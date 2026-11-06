@@ -349,68 +349,98 @@ def driver.all(+n: Nat, +lo: U32) -> Bool:
       Bool.and(driver.hi(1n+p, 0, lo), driver.all(p, (lo + 1 : U32)))
 
 # ---------------------------------------------------------------------------
-# Move ordering
+# Move generation
 
 # Whether a list holds each card of these four holdings exactly once.
-def order.exact(xs: List<&2, U32>, +k0: U32, +k1: U32, +k2: U32, +k3: U32) -> Bool:
+def gen.exact(xs: List<&2, U32>, +k0: U32, +k1: U32, +k2: U32, +k3: U32) -> Bool:
   match xs:
     case Nil{}:
       U32.is_zero((k0 .|. k1 .|. k2 .|. k3 : U32))
     case Con{+c, t}:
       +s = C.card.suit(c)
       +bit = C.card.bit(c)
-      +is0 = U32.is_eq(s, 0)
-      +is1 = U32.is_eq(s, 1)
-      +is2 = U32.is_eq(s, 2)
-      +is3 = U32.is_eq(s, 3)
       bit.in(R.pick(U32.to_nat(s), k0, k1, k2, k3), bit) &&
-        order.exact(t, (k0 .^. R.sel(is0, bit, 0) : U32), (k1 .^. R.sel(is1, bit, 0) : U32), (k2 .^. R.sel(is2, bit, 0) : U32), (k3 .^. R.sel(is3, bit, 0) : U32))
+        gen.exact(t, (k0 .^. R.sel(U32.is_eq(s, 0), bit, 0) : U32), (k1 .^. R.sel(U32.is_eq(s, 1), bit, 0) : U32), (k2 .^. R.sel(U32.is_eq(s, 2), bit, 0) : U32), (k3 .^. R.sel(U32.is_eq(s, 3), bit, 0) : U32))
 
-def order.ok(+first: Bool, +mine: Bool, +k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0: U32, +w1: U32, +w2: U32, +w3: U32) -> Bool:
-  order.exact(Z.order(first, mine, k0, k1, k2, k3, w0, w1, w2, w3, Z.mem.none()), k0, k1, k2, k3)
+# The holding of suit s that may be played: all of it when free to play anything,
+# otherwise only the suit led.
+def legal(+free: Bool, +s: U32, +lead: U32, +m: U32) -> U32:
+  R.sel(free || U32.is_eq(s, lead), m, 0)
 
-def order.modes(+k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0: U32, +w1: U32, +w2: U32, +w3: U32) -> Bool:
-  order.ok(True{}, True{}, k0, k1, k2, k3, w0, w1, w2, w3) &&
-    order.ok(True{}, False{}, k0, k1, k2, k3, w0, w1, w2, w3) &&
-    order.ok(False{}, True{}, k0, k1, k2, k3, w0, w1, w2, w3) &&
-    order.ok(False{}, False{}, k0, k1, k2, k3, w0, w1, w2, w3)
+# Whether the moves in a position are the top card of each run among the legal plays.
+def gen.ok(+t: U32, pos: R.Pos, +l01: U32, +l23: U32, +d: U32) -> Bool:
+  match pos:
+    case R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, +tr, +won}:
+      +seat = U32.to_nat(R.trick.seat(tr))
+      +h01 = R.pick(seat, n01, e01, s01, w01)
+      +h23 = R.pick(seat, n23, e23, s23, w23)
+      +lead = R.trick.lead(tr)
+      +free = U32.is_zero(R.suit.mask(U32.to_nat(lead), h01, h23))
+      gen.exact(Z.gen(t, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, l01, l23, Z.mem.none(), d),
+        Z.tops(legal(free, 0, lead, (h01 >> 16n : U32)), (l01 >> 16n : U32)),
+        Z.tops(legal(free, 1, lead, (h01 .&. 65535 : U32)), (l01 .&. 65535 : U32)),
+        Z.tops(legal(free, 2, lead, (h23 >> 16n : U32)), (l23 >> 16n : U32)),
+        Z.tops(legal(free, 3, lead, (h23 .&. 65535 : U32)), (l23 .&. 65535 : U32)))
 
-# Each subset w of k, in a suit, walking down from k: w takes each subset once.
-def order.subsets(n: Nat, +k: U32, +w: U32, +k1: U32, +w1: U32) -> Bool:
+def first.card(xs: List<&2, U32>) -> U32:
+  match xs:
+    case Nil{}:
+      0
+    case Con{c, _}:
+      c
+
+# Checks the moves at each of the four places in a trick, playing the top legal card
+# each time.
+def gen.trick(n: Nat, +t: U32, +pos: R.Pos, +l01: U32, +l23: U32, +d: U32) -> Bool:
   match n:
     case 0n:
-      order.modes(k, k1, 4097, 8191, w, w1, 1, 4096)
+      True{}
     case 1n+p:
-      Bool.and(order.subsets(p, k, ((w - 1) .&. k : U32), k1, w1), order.modes(k, k1, 4097, 8191, w, w1, 1, 4096))
+      Bool.and(gen.ok(t, pos, l01, l23, d),
+        gen.trick(p, t, R.play(t, pos, first.card(R.moves(pos))), l01, l23, (d - 1 : U32)))
+
+def gen.strains(n: Nat, +t: U32, +deal: C.Deal, +d: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      +pos = R.pos.start(deal, (t .&. 3 : U32))
+      Bool.and(gen.trick(4n, t, pos, R.pos.live01(pos), R.pos.live23(pos), d), gen.strains(p, (t + 1 : U32), deal, d))
+
+def gen.all(n: Nat, +seed: U32, +k: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(gen.strains(5n, 0, D.ending(seed, k), (4 * k : U32)), gen.all(p, (seed + 1 : U32), k))
 
 # ---------------------------------------------------------------------------
-# Winners
+# Runs
 
-# Whether a card counts as a winner exactly when it beats the card winning.
-def wins.ok(+t: U32, +best: U32, +c: U32) -> Bool:
-  bool.eq(U32.is_ne(Z.wins(False{}, C.card.suit(c), C.card.bit(c), 8191, t, best), 0), R.beats(t, best, c))
+# Whether n is how many cards in play from the top down are in m.
+def run.count(k: Nat, +bit: U32, +m: U32, +live: U32, +going: Bool, +n: U32) -> U32:
+  match k:
+    case 0n:
+      n
+    case 1n+p:
+      +il = bit.in(live, bit)
+      +im = bit.in(m, bit)
+      +still = going && (Bool.not(il) || im)
+      run.count(p, (bit >> 1n : U32), m, live, still, (n + Bool.to_u32(still && il) : U32))
 
-def wins.c.rank(n: Nat, +t: U32, +best: U32, +s: U32, +r: U32) -> Bool:
+def run.ok(+m: U32, +live: U32) -> Bool:
+  U32.is_eq(Z.run(m, live), run.count(13n, 4096, m, live, True{}, 0))
+
+# Every way to split n ranks, from this bit up, as tops.walk does.
+def run.walk(+n: Nat, +bit: U32, +m: U32, +live: U32) -> Bool:
   match n:
     case 0n:
-      True{}
+      run.ok(m, live)
     case 1n+p:
-      Bool.and(wins.ok(t, best, C.card.make(s, r)), wins.c.rank(p, t, best, s, (r + 1 : U32)))
-
-def wins.c.suit(n: Nat, +t: U32, +best: U32, +s: U32) -> Bool:
-  match n:
-    case 0n:
-      True{}
-    case 1n+p:
-      Bool.and(wins.c.rank(13n, t, best, s, 0), wins.c.suit(p, t, best, (s + 1 : U32)))
-
-# Best is any card of suit s: the suit led, or a trump on top of it.
-def wins.best(n: Nat, +t: U32, +s: U32, +r: U32) -> Bool:
-  match n:
-    case 0n:
-      True{}
-    case 1n+p:
-      Bool.and(wins.c.suit(4n, t, C.card.make(s, r), 0), wins.best(p, t, s, (r + 1 : U32)))
+      +up = (bit << 1n : U32)
+      Bool.and(run.walk(p, up, m, live),
+        Bool.and(run.walk(p, up, m, (live .|. bit : U32)),
+          run.walk(p, up, (m .|. bit : U32), (live .|. bit : U32))))
 
 # ---------------------------------------------------------------------------
 # The search against brute force
@@ -439,3 +469,39 @@ def oracle.all(n: Nat, +seed: U32, +k: U32) -> Bool:
       True{}
     case 1n+p:
       Bool.and(oracle.ok(D.ending(seed, k)), oracle.all(p, (seed + 1 : U32), k))
+
+def res.value(r: B.Res) -> U32:
+  match r:
+    case B.Res{v, _}:
+      v
+
+# Whether what the search counts as sure fits the true result, for one strain and
+# leader of a deal with left tricks.
+def sure.ok(+t: U32, +leader: U32, +left: U32, +deal: C.Deal) -> Bool:
+  +pos = R.pos.start(deal, leader)
+  +both = Z.counts(t, pos, left)
+  +v = res.value(B.solve(U32.to_nat((left * 4 : U32)), t, pos, 0n))
+  +side = R.sel(U32.is_zero((leader .&. 1 : U32)), v, (left - v : U32))
+  U32.is_le((both .&. 255 : U32), side) && U32.is_le((both >> 8n : U32), (left - side : U32))
+
+def sure.leaders(n: Nat, +leader: U32, +t: U32, +left: U32, +deal: C.Deal) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(sure.ok(t, leader, left, deal), sure.leaders(p, (leader + 1 : U32), t, left, deal))
+
+def sure.strains(n: Nat, +t: U32, +left: U32, +deal: C.Deal) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(sure.leaders(4n, 0, t, left, deal), sure.strains(p, (t + 1 : U32), left, deal))
+
+# Every strain and leader of the endings from these seeds.
+def sure.all(n: Nat, +seed: U32, +k: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(sure.strains(5n, 0, k, D.ending(seed, k)), sure.all(p, (seed + 1 : U32), k))

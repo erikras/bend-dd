@@ -13,6 +13,12 @@
 #
 # The same, by plain minimax: the oracle, for endings of up to about 5 cards.
 #
+#   dd --sure [deal or file]...
+#
+# For each table entry, with the seat on declarer's left on lead, prints the tricks
+# the search is sure of at the start: for that seat's side, then declarer's. This is
+# for checking them against the true results.
+#
 #   dd --print [deal or file]...
 #
 # Prints each deal back in canonical form, starting from North.
@@ -224,12 +230,19 @@ def brute.table(+deal: C.Deal) -> B.Table:
 def search.table(+deal: C.Deal) -> B.Table:
   Z.table(deal)
 
+def search.bounds(+deal: C.Deal) -> B.Table:
+  Z.bounds(deal)
+
 def main.go(xs: List<String>) -> IO(Unit):
   match xs:
     case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{98}, _}}}, t}:
       do IO<Unit>:
         deals : List<&2, String> <- args.read(t)
         run(~brute.table, "brute", deals)
+    case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{115}, _}}}, t}:
+      do IO<Unit>:
+        deals : List<&2, String> <- args.read(t)
+        run(~search.bounds, "sure", deals)
     case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{112}, _}}}, t}:
       do IO<Unit>:
         deals : List<&2, String> <- args.read(t)

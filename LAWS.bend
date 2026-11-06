@@ -244,25 +244,32 @@ law driver_finds:
   {S.driver.all(14n, 0) == True{} : Bool}
 
 # ---------------------------------------------------------------------------
-# Move ordering
+# Move generation
 
-# LAW: ordering loses no move and repeats none, on lead or not, with partner
-# winning or not. This is a sample: each subset of AQ5 of the winners in spades,
-# with some fixed holdings in the other suits.
-law order_keeps_moves:
-  {S.order.subsets(8n, 2068, 2068, 5, 1) == True{} : Bool}
+# LAW: the search tries exactly the top card of each run of the legal plays, each
+# once, whatever order the weights put them in. This is a sample: all 5 strains, at
+# each of the four places in a trick, on 20 random 3-card endings.
+law gen_keeps_moves:
+  {S.gen.all(20n, 1, 3) == True{} : Bool}
 
-# LAW: a card counts as a winner exactly when it beats the card winning the trick.
-# It only steers the ordering, so this is a sample: every card against every heart
-# and every spade with spades as trumps, and against every spade at no trumps.
-law wins_hearts_with_spade_trumps:
-  {S.wins.best(13n, 0, 1, 0) == True{} : Bool}
+# ---------------------------------------------------------------------------
+# Sure tricks
 
-law wins_spades_with_spade_trumps:
-  {S.wins.best(13n, 0, 0, 0) == True{} : Bool}
+# LAW: the run behind quick tricks is the number of top cards in play that are in
+# the hand, walking the ranks from the ace down. This covers each of the 2187 ways
+# to split the seven low ranks, and the same for the seven high ranks.
+law run_low_ranks:
+  {S.run.walk(7n, 1, 0, 0) == True{} : Bool}
 
-law wins_spades_at_no_trumps:
-  {S.wins.best(13n, 4, 0, 0) == True{} : Bool}
+law run_high_ranks:
+  {S.run.walk(7n, 64, 0, 0) == True{} : Bool}
+
+# LAW: quick tricks never exceed the tricks the side on lead takes, and later tricks
+# never exceed what its opponents take, by brute force. Only a sample, since the
+# checker is slow at this: all 5 strains and 4 leaders of 4 random 2-card endings.
+# tests/oracle and tools/check.py sure cover thousands more, up to whole deals.
+law sure_never_exceeds:
+  {S.sure.all(4n, 100, 2) == True{} : Bool}
 
 # ---------------------------------------------------------------------------
 # The search

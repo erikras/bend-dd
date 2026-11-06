@@ -108,6 +108,12 @@ def ending.go(n: Nat, +i: U32, +seed: U32, +a: U32, +b: U32, +c: U32, +e: U32, +
       ending.go(p, (i + 1 : U32), x, dec(in0, a), dec(in1, b), dec(in2, c), dec(in3, e), dec(Bool.not(keep), out),
         ending.add(keep, seat, i, d))
 
+# A random ending with k cards in each hand from the first few suits, which makes
+# long runs and voids common.
+def ending.in(+suits: U32, +seed: U32, +k: U32) -> C.Deal:
+  +cards = (13 * suits : U32)
+  ending.go(U32.to_nat(cards), 0, mix(seed), k, k, k, k, (cards - 4 * k : U32), C.deal.empty())
+
 # A random ending for one seed, with k cards in each hand.
 def ending(+seed: U32, +k: U32) -> C.Deal:
-  ending.go(52n, 0, mix(seed), k, k, k, k, (52 - 4 * k : U32), C.deal.empty())
+  ending.in(4, seed, k)

@@ -14,6 +14,10 @@
       Reports dd's node counts and times without checking them, with the median
       and worst deal, for sizes too slow to check against DDS or brute force.
 
+  check.py sure [--file tests/data/list100.txt ...] [--limit N] [--count N] [--cards 4 6 8]
+      The tricks the search counts as sure must not exceed the true ones, on whole
+      deals from the DDS lists and on random endings against DDS.
+
   check.py lists [--file tests/data/list100.txt ...] [--limit N]
       Checks the vendored DDS lists: dd must read every deal and print it back
       unchanged, and endplay's DDS must reproduce every TABLE line, which pins
@@ -256,6 +260,51 @@ def check_roundtrip(args):
     print("OK: %d deals from hand round-trip through dd" % len(deals))
 
 
+def sure_table(deals):
+    lines, _ = with_deals(deals, lambda p: run_dd(["--sure", p]))
+    if len(lines) != len(deals):
+        fail("dd answered %d lines for %d deals" % (len(lines), len(deals)))
+    return [[int(x) for x in line.split()] for line in lines]
+
+
+def sure_check(deals, tables, cards):
+    """Compares dd's sure tricks with tables of the tricks declarer's side takes."""
+    quick = later = 0
+    for pbn, table, sure in zip(deals, tables, sure_table(deals)):
+        for i in range(20):
+            q, l = sure[2 * i], sure[2 * i + 1]
+            if q > cards - table[i] or l > table[i]:
+                fail(
+                    "%s strain %s declarer %s: sure %d for the leader's side and %d for declarer's, true %d and %d"
+                    % (pbn, STRAINS[i // 4], SEATS[i % 4], q, l, cards - table[i], table[i])
+                )
+            quick += q
+            later += l
+    return quick, later
+
+
+def check_sure(args):
+    for path in args.file:
+        deals = read_list(path)
+        if args.limit:
+            deals = deals[: args.limit]
+        pbns = [p for p, _ in deals]
+        q, l = sure_check(pbns, [t for _, t in deals], 13)
+        print(
+            "%s: %d deals x 20: sure tricks never exceed DDS (mean %.2f quick, %.2f later)"
+            % (os.path.relpath(path, ROOT), len(deals), q / (20.0 * len(deals)), l / (20.0 * len(deals)))
+        )
+    rng = random.Random(args.seed)
+    for cards in args.cards:
+        pbns = [random_ending(rng, cards, args.suits) for _ in range(args.count)]
+        q, l = sure_check(pbns, [dds_table(p, cards) for p in pbns], cards)
+        print(
+            "%d-card endings: %d deals x 20: sure tricks never exceed DDS (mean %.2f quick, %.2f later)"
+            % (cards, len(pbns), q / (20.0 * len(pbns)), l / (20.0 * len(pbns)))
+        )
+    print("OK: sure tricks")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -293,6 +342,19 @@ def main():
     )
     p.add_argument("--limit", type=int)
     p.set_defaults(fn=check_lists)
+
+    p = sub.add_parser("sure")
+    p.add_argument(
+        "--file",
+        nargs="*",
+        default=[os.path.join(ROOT, "tests/data", f) for f in ("list100.txt", "list1000.txt")],
+    )
+    p.add_argument("--limit", type=int)
+    p.add_argument("--count", type=int, default=500)
+    p.add_argument("--cards", type=int, nargs="+", default=[2, 3, 4, 6, 8])
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--suits", type=int, default=4, choices=[1, 2, 3, 4])
+    p.set_defaults(fn=check_sure)
 
     p = sub.add_parser("roundtrip")
     p.add_argument("--count", type=int, default=1000)

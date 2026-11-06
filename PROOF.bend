@@ -365,16 +365,16 @@ def Laws.cut_sound():
 def Laws.driver_finds():
   {==}
 
-def Laws.order_keeps_moves():
+def Laws.gen_keeps_moves():
   {==}
 
-def Laws.wins_hearts_with_spade_trumps():
+def Laws.run_low_ranks():
   {==}
 
-def Laws.wins_spades_with_spade_trumps():
+def Laws.run_high_ranks():
   {==}
 
-def Laws.wins_spades_at_no_trumps():
+def Laws.sure_never_exceeds():
   {==}
 
 def Laws.search_is_brute():

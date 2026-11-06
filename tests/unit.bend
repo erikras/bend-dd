@@ -201,6 +201,60 @@ def after(+t: U32, d: Maybe<&2, C.Deal>, xs: List<&2, U32>) -> R.Pos:
     case Some{x}:
       after.go(t, xs, R.pos.start(x, 0))
 
+# The cards of a list as one mask, ignoring suits.
+def list.mask(xs: List<&2, U32>, +acc: U32) -> U32:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{+c, t}:
+      list.mask(t, (acc .|. C.card.bit(c) : U32))
+
+def counts.of(+t: U32, +leader: U32, d: Maybe<&2, C.Deal>, +left: U32) -> U32:
+  match d:
+    case None{}:
+      99999
+    case Some{x}:
+      Z.counts(t, R.pos.start(x, leader), left)
+
+# What the search is sure of: quick tricks in the low byte, later tricks above that.
+def sure.is(+pbn: String, +t: U32, +left: U32, +q: U32, +l: U32) -> Bool:
+  U32.is_eq(counts.of(t, 0, P.parse(pbn), left), (q .|. (l << 8n) : U32))
+
+# Hand-worked, with North on lead.
+def sure.checks() -> List<&2, Check>:
+  [
+    # Two top spades, then a heart across to South's two top hearts, capped at 3.
+    Check{"quick: cash, cross and cap", sure.is("N:AK.2.. QJ.3.. 3.A5.. T9.4..", 4, 3, 3, 0)},
+    # In hearts, the spades still stand up, since each opponent has two.
+    Check{"quick: safe from ruffs, trump entry", sure.is("N:AK.2.. QJ.3.. 3.A5.. T9.4..", 1, 3, 3, 0)},
+    # East ruffs at once, so the top hearts are worth nothing. East and West each have
+    # two trumps against none.
+    Check{"later: all the trumps", sure.is("N:.AK.. A2... .QJ.. KQ...", 0, 2, 0, 2)},
+    # The top two trumps are alone and can fall together.
+    Check{"later: two singleton top trumps are one trick", sure.is("N:2.A.. A.2.. 3.K.. K.3..", 0, 2, 1, 1)},
+    # East's K can wait behind North's A.
+    Check{"later: a second trump behind the top one", sure.is("N:A2... K3... T9... 87...", 0, 2, 1, 1)},
+    Check{"later: not when it is in front", sure.is("N:A2... 87... T9... K3...", 0, 2, 1, 0)},
+    # No trumps: North can only lead to the opposing top card.
+    Check{"later: no top card in any suit the leader has", sure.is("N:2... A... 3... 4...", 4, 1, 0, 1)}
+  ]
+
+def lead.then(+t: U32, d: Maybe<&2, C.Deal>, +c: U32, +won: U32, +left: U32, +target: U32) -> U32:
+  match d:
+    case None{}:
+      99
+    case Some{x}:
+      Z.second(t, R.play(t, R.pos.start(x, 0), c), won, left, target)
+
+# After the lead: the side with the best hand left for this trick is sure of it.
+def second.checks() -> List<&2, Check>:
+  [
+    Check{"after the lead: East's ace beats it", U32.is_eq(lead.then(4, P.parse("N:2... A... 3... 4..."), s(0), 0, 1, 1), 2)},
+    Check{"after the lead: North's ace holds", U32.is_eq(lead.then(4, P.parse("N:A... 2... 3... 4..."), s(12), 0, 1, 1), 1)},
+    Check{"after the lead: East ruffs", U32.is_eq(lead.then(1, P.parse("N:A... .2.. 3... 4..."), s(12), 0, 1, 1), 2)},
+    Check{"after the lead: a trick does not reach the target", U32.is_eq(lead.then(4, P.parse("N:AK... 23... 45... 67..."), s(12), 0, 2, 2), 0)}
+  ]
+
 def order.checks() -> List<&2, Check>:
   # Hand-worked: East is second to play on the spade Q led by North, holding K J 2,
   # with the A and T elsewhere. The Q on the table still splits K from J.
@@ -208,11 +262,10 @@ def order.checks() -> List<&2, Check>:
   +live01 = R.pos.live01(p)
   +l01 = (live01 .|. (1024 << 16n) : U32)
   [
-    Check{"second hand: winner first, then the rest low first; K and J stay apart",
-      ints.eq(Z.gen(4, p, l01, 0, Z.mem.none()), [s(11), s(0), s(9)])},
-    Check{"on lead: the top card in play first, then the rest by suit, high first",
-      ints.eq(Z.gen(4, R.pos.start(C.Deal{C.Hand{(4096 .|. 1 : U32), (2048 : U32), 0, 0}, C.Hand{2, 4096, 0, 0}, C.Hand{4, 1, 0, 0}, C.Hand{8, 2, 0, 0}}, 0), (((4096 .|. 15) << 16n) .|. (4096 .|. 2048 .|. 3) : U32), 0, Z.mem.none()),
-        [s(12), s(0), h(11)])}
+    Check{"second hand keeps K, J and 2 apart, with the Q on the table",
+      U32.is_eq(C.bits.count(list.mask(Z.gen(4, p, l01, 0, Z.mem.none(), 7), 0)), 3)},
+    Check{"without the Q on the table, K and J are one move",
+      U32.is_eq(C.bits.count(list.mask(Z.gen(4, p, live01, 0, Z.mem.none(), 7), 0)), 2)}
   ]
 
 def search.checks() -> List<&2, Check>:
@@ -280,8 +333,10 @@ def checks() -> List<&2, Check>:
           List.append(&2, Check, brute.checks(),
             List.append(&2, Check, tops.checks(),
               List.append(&2, Check, cut.checks(),
-                List.append(&2, Check, order.checks(),
-                  List.append(&2, Check, search.checks(), dealer.checks())))))))))
+                List.append(&2, Check, sure.checks(),
+                  List.append(&2, Check, second.checks(),
+                    List.append(&2, Check, order.checks(),
+                      List.append(&2, Check, search.checks(), dealer.checks())))))))))))
 
 def main() -> IO(Unit):
   do IO<Unit>:

@@ -46,6 +46,10 @@ else
   tests/oracle 5000 3
   tests/oracle 5000 4
   tests/oracle 200 5
+  # From fewer suits, which makes long runs and voids common.
+  tests/oracle 5000 3 1 2
+  tests/oracle 2000 4 1 2
+  tests/oracle 200 3 1 1
 fi
 
 echo "== hand output"
@@ -86,6 +90,14 @@ else
   .venv/bin/python tools/check.py oracle --count 2000 --cards 3 4
   .venv/bin/python tools/check.py oracle --count 2000 --cards 3 4 --suits 2
   .venv/bin/python tools/check.py oracle --count 100 --cards 5
+fi
+
+echo "== sure tricks against DDS"
+if [ $quick = 1 ]; then
+  .venv/bin/python tools/check.py sure --limit 100 --count 50 --cards 2 4 8
+else
+  .venv/bin/python tools/check.py sure --count 300
+  .venv/bin/python tools/check.py sure --file --count 300 --cards 4 6 --suits 2
 fi
 
 echo "== endings against DDS"
