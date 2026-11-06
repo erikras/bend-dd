@@ -1,10 +1,11 @@
 # LAWS.bend: what the solver promises. PROOF.bend proves each law.
 #
-# Many laws here are finite: they walk a whole domain with a decision procedure,
-# such as "every 13-bit holding", and say that it answers True. The checker runs
-# the procedure when it checks the proof, so the law holds for every value in
-# that domain, not just for a sample of tests. Each comment says what the domain
-# is, and calls it a sample when it is not the whole space.
+# Some laws hold for all values by induction. Others are finite: they walk a whole
+# domain with a decision procedure, such as "every 13-bit holding", and say that
+# it answers True. The checker runs the procedure when it checks the proof, so
+# the law holds for every value in that domain, not just for a sample of tests.
+# Each comment says what the domain is, and calls it a sample when it is not the
+# whole space. The specs and procedures are in SPEC.bend.
 
 import Base
 import ./src/cards.bend as C
@@ -15,26 +16,41 @@ import ./SPEC.bend as S
 # ---------------------------------------------------------------------------
 # PBN
 
-def holding.ok.go(a: Maybe<&2, U32>, +m: U32) -> Bool:
-  match a:
-    case None{}:
-      False{}
-    case Some{x}:
-      U32.is_eq(x, m)
-
-def holding.ok(+m: U32) -> Bool:
-  holding.ok.go(P.suit.parse(P.suit.print(m)), m)
-
-def holdings.ok(n: Nat, +m: U32) -> Bool:
-  match n:
-    case 0n:
-      True{}
-    case 1n+p:
-      Bool.and(holding.ok(m), holdings.ok(p, (m + 1 : U32)))
-
 # LAW: parsing a printed holding gives it back, for each of the 8192 holdings.
 law holding_roundtrip:
-  {holdings.ok(8192n, 0) == True{} : Bool}
+  {S.holdings.ok(8192n, 0) == True{} : Bool}
+
+# LAW: the same, as an equality for any holding number below 8192.
+law holding_good:
+  for +k: Nat
+  for lt: {Nat.is_lt(k, 8192n) == True{} : Bool}
+  S.Good(U32.from_nat(k))
+
+# LAW: any four holdings below 8192 make a hand that round-trips.
+law hand_good:
+  for +a: Nat
+  for +b: Nat
+  for +c: Nat
+  for +d: Nat
+  for la: {Nat.is_lt(a, 8192n) == True{} : Bool}
+  for lb: {Nat.is_lt(b, 8192n) == True{} : Bool}
+  for lc: {Nat.is_lt(c, 8192n) == True{} : Bool}
+  for ld: {Nat.is_lt(d, 8192n) == True{} : Bool}
+  S.Good.hand(C.Hand{U32.from_nat(a), U32.from_nat(b), U32.from_nat(c), U32.from_nat(d)})
+
+# LAW: parsing a printed deal gives it back, for any deal whose hands round-trip
+# (hand_good gives that for any real hand) and share no card.
+law deal_roundtrip:
+  for +n: C.Hand
+  for +e: C.Hand
+  for +s: C.Hand
+  for +w: C.Hand
+  for gn: S.Good.hand(n)
+  for ge: S.Good.hand(e)
+  for gs: S.Good.hand(s)
+  for gw: S.Good.hand(w)
+  for dj: {P.deal.disjoint(n, e, s, w) == True{} : Bool}
+  {P.parse(P.print(C.Deal{n, e, s, w})) == Some{C.Deal{n, e, s, w}} : Maybe<&2, C.Deal>}
 
 # LAW: the deal's first hand goes to the seat its PBN letter names, and the rest
 # follow clockwise.

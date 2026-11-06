@@ -76,6 +76,41 @@ list and the runtime benchmarks in the Bend repo:
 | `Array.fork` plus `Array.atomic.*` exist, but `Array.fork` is `@unsafe` | A shared, lock-free TT across parallel searches is ruled out by the no-`@unsafe` rule. Every parallel search owns its own TT. |
 | The checker normalises a pure `main` slowly; compiled `IO` mains are fast | The solver's `main` is IO and is built with `bend dd.bend -o dd`. |
 
+### 2.3 What Phase 1 measured
+
+On an M1 Max (8 performance and 2 efficiency cores) under Bend 2.0.40, running
+plain minimax over 2.8 billion nodes of 4-card endings. The machine had other
+work running, so these are rough. `bench/brute.c` is the same search in C and
+visits exactly the same nodes.
+
+| | nodes/s |
+|---|---|
+| C, `clang -O2`, 1 thread | 80M |
+| Bend, 1 thread | 63M |
+| Bend, 2 threads | 124M |
+| Bend, 4 threads | 246M |
+| Bend, 8 threads | 390M |
+| Bend, 10 threads, 16 leaves | 378M |
+| Bend, 10 threads, 1024 leaves | 477M |
+
+`bench/gpu.bend` runs the same search on 3-card endings: 113M to 133M nodes/s on
+the GPU against about 525M on the CPU threads, so the GPU is 4 to 5 times slower.
+
+What this changes:
+
+- One Bend thread costs about 27% over C, not the several times §8 feared, even
+  with a position record and a heap move list at every node.
+- A `Nat` is a machine integer at run time and a shift by a `Nat` is one
+  instruction. Depth can bound the recursion, so no separate fuel is needed: the
+  child call takes one off `d`, and the sibling keeps `d` and drops a move.
+- Many more fork leaves than threads balance better, even with no work stealing.
+  §5 says to go only as wide as the core count, because each leaf owns a TT. That
+  trade-off needs measuring in Phase 5, for example by sharing one TT across the
+  deals in a leaf.
+- Finite laws cost about 8 ms per case in the checker, so the proof gate is the
+  slow part of the tests (`tools/test.sh --quick` skips it). Laws that hold by
+  induction are nearly free, so they are worth the extra work.
+
 ## 3. Data representation
 
 **Cards.** Suit 0..3 = ♠ ♥ ♦ ♣ (as in `hand.bend` and DDS's strain order),

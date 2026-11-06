@@ -187,9 +187,11 @@ def brute.print(xs: List<&2, Out>) -> IO(Unit):
         brute.print.go(good, line)
         brute.print(t)
 
-# How deep a fork tree must go to give every thread a share.
+# How deep to fork: 64 leaves per thread or so. Tasks never move between threads,
+# and endings differ a lot in size, so many small leaves balance better than one
+# per thread. On 4-card endings this took 5.8 s against 7.4 s.
 def fork.depth(+threads: U32) -> Nat:
-  U32.log2((threads * 2 - 1 : U32))
+  Nat.add(6n, U32.log2((threads * 2 - 1 : U32)))
 
 # Runs a whole list of deals. The results are forced before the clock is read
 # again, since compiled code is strict, so the time covers the solving.

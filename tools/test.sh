@@ -22,7 +22,7 @@ if [ "$have" != "$BEND_VERSION" ]; then
   echo "warning: tested with bend $BEND_VERSION, this is bend $have"
 fi
 
-if grep -n '@unsafe\|^def [^ (]*?' hand.bend dd.bend LAWS.bend SPEC.bend PROOF.bend src/*.bend tests/*.bend; then
+if grep -n '@unsafe\|^def [^ (]*?' hand.bend dd.bend LAWS.bend SPEC.bend PROOF.bend src/*.bend tests/*.bend bench/*.bend; then
   echo "FAIL: @unsafe is not allowed anywhere"
   exit 1
 fi

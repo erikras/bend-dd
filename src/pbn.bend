@@ -36,13 +36,13 @@ def suit.print(+m: U32) -> String:
 def hand.print(h: C.Hand) -> String:
   match h:
     case C.Hand{s, x, d, c}:
-      suit.print(s) ++ "." ++ suit.print(x) ++ "." ++ suit.print(d) ++ "." ++ suit.print(c)
+      suit.print(s) ++ SCon{'.', suit.print(x) ++ SCon{'.', suit.print(d) ++ SCon{'.', suit.print(c)}}}
 
 # The whole deal, starting from North.
 def print(d: C.Deal) -> String:
   match d:
     case C.Deal{n, e, s, w}:
-      "N:" ++ hand.print(n) ++ " " ++ hand.print(e) ++ " " ++ hand.print(s) ++ " " ++ hand.print(w)
+      SCon{'N', SCon{':', hand.print(n) ++ SCon{' ', hand.print(e) ++ SCon{' ', hand.print(s) ++ SCon{' ', hand.print(w)}}}}}
 
 # ---------------------------------------------------------------------------
 # Parsing

@@ -2,7 +2,49 @@
 
 import Base
 import ./src/cards.bend as C
+import ./src/pbn.bend as P
 import ./src/rules.bend as R
+
+# ---------------------------------------------------------------------------
+# PBN
+
+# Whether a string is free of a separator, as a type: one proof per character.
+def Free(+sep: Char, s: String) -> Type:
+  match s:
+    case SNil{}:
+      Unit
+    case SCon{c, t}:
+      {Char.is_eq(c, sep) == False{} : Bool} & Free(sep, t)
+
+# A holding whose printed form parses back to it.
+def Good(+m: U32) -> Type:
+  {P.suit.parse(P.suit.print(m)) == Some{m} : Maybe<&2, U32>}
+
+def Good.hand(+h: C.Hand) -> Type:
+  match h:
+    case C.Hand{+s, +x, +d, +c}:
+      Good(s) & Good(x) & Good(d) & Good(c)
+
+def holding.ok.go(a: Maybe<&2, U32>, +m: U32) -> Bool:
+  match a:
+    case None{}:
+      False{}
+    case Some{x}:
+      U32.is_eq(x, m)
+
+def holding.ok(+m: U32) -> Bool:
+  holding.ok.go(P.suit.parse(P.suit.print(m)), m)
+
+# The exhaustive check, walking with U32.inc so it lines up with U32.from_nat.
+def holdings.ok(n: Nat, +m: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(holding.ok(m), holdings.ok(p, U32.inc(m)))
+
+# ---------------------------------------------------------------------------
+# Tricks
 
 # How a card ranks in a trick with trumps t once suit l has been led: any trump
 # beats any card of the suit led, and any other card cannot win.
@@ -61,9 +103,6 @@ def trick.run(+t: U32, +leader: U32, +a: U32, +b: U32, +c: U32, +d: U32) -> U32:
   +t2 = R.trick.next(t1, t, b)
   +t3 = R.trick.next(t2, t, c)
   R.trick.next(t3, t, d)
-
-def later(+x: U32, +y: U32, +i: U32, other: U32) -> U32:
-  R.sel(U32.is_gt(y, x), i, other)
 
 # The position in the trick (0..3) of the card with the most power, where the
 # earlier of two equal cards stays ahead.
