@@ -12,12 +12,13 @@ double dummy solver.
 
 ## Status
 
-Phases 0 to 3 of the [plan](docs/PLAN.md) are done. There is a dealer, a PBN
-parser and printer, the rules of play, a brute-force minimax as an oracle, and a
-zero-window search with target cutoffs, card equivalence, quick and later tricks,
-and DDS's move ordering. The search matches the oracle and DDS on thousands of
-endings. It solves endings of up to about 12 cards in each hand in under a minute
-or so. Full deals need the transposition table from Phase 4 to be practical.
+Phases 0 to 5 of the [plan](docs/PLAN.md) are done. There is a dealer, a PBN parser
+and printer, the rules of play, a brute-force minimax as an oracle, and a zero-window
+search with target cutoffs, card equivalence, quick and later tricks, DDS's move
+ordering, and a transposition table with partition search. It solves whole deals, and
+all 1,100 tables of DDS's `list100` and `list1000` match exactly. On an Apple M6 it
+does about 7 deals a second on 12 threads, against about 68 for DDS on the same
+machine. Closing that gap is Phase 6.
 
 ## Requirements
 
@@ -134,7 +135,6 @@ The full plan, with the algorithm choices and the testing strategy, is in
 2. Represent the deal as bitboards, generate legal plays and brute-force small
    endings (done).
 3. Solve a single strain and lead with alpha-beta search (done).
-4. Add transposition tables, move ordering and quick tricks (ordering and quick
-   tricks done).
-5. Compute the full 4 x 5 table of trick counts, compared against DDS.
-6. Parallelize the search with Bend's parallel calls.
+4. Add transposition tables, move ordering and quick tricks (done).
+5. Compute the full 4 x 5 table of trick counts, compared against DDS (done).
+6. Parallelize the search with Bend's parallel calls (done over strains and deals).

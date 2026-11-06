@@ -31,6 +31,10 @@
       Solves whole deals from a DDS list with dd and compares them with their TABLE
       lines. Reports node counts and times.
 
+  check.py speed [--file ...] [--limit N] [--threads T]
+      Deals per second for dd next to DDS, on the same deals and machine, checking
+      dd's tables against the TABLE lines on the way.
+
   check.py roundtrip [--count N]
       Parses and prints the first N deals from ./hand with dd, which must print
       them back unchanged.
@@ -252,6 +256,40 @@ def check_lists(args):
     print("OK: lists")
 
 
+def check_speed(args):
+    """Deals per second next to DDS on the same deals and machine. Both take all the
+    threads they want: dd through its fork tree, and DDS through CalcAllTables, which
+    takes 32 tables at a time."""
+    from endplay.dds import calc_all_tables, calc_dd_table
+    from endplay.types import Deal
+
+    print("%-16s %6s %10s %10s %14s %14s %8s" % ("file", "deals", "dd s", "dd deals/s", "DDS 1 at a time", "DDS batches", "behind"))
+    for path in args.file:
+        deals = read_list(path)
+        if args.limit:
+            deals = deals[: args.limit]
+        pbns = [p for p, _ in deals]
+        start = time.time()
+        got, _, _ = solve_all([], pbns, args.threads)
+        ours = time.time() - start
+        for (pbn, want), g in zip(deals, got):
+            if g != want:
+                fail("%s: dd %s, TABLE %s" % (pbn, g, want))
+        ds = [Deal(p) for p in pbns]
+        start = time.time()
+        for d in ds:
+            calc_dd_table(d)
+        one = time.time() - start
+        start = time.time()
+        for i in range(0, len(ds), 32):
+            calc_all_tables(ds[i : i + 32])
+        many = time.time() - start
+        print(
+            "%-16s %6d %10.1f %10.1f %14.1f %14.1f %7.1fx"
+            % (os.path.basename(path), len(ds), ours, len(ds) / ours, len(ds) / one, len(ds) / many, ours / many)
+        )
+
+
 # ---------------------------------------------------------------------------
 # Round trip
 
@@ -430,6 +468,16 @@ def main():
     p.add_argument("--limit", type=int, default=10)
     p.add_argument("--threads", type=int)
     p.set_defaults(fn=check_full)
+
+    p = sub.add_parser("speed")
+    p.add_argument(
+        "--file",
+        nargs="+",
+        default=[os.path.join(ROOT, "tests/data", f) for f in ("list100.txt", "list1000.txt")],
+    )
+    p.add_argument("--limit", type=int)
+    p.add_argument("--threads", type=int)
+    p.set_defaults(fn=check_speed)
 
     p = sub.add_parser("roundtrip")
     p.add_argument("--count", type=int, default=1000)

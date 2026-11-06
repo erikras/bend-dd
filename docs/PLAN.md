@@ -112,9 +112,7 @@ What this changes:
   instruction. Depth can bound the recursion, so no separate fuel is needed: the
   child call takes one off `d`, and the sibling keeps `d` and drops a move.
 - Many more fork leaves than threads balance better, even with no work stealing.
-  §5 says to go only as wide as the core count, because each leaf owns a TT. That
-  trade-off needs measuring in Phase 5, for example by sharing one TT across the
-  deals in a leaf.
+  A leaf only holds its TT while it is solving, so width costs no memory (§5).
 - Finite laws cost about 8 ms per case in the checker, so the proof gate is the
   slow part of the tests (`tools/test.sh --quick` skips it). Laws that hold by
   induction are nearly free, so they are worth the extra work.
@@ -298,6 +296,80 @@ billion, at about 15M nodes/s, so 3.5 to 39 minutes each, and those 4 took more 
 about 36 billion. That is at least 10 times the 12-card mean, near the 8 times that
 §2.4 expected, and far too slow to be useful: a table was needed, as planned.
 
+### 2.7 What Phase 4 measured
+
+Whole tables of `list100` on the M6, 12 threads, with other work running. Every row
+matches DDS on all 100 deals, except the first, which didn't finish them.
+
+| Search | Mean nodes per deal | Worst deal | Wall for 100 deals |
+|---|---|---|---|
+| No table (§2.6, 16 of 21 deals) | more than 16,600,000,000 | | |
+| Table, hashed on lengths, one table for all 5 strains | 83,758,437 | 2,651,318,416 | 369 s |
+| + small card filter, and hashing on levels of top cards | 11,461,796 | 234,233,597 | 46 s |
+| + hashing on the suits that matter, with a directory, and a table per strain | 6,978,487 | 83,772,644 | 20 s |
+
+What this changes:
+
+- Partition search works in Bend with no `@unsafe`, and it works first time against
+  thousands of endings and the DDS lists, so the plan's design of the entry held. Each
+  answer carries its winning ranks up in its `Res`. A trick won by rank adds the card
+  and the run below it in its hand, since the search only tries the top of a run. Each
+  cut adds what it looks at: quick tricks the top run of the side's cards in each suit,
+  later tricks the top card of each suit or the top two trumps, and the check after the
+  lead the card that wins.
+- The hash matters more than anything else in the table. An entry can only be hashed
+  on what every position it matches shares, and that is less than DDS's bucket by
+  lengths can bear with 8 entries a bucket: late in a deal a few lengths hold most of
+  the positions. So an entry goes by its pattern, the suits whose top 3 cards all
+  matter, and hashes on those cards' owners. A lookup tries each pattern that the
+  directory word for its lengths has seen. On the first 20 deals, in mean nodes, top
+  cards hashed per suit: 1, 7.5M; 2, 5.0M; 3, 4.4M; 4, 4.5M; 6, 5.3M.
+- The table's size hardly matters: at 2^21 words (8 MB) per strain, 2^23, 2^25 and 2^27
+  words save 1% to 2% on ordinary deals. On the two heaviest deals of `list100`, under
+  the older hash, they saved a quarter.
+- 4 entries a bucket cost half as many nodes again as 8.
+- The small card filter cuts nodes by a third (10.1M to 6.6M on the first 20).
+- A best move kept in each entry, as DDS does, gave nothing here (6.60M to 6.69M), so
+  it is out: the memory by depth and the weights already find most of it.
+- The table does update in place: the emitted C has no array copy, memory stays at
+  about 100 MB, and a table 64 times bigger takes about the same time.
+- Nearly every position at the start of a trick now ends in the table or a cut, so the
+  nodes are mostly the three cards in between. Speed per node is about 8M/s on one
+  thread, against 23M with no table.
+
+Termination needed one change to the search's shape. The table is read going into a
+child, and that decides the child's moves, but the search can't destructure a call. So
+a child enters with a phase argument of 1 and takes its moves out of its `Res`, then
+goes on with phase 0. This fits the rule that arguments are compared left to right.
+
+Still unproved: partition search itself has no law for every position. Laws cover the
+parts: entries' top cards and ranks, runs, bounds and owner words. Tests stand in for
+the rest: brute force on small endings, DDS on endings and on all of both lists.
+
+### 2.8 What Phase 5 measured
+
+`tools/check.py speed` on the M6, on all 12 threads, with other work running. `dd`'s
+tables match both lists exactly, all 1,100.
+
+| File | Deals | `dd`, deals/s | DDS one at a time, deals/s | DDS in batches, deals/s | Behind DDS in batches |
+|---|---|---|---|---|---|
+| `list100` | 100 | 5.0 | 28.0 | 73.9 | 14.7× |
+| `list1000` | 1000 | 7.1 | 24.5 | 68.1 | 9.6× |
+
+What this changes:
+
+- Decision 2 asked for throughput over many deals. We are about 10 times behind DDS
+  in batches. Phase 6 is where that gets worked on.
+- One deal now uses up to 5 threads, a deal of 23M nodes going from 2.3 s to 1.2 s, as
+  far as its largest strain allows. A fork nested inside a leaf of the fork tree did
+  nothing: the scheduler only hands out tasks until it has enough of them, and a tree
+  that is mostly empty leaves has enough at once. So `dd` forks over pairs of deal and
+  strain, with no leaf that has no work, in one flat tree.
+- The rest of the imbalance is the tail: on `list100` the worst 5 deals held 45% of
+  all nodes before the last hash, and 12 threads give only 4.5 times one, since tasks
+  never move and a heavy strain can land on an efficiency core. 6 threads were within
+  15% of 12. Splitting a heavy strain by leader would need a table per leader.
+
 ## 3. Data representation
 
 **Cards.** Suit 0..3 = ♠ ♥ ♦ ♣ (as in `hand.bend` and DDS's strain order),
@@ -334,8 +406,9 @@ is at most 13 long.
 2 words, tt: Array<U32>)`. Returning the table alongside the answer is how it
 gets threaded.
 
-**The transposition table** is one `Array<U32>`, for example 2^20 words (4 MB)
-per independent search. An entry is about 8 words:
+**The transposition table** is one `Array<U32>`, 2^21 words (8 MB) per strain of a
+whole deal. `src/search.bend` has the entry as built, and §2.7 says what changed. As
+first planned, an entry is about 8 words:
 
 - the suit lengths of N, E and S in three suits (48 bits, 2 words), which with
   the leader is the bucket key, as in DDS;
@@ -400,9 +473,9 @@ In order of payoff:
    can actually run at the same time in Bend's runtime is something to test
    early, since Bend runs one computation at a time between effects.
 
-Each parallel leaf owns its own TT, so the TT size times the number of live
-leaves must fit in memory. The batch tree should therefore go only as wide
-as the core count needs, then run deals in sequence inside each leaf.
+Each parallel leaf owns its own TT, but a leaf only makes one while it is solving, so
+what is live at once is the TT size times the number of threads, whatever the width of
+the tree. The tree can be as wide as balance wants.
 
 ## 6. Phases
 
@@ -434,7 +507,7 @@ handles 7 to 8 card endings quickly. We log node counts from here on.
 Quick tricks, later tricks, and DDS's move-ordering weights per hand position.
 *Done when:* node counts drop sharply on the 8-card set, with no wrong
 answers.
-*Done:* see §2.5.
+*Done:* see §2.5 and §2.6.
 
 **Phase 4: Transposition table.**
 First an exact-position TT (relative ranks, bounds, bucketed array). Then
@@ -442,11 +515,13 @@ partition search: winning-rank backup, masked matching, and the small-card
 filter.
 *Done when:* full 13-card deals solve and the table matches DDS's `list100`
 exactly.
+*Done:* see §2.7.
 
 **Phase 5: Full table and batching.**
 The 20-entry table, parallel over strains, and a batch mode over many deals.
 *Done when:* 100% agreement with DDS on `list1000` (later `list10000`), and we
 have a throughput figure next to DDS on the same Mac.
+*Done:* see §2.8, except for `list10000`, which isn't vendored yet.
 
 **Phase 6: Performance.**
 Read the emitted C for refcount traffic, precompute lookup tables (relative

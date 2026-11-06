@@ -87,7 +87,7 @@ echo "== whole deals against DDS"
 if [ $quick = 1 ]; then
   .venv/bin/python tools/check.py full --limit 12
 else
-  .venv/bin/python tools/check.py full --limit 100
+  .venv/bin/python tools/check.py speed
 fi
 
 echo "== search against brute force, from Python"
