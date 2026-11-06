@@ -894,7 +894,7 @@ def tt.on(+left: U32) -> Bool:
 # How big a memory array to make for a deal of this many tricks: a depth, so 2^d
 # slots. An array that small has no room for the table, and tt.on keeps away from it.
 def tt.depth(+left: U32) -> Nat:
-  U32.to_nat(R.sel(U32.is_lt(left, 4), 10, R.sel(U32.is_lt(left, 6), 14, R.sel(U32.is_lt(left, 9), 18, 21))))
+  U32.to_nat(R.sel(U32.is_lt(left, 4), 10, R.sel(U32.is_lt(left, 6), 14, R.sel(U32.is_lt(left, 9), 18, 23))))
 
 def tt.mask.slot() -> U32:
   61
