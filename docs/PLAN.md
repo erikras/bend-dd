@@ -156,12 +156,12 @@ What this changes:
   near 6 × 10^11 nodes, or hours. The transposition table has to carry it from
   there, as planned. Phase 3 should be judged on the 8-card set.
 - The search runs about 26M nodes/s on one thread, against 63M for brute force.
-  Most of the difference is that it generates, collapses and orders moves at every
+  Most of the difference is probably that it generates, collapses and orders moves at every
   node. Without ordering the rate rose by up to 2×, but it pays for itself by 7
   cards. This is the first target for the lookup tables of Phase 6.
 - One deal runs on one thread, so large endings waste the other cores: the rate on
   10 threads falls from 135M at 8 cards to 74M at 11, as a few long deals fill
-  few leaves. The worst deal is 7 to 17 times the mean, so batches need many leaves
+  few leaves. The worst deal is 10 to 17 times the mean from 7 to 9 cards, so batches need many leaves
   (§5), and single deals need the fork over strains from Phase 5.
 - `Nat` is a checked 48-bit integer at run time, not a wrapping one, so it is the
   node counter: `1n+n` costs a test and past 2^48 the program stops with an error.
