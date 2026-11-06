@@ -867,9 +867,10 @@ def cut.ranks(why: Nat, +t: U32, +pos: R.Pos) -> Ranks:
 #
 # An entry can only be hashed on what every position it matches has in common, and
 # late in a deal many positions have the same lengths. So an entry goes in a bucket by
-# its level, the number of top cards of every suit that matter to it, up to 3, and the
-# hash takes in the owners of that many top cards. A lookup tries each level, highest
-# first. An entry is:
+# its pattern, the suits where its top 3 cards all matter (or all of a shorter suit),
+# and the hash takes in the owners of those cards. A lookup tries each pattern that
+# has been stored with these lengths, which a directory word says: slot 15 of the
+# bucket for the lengths and no pattern, as 16 bits. An entry is:
 #
 #   0: a set top bit, the strain, the leader, and the suit lengths of North and East
 #   1: the tricks left, and the suit lengths of South and West
@@ -877,7 +878,8 @@ def cut.ranks(why: Nat, +t: U32, +pos: R.Pos) -> Ranks:
 #      for each suit how many of the top cards in play matter (4 bits each)
 #   3 to 6: for each suit the owners of the cards in play, 2 bits each, the top card
 #      highest. Only as many as the top cards that matter are compared.
-#   7: unused, except in the first entry of a bucket, where it counts stores.
+#   7: unused, except in the first entry of a bucket, where it counts stores, and the
+#      second, which is the directory word.
 #
 # The lengths of three suits and the tricks left give the lengths of the fourth, as
 # in DDS, so equal lengths give each hand the same voids.
@@ -982,28 +984,28 @@ def key.lens(key: TtKey) -> U32:
 def nib(+x: U32, +i: U32) -> U32:
   ((x >> U32.to_nat((i * 4 : U32))) .&. 15 : U32)
 
-# The owners of the top level cards of suit i, or of all of them if it has fewer.
-def tt.top(+i: U32, +key: TtKey, +level: U32) -> U32:
+# The owners of the top 3 cards of suit i, or of all of them if it has fewer, if the
+# pattern has the suit.
+def tt.top(+i: U32, +key: TtKey, +pat: U32) -> U32:
   +l = nib(key.lens(key), i)
-  (key.own(i, key) >> U32.to_nat(((l - U32.min(l, level)) * 2 : U32)) : U32)
+  R.sel(U32.is_zero(((pat >> U32.to_nat(i)) .&. 1 : U32)), 0, (key.own(i, key) >> U32.to_nat(((U32.max(l, 3) - 3) * 2 : U32)) : U32))
 
-# The first slot of the bucket of a key at a level, where mask is the number of
+# The first slot of the bucket of a key with a pattern, where mask is the number of
 # buckets less one. The first 16 buckets' worth of slots hold the memory and the
 # statistics.
-def tt.bucket(+key: TtKey, +mask: U32, +level: U32) -> U32:
-  +a = ((key.k0(key) * 2654435761) .^. (key.k1(key) * 2246822519) .^. (level * 40503) : U32)
-  +b = ((((((a * 31) .^. tt.top(0, key, level)) * 2654435761) .^. tt.top(1, key, level)) * 2246822519) .^. (tt.top(2, key, level) * 3266489917) .^. (tt.top(3, key, level) * 668265263) : U32)
+def tt.bucket(+key: TtKey, +mask: U32, +pat: U32) -> U32:
+  +a = ((key.k0(key) * 2654435761) .^. (key.k1(key) * 2246822519) .^. (pat * 40503) : U32)
+  +b = ((((((a * 31) .^. tt.top(0, key, pat)) * 2654435761) .^. tt.top(1, key, pat)) * 2246822519) .^. (tt.top(2, key, pat) * 3266489917) .^. (tt.top(3, key, pat) * 668265263) : U32)
   +h = ((b .^. (b >> 15n)) .&. mask : U32)
   (R.sel(U32.is_lt(h, 16), (h + 16 : U32), h) * 64 : U32)
 
-# What a suit with w of its l cards mattering allows as the level: any, if all of them
-# matter, since then a lookup at any level sees the same cards.
-def lvl.suit(+w: U32, +l: U32) -> U32:
-  R.sel(U32.is_eq(w, l), 3, U32.min(w, 3))
+# Whether suit i, with w of its l cards mattering, goes in the pattern.
+def pat.suit(+w: U32, +l: U32, +i: U32) -> U32:
+  (Bool.to_u32(U32.is_ge(w, U32.min(l, 3)) && U32.is_ne(l, 0)) << U32.to_nat(i) : U32)
 
-# The level of an entry.
-def tt.level(+ws: U32, +lens: U32) -> U32:
-  U32.min(U32.min(lvl.suit(nib(ws, 0), nib(lens, 0)), lvl.suit(nib(ws, 1), nib(lens, 1))), U32.min(lvl.suit(nib(ws, 2), nib(lens, 2)), lvl.suit(nib(ws, 3), nib(lens, 3))))
+# The pattern of an entry.
+def tt.pattern(+ws: U32, +lens: U32) -> U32:
+  (pat.suit(nib(ws, 0), nib(lens, 0), 0) .|. pat.suit(nib(ws, 1), nib(lens, 1), 1) .|. pat.suit(nib(ws, 2), nib(lens, 2), 2) .|. pat.suit(nib(ws, 3), nib(lens, 3), 3) : U32)
 
 # Whether two owner words agree on the top w of their l cards.
 def own.agree(+a: U32, +b: U32, +l: U32, +w: U32) -> Bool:
@@ -1093,19 +1095,25 @@ def tt.probe.bucket(miss: Bool, m: Array<U32>, +v: U32, +i: U32, +key: TtKey, +n
     case False{}:
       (m, v)
 
-def tt.probe.levels(+n: Nat, p: Array<U32> & U32, +mask: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+def tt.probe.pats(+n: Nat, p: Array<U32> & U32, +dir: U32, +mask: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
   match n:
     case 0n:
       p
     case 1n+q:
       match p:
         case (m, +v):
-          tt.probe.levels(q, tt.probe.bucket(U32.is_zero(v), m, v, tt.bucket(key, mask, U32.from_nat(q)), key, need), mask, key, need)
+          +pat = U32.from_nat(q)
+          tt.probe.pats(q, tt.probe.bucket(U32.is_zero(v) && U32.is_ne(((dir >> q) .&. 1 : U32), 0), m, v, tt.bucket(key, mask, pat), key, need), dir, mask, key, need)
+
+def tt.probe.dir(p: Array<U32> & U32, +mask: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  match p:
+    case (m, +dir):
+      tt.probe.pats(16n, (m, 0), dir, mask, key, need)
 
 def tt.probe.go(p: Array<U32> & U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
   match p:
     case (m, +mask):
-      tt.probe.levels(4n, (m, 0), mask, key, need)
+      tt.probe.dir(Array.get(U32, m, (tt.bucket(key, mask, 0) + 15 : U32)), mask, key, need)
 
 # Looks a position up: 0 if the table doesn't settle whether North-South reach need
 # more tricks, and otherwise 1 for yes or 2 for no, with above that the number of top
@@ -1203,11 +1211,18 @@ def tt.store.at(p: Array<U32> & U32, +base: U32, +key: TtKey, ok: Bool, +need: U
     case (m, +at):
       tt.store.go(U32.is_ne(at, 0), m, at, base, key, ok, need, left, ws)
 
+# Marks a pattern in the directory, and starts a scan with nothing found.
+def tt.dir.add(p: Array<U32> & U32, +i: U32, +pat: U32) -> Array<U32> & U32:
+  match p:
+    case (m, +d):
+      (Array.set(U32, m, i, ((d .&. 65535) .|. (1 << U32.to_nat(pat)) : U32)), 0)
+
 def tt.store.mask(p: Array<U32> & U32, +key: TtKey, ok: Bool, +need: U32, +left: U32, +ws: U32) -> Array<U32>:
   match p:
     case (m, +mask):
-      +base = tt.bucket(key, mask, tt.level(ws, key.lens(key)))
-      tt.store.at(tt.find.scan(8n, (m, 0), base, key, ws), base, key, ok, need, left, ws)
+      +pat = tt.pattern(ws, key.lens(key))
+      +base = tt.bucket(key, mask, pat)
+      tt.store.at(tt.find.scan(8n, tt.dir.add(Array.get(U32, m, (tt.bucket(key, mask, 0) + 15 : U32)), (tt.bucket(key, mask, 0) + 15 : U32), pat), base, key, ws), base, key, ok, need, left, ws)
 
 # Stores what a search found, if go says to.
 def tt.save(go: Bool, m: Array<U32>, +key: TtKey, ok: Bool, +need: U32, +left: U32, +w01: U32, +w23: U32, +l01: U32, +l23: U32) -> Array<U32>:
@@ -1495,15 +1510,6 @@ def guess.fresh(+t: U32, +pos: R.Pos, +left: U32) -> U32:
   +both = sure.both(t, pos, left)
   ((sure.lo(pos, both) + sure.hi(pos, both, left) + 1 : U32) / 2 : U32)
 
-# The guess for one entry. Within a strain it is the result for the previous leader:
-# moving the lead by one seat rarely changes the result by much.
-def guess.next(fresh: Bool, +v: U32, +t: U32, +pos: R.Pos, +left: U32) -> U32:
-  match fresh:
-    case True{}:
-      guess.fresh(t, pos, left)
-    case False{}:
-      v
-
 # ---------------------------------------------------------------------------
 # The table
 
@@ -1511,9 +1517,9 @@ def guess.next(fresh: Bool, +v: U32, +t: U32, +pos: R.Pos, +left: U32) -> U32:
 type Solved is Type:
   Solved{tricks: List<&2, U32>, nodes: Nat, mem: Array<U32>}
 
-# Fills the table from its last entry to its first, so that it comes out in the
-# order of B.table. r is the result for entry i + 1, and it can feed the guess for
-# entry i. Entries 3, 7, 11, 15 and 19 are the first of their strains.
+# Fills a strain's part of the table from its last entry to its first, so that it
+# comes out in the order of B.table. r is the result for entry i + 1, and it feeds the
+# guess for entry i: moving the lead by one seat rarely changes the result by much.
 def table.go(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, ~sb: @m:Array<U32> -> @+i:U32 -> Array<U32>, k: Nat, r: Val, +i: U32, +d: Nat, +left: U32, +deal: C.Deal, acc: List<&2, U32>) -> Solved:
   match k r:
     case 0n Val{+v, n, m}:
@@ -1522,25 +1528,38 @@ def table.go(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01
       +t = (i >> 2n : U32)
       +decl = (i .&. 3 : U32)
       +pos = R.pos.start(deal, ((decl + 1) .&. 3 : U32))
-      table.go(~st, ~sa, ~sb, p, solve(~st, ~sa, d, t, pos, guess.next(U32.is_eq(decl, 3), v, t, pos, left), n, sb(m, i)), (i - 1 : U32), d, left, deal,
+      table.go(~st, ~sa, ~sb, p, solve(~st, ~sa, d, t, pos, v, n, sb(m, i)), (i - 1 : U32), d, left, deal,
         B.table.entry(U32.is_zero(((i + 1) .&. 1 : U32)), left, v) <> acc)
 
-def table.run(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, ~sb: @m:Array<U32> -> @+i:U32 -> Array<U32>, +deal: C.Deal, m: Array<U32>) -> Solved:
+# The 4 entries of one strain, as table.go leaves them, from the entry for West down.
+def strain.run(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, ~sb: @m:Array<U32> -> @+i:U32 -> Array<U32>, +t: U32, +deal: C.Deal, m: Array<U32>) -> Solved:
   +cards = B.deal.cards(deal)
   +d = U32.to_nat(cards)
   +left = (cards / 4 : U32)
+  +i = (t * 4 + 3 : U32)
   +pos = R.pos.start(deal, 0)
-  table.go(~st, ~sa, ~sb, 19n, solve(~st, ~sa, d, 4, pos, guess.fresh(4, pos, left), 0n, sb(m, 19)), 18, d, left, deal, Nil{})
+  table.go(~st, ~sa, ~sb, 3n, solve(~st, ~sa, d, t, pos, guess.fresh(t, pos, left), 0n, sb(m, i)), (i - 1 : U32), d, left, deal, Nil{})
 
 def done.table(r: Solved) -> B.Table:
   match r:
     case Solved{ts, n, _}:
       B.Table{ts, n}
 
-# The double dummy table of a deal, as B.table gives it.
-def table(+deal: C.Deal) -> B.Table:
+# One strain's part of the table, with a transposition table of its own.
+def strain.table(+t: U32, +deal: C.Deal) -> B.Table:
   +d = tt.depth((B.deal.cards(deal) / 4 : U32))
-  done.table(table.run(~(+t => m => +p => +c => +a => +b => m), ~(m => +x => m), ~(m => +x => m), deal, tt.ready(d, [mem.none() : U32^d])))
+  done.table(strain.run(~(+t => m => +p => +c => +a => +b => m), ~(m => +x => m), ~(m => +x => m), t, deal, tt.ready(d, [mem.none() : U32^d])))
+
+def table.join(a: B.Table, b: B.Table) -> B.Table:
+  match a b:
+    case B.Table{xs, +n} B.Table{ys, +k}:
+      B.Table{List.append(&2, U32, xs, ys), Nat.add(n, k)}
+
+# The double dummy table of a deal, as B.table gives it. Each strain is its own
+# search with its own table, as an entry from one strain says nothing about another.
+# So they can run on threads of their own: dd forks over them.
+def table(+deal: C.Deal) -> B.Table:
+  table.join(strain.table(0, deal), table.join(strain.table(1, deal), table.join(strain.table(2, deal), table.join(strain.table(3, deal), strain.table(4, deal)))))
 
 # The counters of a table, slots 64 to 703 of the array, in order.
 def stats.list(k: Nat, +i: U32, p: Array<U32> & U32, acc: List<&2, U32>) -> List<&2, U32>:
@@ -1569,10 +1588,26 @@ def stats.clear(k: Nat, +i: U32, m: Array<U32>) -> Array<U32>:
     case 1n+p:
       stats.clear(p, (i + 1 : U32), Array.set(U32, m, i, 0))
 
-# The same search, counting.
-def table.report(+deal: C.Deal) -> Report:
+def stats.sum(xs: List<&2, U32>, ys: List<&2, U32>) -> List<&2, U32>:
+  match xs ys:
+    case Con{+x, a} Con{+y, b}:
+      (x + y : U32) <> stats.sum(a, b)
+    case _ _:
+      Nil{}
+
+def report.join(a: Report, b: Report) -> Report:
+  match a b:
+    case Report{xs, +n, sx} Report{ys, +k, sy}:
+      Report{List.append(&2, U32, xs, ys), Nat.add(n, k), stats.sum(sx, sy)}
+
+def strain.report(+t: U32, +deal: C.Deal) -> Report:
   +d = tt.depth((B.deal.cards(deal) / 4 : U32))
-  report.go(table.run(~stat.node, ~stat.ask, ~stat.begin, deal, stats.clear(640n, 64, tt.ready(d, [mem.none() : U32^d]))))
+  report.go(strain.run(~stat.node, ~stat.ask, ~stat.begin, t, deal, stats.clear(640n, 64, tt.ready(d, [mem.none() : U32^d]))))
+
+# The same search, counting, with one strain after another. Each entry only writes to
+# its own counters, so adding them up puts them together.
+def table.report(+deal: C.Deal) -> Report:
+  report.join(strain.report(0, deal), report.join(strain.report(1, deal), report.join(strain.report(2, deal), report.join(strain.report(3, deal), strain.report(4, deal)))))
 
 # ---------------------------------------------------------------------------
 # Sure tricks, for checking

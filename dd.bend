@@ -162,6 +162,19 @@ def table.show(t: B.Table) -> Out:
     case B.Table{ts, +n}:
       Out{True{}, ints.show(ts, Nat.show(n)), n}
 
+# One strain's part of a line: its tricks without the nodes.
+def part.show(t: B.Table) -> Out:
+  match t:
+    case B.Table{ts, +n}:
+      Out{True{}, ints.show(ts, ""), n}
+
+def out.end.go(good: Bool, a: String, +n: Nat) -> Out:
+  match good:
+    case True{}:
+      Out{True{}, a ++ Nat.show(n), n}
+    case False{}:
+      Out{False{}, a, n}
+
 # ~f is the solver, so that each one compiles to its own copy of the batch.
 def one.even(~f: @+deal:C.Deal -> B.Table, even: Bool, text: String, +deal: C.Deal) -> Out:
   match even:
@@ -216,9 +229,13 @@ def out.print(xs: List<&2, Out>) -> IO(Unit):
 
 # How deep to fork: 64 leaves per thread or so. Tasks never move between threads,
 # and endings differ a lot in size, so many small leaves balance better than one
-# per thread. On 4-card endings this took 5.8 s against 7.4 s.
-def fork.depth(+threads: U32) -> Nat:
-  Nat.add(6n, U32.log2((threads * 2 - 1 : U32)))
+# per thread. On 4-card endings this took 5.8 s against 7.4 s. Never deeper than one
+# deal per leaf: the scheduler only hands out tasks until it has enough of them, so
+# empty leaves would keep the forks over strains inside a deal on one thread.
+def fork.depth(+threads: U32, +n: Nat) -> Nat:
+  +deals = U32.log2((U32.from_nat(n) * 2 - 1 : U32))
+  +wide = Nat.add(6n, U32.log2((threads * 2 - 1 : U32)))
+  U32.to_nat(U32.min(U32.from_nat(deals), U32.from_nat(wide)))
 
 # Runs a whole list of deals. The results are forced before the clock is read
 # again, since compiled code is strict, so the time covers the solving.
@@ -227,10 +244,100 @@ def run(~f: @+deal:C.Deal -> B.Table, +name: String, +xs: List<&2, String>) -> I
   do IO<Unit>:
     +threads : U32 <- IO.thread_count()
     t0 : Nat <- IO.now()
-    +out : List<&2, Out> = batch(~f, fork.depth(threads), n, xs)
+    +out : List<&2, Out> = batch(~f, fork.depth(threads, n), n, xs)
     t1 : Nat <- IO.now()
     IO.print_err(name ++ ": " ++ U32.show(U32.from_nat(Nat.sub(t1, t0))) ++ " ms on " ++ U32.show(threads) ++ " threads")
     out.print(out)
+
+# ---------------------------------------------------------------------------
+# Solving by strain
+
+# The search forks over each strain of each deal rather than each deal: there are five
+# times as many leaves to balance, and one deal still fills 5 threads. A fork inside
+# a leaf would do neither, since the scheduler only hands out tasks until it has
+# enough of them.
+type Item is Data:
+  Item{text: String, t: U32}
+
+def items.of(xs: List<&2, String>) -> List<&2, Item>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{+h, t}:
+      Item{h, 0} <> (Item{h, 1} <> (Item{h, 2} <> (Item{h, 3} <> (Item{h, 4} <> items.of(t)))))
+
+def part.even(even: Bool, +text: String, +t: U32, +deal: C.Deal) -> Out:
+  match even:
+    case True{}:
+      part.show(Z.strain.table(t, deal))
+    case False{}:
+      Out{False{}, "dd: hands differ in length: " ++ text, 0n}
+
+def part.parsed(+text: String, +t: U32, d: Maybe<&2, C.Deal>) -> Out:
+  match d:
+    case None{}:
+      Out{False{}, "dd: not a PBN deal: " ++ text, 0n}
+    case Some{+deal}:
+      part.even(B.deal.even(deal), text, t, deal)
+
+def part(i: Item) -> Out:
+  match i:
+    case Item{+text, +t}:
+      part.parsed(text, t, P.parse(text))
+
+def parts.seq(xs: List<&2, Item>) -> List<&2, Out>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{h, t}:
+      part(h) <> parts.seq(t)
+
+def parts.batch(+depth: Nat, +n: Nat, +xs: List<&2, Item>) -> List<&2, Out>:
+  match depth:
+    case 0n:
+      parts.seq(xs)
+    case 1n+p:
+      +half = Nat.div(n, 2n)
+      a b = parts.batch(p, half, List.take(&2, Item, xs, half)) parts.batch(p, Nat.sub(n, half), List.drop(&2, Item, xs, half))
+      List.append(&2, Out, a, b)
+
+def out.join.go(g1: Bool, g2: Bool, a: String, b: String, +n: Nat, +k: Nat) -> Out:
+  match g1 g2:
+    case True{} True{}:
+      Out{True{}, a ++ b, Nat.add(n, k)}
+    case True{} False{}:
+      Out{False{}, b, 0n}
+    case False{} _:
+      Out{False{}, a, 0n}
+
+def out.join(x: Out, y: Out) -> Out:
+  match x y:
+    case Out{g1, a, +n} Out{g2, b, +k}:
+      out.join.go(g1, g2, a, b, n, k)
+
+def out.end(x: Out) -> Out:
+  match x:
+    case Out{+g, a, +n}:
+      out.end.go(g, a, n)
+
+# Each deal's five parts as its line: its tricks in order and then its nodes.
+def parts.lines(xs: List<&2, Out>) -> List<&2, Out>:
+  match xs:
+    case Con{a, Con{b, Con{c, Con{d, Con{e, t}}}}}:
+      out.end(out.join(a, out.join(b, out.join(c, out.join(d, e))))) <> parts.lines(t)
+    case _:
+      Nil{}
+
+def run.parts(+xs: List<&2, String>) -> IO(Unit):
+  +items = items.of(xs)
+  +n = List.length(&2, Item, items)
+  do IO<Unit>:
+    +threads : U32 <- IO.thread_count()
+    t0 : Nat <- IO.now()
+    +out : List<&2, Out> = parts.batch(fork.depth(threads, n), n, items)
+    t1 : Nat <- IO.now()
+    IO.print_err("search: " ++ U32.show(U32.from_nat(Nat.sub(t1, t0))) ++ " ms on " ++ U32.show(threads) ++ " threads")
+    out.print(parts.lines(out))
 
 # ---------------------------------------------------------------------------
 # For people
@@ -336,9 +443,6 @@ def args.tail(xs: List<String>) -> List<String>:
 def brute.table(+deal: C.Deal) -> B.Table:
   B.table(deal)
 
-def search.table(+deal: C.Deal) -> B.Table:
-  Z.table(deal)
-
 def search.bounds(+deal: C.Deal) -> B.Table:
   Z.bounds(deal)
 
@@ -373,7 +477,7 @@ def main.go(xs: List<String>) -> IO(Unit):
     case _:
       do IO<Unit>:
         deals : List<&2, String> <- args.read(xs)
-        run(~search.table, "search", deals)
+        run.parts(deals)
 
 def main() -> IO(Unit):
   do IO<Unit>:
