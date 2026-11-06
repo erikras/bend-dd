@@ -818,14 +818,44 @@ def narrow(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U
       +next = driver.next(ok, lo2, hi2)
       narrow(~st, ~sa, p, stop, ask(~st, ~sa, stop, d, t, pos, next, n, m), next, d, t, pos, lo2, hi2)
 
+# The fewest tricks North-South are sure of at the start of a trick, from both as
+# counts gives it, and the most they can still take. The target cuts don't run on
+# the first card of a search, so without these the driver would search for answers
+# that the counts already give. With no cards left the counts mean nothing.
+def sure.both(+t: U32, +pos: R.Pos, +left: U32) -> U32:
+  R.sel(U32.is_zero(left), 0, counts(t, pos, left))
+
+def sure.lo(+pos: R.Pos, +both: U32) -> U32:
+  (R.pos.won(pos) + R.sel(R.pos.ns(pos), (both .&. 255 : U32), (both >> 8n : U32)) : U32)
+
+def sure.hi(+pos: R.Pos, +both: U32, +left: U32) -> U32:
+  (R.pos.won(pos) + left - R.sel(R.pos.ns(pos), (both >> 8n : U32), (both .&. 255 : U32)) : U32)
+
 # North-South's tricks from the start of a trick with d cards left, starting from
 # a guess at the answer.
 def solve(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, +d: Nat, +t: U32, +pos: R.Pos, +guess: U32, n: Nat, m: Array<U32>) -> Val:
-  +lo = R.pos.won(pos)
-  +hi = (lo + (U32.from_nat(d) >> 2n) : U32)
+  +left = (U32.from_nat(d) >> 2n : U32)
+  +both = sure.both(t, pos, left)
+  +lo = sure.lo(pos, both)
+  +hi = sure.hi(pos, both, left)
   +stop = U32.is_ge(lo, hi)
   +target = driver.first(guess, lo, hi)
   narrow(~st, ~sa, 14n, stop, ask(~st, ~sa, stop, d, t, pos, target, n, m), target, d, t, pos, lo, hi)
+
+# The first guess for a strain: the middle of what isn't already sure. The result of
+# another strain says little, since the trumps can change who has the long suit.
+def guess.fresh(+t: U32, +pos: R.Pos, +left: U32) -> U32:
+  +both = sure.both(t, pos, left)
+  ((sure.lo(pos, both) + sure.hi(pos, both, left) + 1 : U32) / 2 : U32)
+
+# The guess for one entry. Within a strain it is the result for the previous leader:
+# moving the lead by one seat rarely changes the result by much.
+def guess.next(fresh: Bool, +v: U32, +t: U32, +pos: R.Pos, +left: U32) -> U32:
+  match fresh:
+    case True{}:
+      guess.fresh(t, pos, left)
+    case False{}:
+      v
 
 # ---------------------------------------------------------------------------
 # The table
@@ -835,8 +865,8 @@ type Solved is Type:
   Solved{tricks: List<&2, U32>, nodes: Nat, mem: Array<U32>}
 
 # Fills the table from its last entry to its first, so that it comes out in the
-# order of B.table. r is the result for entry i + 1, and it feeds the guess for
-# entry i: moving the lead by one seat rarely changes the result by much.
+# order of B.table. r is the result for entry i + 1, and it can feed the guess for
+# entry i. Entries 3, 7, 11, 15 and 19 are the first of their strains.
 def table.go(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, ~sb: @m:Array<U32> -> @+i:U32 -> Array<U32>, k: Nat, r: Val, +i: U32, +d: Nat, +left: U32, +deal: C.Deal, acc: List<&2, U32>) -> Solved:
   match k r:
     case 0n Val{+v, n, m}:
@@ -844,15 +874,16 @@ def table.go(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01
     case 1n+p Val{+v, n, m}:
       +t = (i >> 2n : U32)
       +decl = (i .&. 3 : U32)
-      +leader = ((decl + 1) .&. 3 : U32)
-      table.go(~st, ~sa, ~sb, p, solve(~st, ~sa, d, t, R.pos.start(deal, leader), v, n, sb(m, i)), (i - 1 : U32), d, left, deal,
+      +pos = R.pos.start(deal, ((decl + 1) .&. 3 : U32))
+      table.go(~st, ~sa, ~sb, p, solve(~st, ~sa, d, t, pos, guess.next(U32.is_eq(decl, 3), v, t, pos, left), n, sb(m, i)), (i - 1 : U32), d, left, deal,
         B.table.entry(U32.is_zero(((i + 1) .&. 1 : U32)), left, v) <> acc)
 
 def table.run(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, ~sb: @m:Array<U32> -> @+i:U32 -> Array<U32>, +deal: C.Deal, m: Array<U32>) -> Solved:
   +cards = B.deal.cards(deal)
   +d = U32.to_nat(cards)
   +left = (cards / 4 : U32)
-  table.go(~st, ~sa, ~sb, 19n, solve(~st, ~sa, d, 4, R.pos.start(deal, 0), ((left + 1) / 2 : U32), 0n, sb(m, 19)), 18, d, left, deal, Nil{})
+  +pos = R.pos.start(deal, 0)
+  table.go(~st, ~sa, ~sb, 19n, solve(~st, ~sa, d, 4, pos, guess.fresh(4, pos, left), 0n, sb(m, 19)), 18, d, left, deal, Nil{})
 
 def done.table(r: Solved) -> B.Table:
   match r:

@@ -313,9 +313,10 @@ depth with one move fewer, so no separate fuel is needed. A child's answer rides
 into the next sibling as an argument, and that sibling stops at once if the answer
 settles the node.
 
-The **driver** for one strain and leader starts from a guess (half the tricks, or
-the answer for the previous leader, later perhaps quick tricks) and narrows the bounds with zero-window
-searches, threading the same TT through every call. The four leaders of one
+The **driver** for one strain and leader takes its bounds from the sure tricks. It
+starts from a guess (the answer for the previous leader, or the middle of the bounds
+for a strain's first entry) and narrows the bounds with zero-window searches,
+threading the same TT through every call. The four leaders of one
 strain share one TT, as in DDS.
 
 ## 5. Parallelism

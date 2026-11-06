@@ -314,7 +314,8 @@ def check_human(args):
                 targets = r[6 : 6 + searches]
                 cuts = r[6 + searches : 6 + searches + 4]
                 moves, kept = int(r[-2]), int(r[-1])
-                if kept > moves or len(cuts) != 4 or searches < 1:
+                # Sure tricks can settle an entry with no search at all.
+                if kept > moves or len(cuts) != 4 or (searches == 0 and int(r[4]) != 0):
                     fail("%s: dd -v row %s" % (pbn, r))
             if str(n) + " nodes" not in lines[-1]:
                 fail("%s: dd -v ends with %s, dd has %d nodes" % (pbn, lines[-1], n))
