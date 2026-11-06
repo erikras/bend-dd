@@ -178,11 +178,10 @@ Each phase ends with something we can run and check.
 **Phase 0: Foundations.**
 Split the code into modules (`src/cards.bend`, `src/pbn.bend`, `src/deal.bend`,
 ...) with `hand.bend` reusing them. Add a PBN parser and a `dd` CLI that reads
-deals from the arguments or a file. Add the test harness (§7) and a GitHub
-Actions job that installs Bend on Linux and runs the tests, so cloud sessions
-can verify changes without Erik's Mac.
-*Done when:* parse then print round-trips 1,000 deals from `hand.bend`, and CI
-is green.
+deals from the arguments or a file. Add the test harness (§7) and a
+`LAWS.bend` / `PROOF.bend` pair with the first laws (§7.5).
+*Done when:* parse then print round-trips 1,000 deals from `hand.bend`, and
+`bend PROOF.bend` prints ALL PROOFS CHECK.
 
 **Phase 1: Rules and a brute-force oracle.**
 Legal move generation (follow suit), trick winner with and without trumps,
@@ -242,7 +241,7 @@ par scores, play analysis, and possibly laws (§7.5).
 `tools/check.py` runs the Bend binary over a file of deals, compares each
 result with the reference, and prints mismatches (with the PBN, strain and
 leader so a failure can be replayed), node counts and timing. The same script
-runs locally and in CI.
+runs on Erik's Mac.
 
 ### 7.3 Layers
 
@@ -263,17 +262,25 @@ runs locally and in CI.
 ### 7.4 Where tests run
 
 The cloud sandbox has not been able to run the Bend compiler so far, so today
-the tests run on Erik's Mac. The CI job in Phase 0 fixes that: once Bend
-installs on a GitHub runner, every PR is checked there.
+the tests run on Erik's Mac (we are not using GitHub Actions). One script,
+`tools/test.sh`, builds the binaries, checks the proofs and runs every test
+layer, so a cloud session can hand it to the Mac in one step.
 
-### 7.5 Laws (optional)
+### 7.5 Laws
 
 Bend can prove laws in `LAWS.bend`. Cheap, useful ones: PBN parse after print
 is the identity; the trick winner is the hand with the highest card of the lead
 suit or the highest trump; move generation only returns cards in the hand and
-follows suit when it can. "The fast solver equals brute-force minimax" is the
-real prize, but proving it is a research project in its own right. Tests cover
-it instead.
+follows suit when it can. Each phase adds the laws for what it builds, for
+example card equivalence (playing either of two equivalent cards gives the
+same result), relative-rank conversion, and that a TT entry only matches
+positions it covers. "The fast solver equals brute-force minimax" is the
+real prize. We aim for it piece by piece, proving each pruning rule sound on
+its own, and keep the tests as the safety net while it stays unproven.
+
+Laws rule out `@unsafe` in anything they cover: Bend fails the proof check for
+every def that depends on one. So the search stays termination-checked, with
+a `Nat` fuel (§4).
 
 ## 8. Risks
 
@@ -285,21 +292,22 @@ it instead.
   accidental copy (an extra owner) turns O(1) into O(n). We check the emitted C.
 - **Verbosity.** No `if`, no matching on computed values, and one def for the
   whole search make the code long. Small helper defs and clear naming keep it
-  readable. If it gets out of hand, `@unsafe` loosens the termination rules.
+  readable. `@unsafe` is not an option, because the laws need checked code.
 - **Bend is young** (frequent releases, a "soon" list that includes U64). We
-  pin a Bend version in CI and the README, and re-test when we upgrade.
+  pin a Bend version in the README and `tools/test.sh`, and re-test when we upgrade.
 
-## 9. Open questions for Erik
+## 9. Decisions
 
-1. **Scope:** is the 20-result table the first target, with mid-play
-   `SolveBoard` later? (Recommended.)
-2. **Performance bar:** what counts as success: within some factor of DDS on
-   one deal, beating DDS on batch throughput, or mainly a showcase of Bend?
-3. **`@unsafe`:** is it OK in the search core if termination-checked code gets
-   too awkward, or should everything pass the checker?
-4. **Laws:** do you want a `LAWS.bend` with the cheap laws in §7.5, or tests
-   only?
-5. **GPU:** a goal, or only an experiment once the CPU version is done?
-6. **Tooling:** OK to use Python plus `endplay` as the test oracle, vendor
-   DDS's hand lists, and add a GitHub Actions job?
-7. **Interface:** plain text table output, or also JSON for scripting?
+Answered by Erik on 2026-11-06:
+
+1. **Scope:** the 4 × 5 table per deal is the target output.
+2. **Performance bar:** throughput over many deals. Batch mode (§5, item 1)
+   is the main event, and single-deal latency matters less.
+3. **`@unsafe`:** not used, since it would break the laws (§7.5).
+4. **Laws:** yes, proved laws in `LAWS.bend`, growing every phase.
+5. **GPU:** an experiment after the CPU version, not a goal.
+6. **Tooling:** no GitHub Actions. Tests run on Erik's Mac through
+   `tools/test.sh`. Python plus `endplay` as the oracle and the vendored DDS
+   lists stay.
+
+Still open: plain text output only, or JSON too.
