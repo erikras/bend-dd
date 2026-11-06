@@ -67,13 +67,13 @@ list and the runtime benchmarks in the Bend repo:
 |---|---|
 | Pure and affine; no mutation except `Array`, which has exactly one owner and updates in place | There is no make/undo. A position is an immutable record of a few `U32`s, and "make a move" builds a new record, which is cheap. The transposition table is an `Array<U32>` threaded linearly through the search, so it really is updated in place. |
 | `U32` only; `U64` is "coming soon" | No 52-bit card sets. We store hands per suit as 13-bit masks (§3). Hash keys are 32-bit, so a TT entry stores its full key to rule out false matches. |
-| Recursion must terminate (structural, left-to-right args); no mutual recursion; no `if`; `match` only on parameters | The search is a single def carrying a `Nat` fuel, with the move loop as a tail self-call, the same shape as Bend's own `queens` benchmark. Decisions are computed by the caller and passed in as `Bool`s. This is verbose but well trodden. `@unsafe` is the escape hatch (open question 3). |
+| Recursion must terminate (structural, left-to-right args); no mutual recursion; no `if`; `match` only on parameters | The search is a single def carrying a `Nat` fuel, with the move loop as a tail self-call, the same shape as Bend's own `queens` benchmark. Decisions are computed by the caller and passed in as `Bool`s. This is verbose but well trodden. No `@unsafe`. |
 | Parallelism is binary fork-join with no work stealing; each fork should be balanced | Alpha-beta is sequential by nature and its subtrees are wildly unbalanced, so we parallelize *across* independent searches (strains, leaders, deals), not inside one search, at least at first. |
 | `~` template arguments are compiled into separate copies | The trump suit can be a template argument, giving five specialised copies of the hot code with the trump checks folded away. |
 | Records of scalars ride in registers; non-tail recursion costs a heap frame; no common-subexpression elimination | Keep the position small and flat, bind values once, and expect per-node overhead to be higher than C. We measure this early (Phase 1). |
 | No C escape from pure code (foreign code is IO only) | Everything in the search is Bend. There is no falling back to a C transposition table. |
 | GPU: Bend's own `queens` search is ~3.5× slower on an M4 GPU than on its CPU cores | The goal is to use every core and the GPU. The CPU path comes first because it is simpler; the GPU path is designed for, then measured (§5). |
-| `Array.fork` plus `Array.atomic.*` exist (marked `@unsafe`) | A shared, lock-free TT across parallel searches is possible later, the way chess engines do it. |
+| `Array.fork` plus `Array.atomic.*` exist, but `Array.fork` is `@unsafe` | A shared, lock-free TT across parallel searches is ruled out by the no-`@unsafe` rule. Every parallel search owns its own TT. |
 | The checker normalises a pure `main` slowly; compiled `IO` mains are fast | The solver's `main` is IO and is built with `bend dd.bend -o dd`. |
 
 ## 3. Data representation
@@ -162,8 +162,8 @@ In order of payoff:
    and suit contracts take different times. Splitting by leader as well gives 20
    leaves at the cost of less TT sharing; we measure both.
 3. **Inside one search** (research, Phase 6): search several targets at once,
-   split the root moves, or share a lock-free TT through `Array.fork` and
-   atomics.
+   or split the root moves. (A shared TT would need `Array.fork`, which is
+   `@unsafe`, so it is out.)
 4. **GPU, as a real target.** Erik wants all the compute in use. Two
    obstacles: per-lane work in a search diverges (lanes on the same SIMD group
    wait for each other), and each lane needs its own TT, while the GPU has
