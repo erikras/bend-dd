@@ -45,7 +45,7 @@ def ending(d: C.Deal, +k: U32) -> C.Deal:
       C.Deal{hand.trim(n, k), hand.trim(e, k), hand.trim(s, k), hand.trim(w, k)}
 
 type Sum is Data:
-  Sum{nodes: U32, tricks: U32}
+  Sum{nodes: Nat, tricks: U32}
 
 def tricks.sum(xs: List<&2, U32>, +acc: U32) -> U32:
   match xs:
@@ -65,7 +65,7 @@ def leaf(+i: U32, +k: U32) -> Sum:
 def merge(a: Sum, b: Sum) -> Sum:
   match a b:
     case Sum{n1, t1} Sum{n2, t2}:
-      Sum{(n1 + n2 : U32), (t1 + t2 : U32)}
+      Sum{Nat.add(n1, n2), (t1 + t2 : U32)}
 
 def run(+d: Nat, +i: U32, +k: U32) -> Sum:
   match d:
@@ -78,7 +78,7 @@ def run(+d: Nat, +i: U32, +k: U32) -> Sum:
 def show(s: Sum) -> String:
   match s:
     case Sum{n, t}:
-      "nodes " ++ U32.show(n) ++ " checksum " ++ U32.show(t)
+      "nodes " ++ Nat.show(n) ++ " checksum " ++ U32.show(t)
 
 def go(+d: Nat, +k: U32) -> IO(Unit):
   do IO<Unit>:

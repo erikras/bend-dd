@@ -94,7 +94,7 @@ def push.all(+high: Bool, +a: U32, +b: U32, +c: U32, +d: U32, acc: List<&2, U32>
   push(high, 0, a, push(high, 1, b, push(high, 2, c, push(high, 3, d, acc))))
 
 # The moves to try from the holdings k, of which w win straight away. On lead:
-# winners, then the rest, high cards first. When partner is winning the trick,
+# winners, then the rest, high cards first in each suit. When partner is winning the trick,
 # the cheapest cards first and any that overtake last. Otherwise the cheapest
 # winner first, then the cheapest of the rest.
 def order(+first: Bool, +mine: Bool, +k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0: U32, +w1: U32, +w2: U32, +w3: U32) -> List<&2, U32>:

@@ -11,6 +11,7 @@ import Base
 import ./src/cards.bend as C
 import ./src/pbn.bend as P
 import ./src/rules.bend as R
+import ./src/search.bend as Z
 import ./SPEC.bend as S
 
 # ---------------------------------------------------------------------------
@@ -199,3 +200,76 @@ law moves_void_clubs:
   for +h23: U32
   for e: {U32.is_zero((h23 .&. 65535 : U32)) == True{} : Bool}
   {R.moves.of(3, h01, h23) == R.moves.all(h01, h23) : List<&2, U32>}
+
+# ---------------------------------------------------------------------------
+# Card equivalence
+
+# LAW: the collapse keeps exactly the top card of each run of a hand's cards,
+# where a run has no other card in play between its cards. So it drops only cards
+# in the hand with a higher card of theirs next above, and adds nothing. This walks
+# each of the 2187 ways to split the seven low ranks into out of play, in play
+# elsewhere and in the hand, and the same for the seven high ranks.
+law tops_low_ranks:
+  {S.tops.walk(7n, 1, 0, 0) == True{} : Bool}
+
+law tops_high_ranks:
+  {S.tops.walk(7n, 64, 0, 0) == True{} : Bool}
+
+# LAW: the same for each of the 8192 holdings with all 13 cards in play.
+law tops_all_in_play:
+  {S.tops.all(8192n, 0) == True{} : Bool}
+
+# LAW: a hand with no cards in the suit tries none, for any cards in play.
+law tops_void:
+  for +live: U32
+  {Z.tops(0, live) == 0 : U32}
+
+# ---------------------------------------------------------------------------
+# Target cutoffs
+
+# LAW: the target cutoffs are sound. If the result will be somewhere from won to
+# won + left, then a cut of 1 means it reaches the target and a cut of 2 means it
+# does not. This covers every won and left adding up to at most 13, every target
+# from 0 to 14, and every result in that range.
+law cut_sound:
+  {S.cut.all(14n, 0) == True{} : Bool}
+
+# ---------------------------------------------------------------------------
+# The driver
+
+# LAW: the driver finds the result. Given answers that are true for targets up to
+# v and false above it, it ends at v within the fuel Z.solve gives it. This covers
+# every lo <= v <= hi up to 13 and every guess from 0 to 13.
+law driver_finds:
+  {S.driver.all(14n, 0) == True{} : Bool}
+
+# ---------------------------------------------------------------------------
+# Move ordering
+
+# LAW: ordering loses no move and repeats none, on lead or not, with partner
+# winning or not. This is a sample: each subset of AQ5 of the winners in spades,
+# with some fixed holdings in the other suits.
+law order_keeps_moves:
+  {S.order.subsets(8n, 2068, 2068, 5, 1) == True{} : Bool}
+
+# LAW: a card counts as a winner exactly when it beats the card winning the trick.
+# It only steers the ordering, so this is a sample: every card against every heart
+# and every spade with spades as trumps, and against every spade at no trumps.
+law wins_hearts_with_spade_trumps:
+  {S.wins.best(13n, 0, 1, 0) == True{} : Bool}
+
+law wins_spades_with_spade_trumps:
+  {S.wins.best(13n, 0, 0, 0) == True{} : Bool}
+
+law wins_spades_at_no_trumps:
+  {S.wins.best(13n, 4, 0, 0) == True{} : Bool}
+
+# ---------------------------------------------------------------------------
+# The search
+
+# LAW: the search gives the same whole table as brute-force minimax, in all 5
+# strains with all 4 leaders. Only a sample so far: the checker is slow at this, so
+# it covers four random 2-card endings. tests/oracle.bend and tools/check.py cover
+# thousands of larger ones.
+law search_is_brute:
+  {S.oracle.all(4n, 1, 2) == True{} : Bool}

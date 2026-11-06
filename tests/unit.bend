@@ -5,6 +5,7 @@ import ../src/cards.bend as C
 import ../src/pbn.bend as P
 import ../src/rules.bend as R
 import ../src/brute.bend as B
+import ../src/search.bend as Z
 import ../src/deal.bend as D
 
 type Check is Data:
@@ -151,12 +152,91 @@ def brute.checks() -> List<&2, Check>:
   ]
 
 # ---------------------------------------------------------------------------
+# Search
+
+def search.of(d: Maybe<&2, C.Deal>) -> List<&2, U32>:
+  match d:
+    case None{}:
+      Nil{}
+    case Some{+x}:
+      table.tricks(Z.table(x))
+
+def search.is(+pbn: String, want: List<&2, U32>) -> Bool:
+  ints.eq(search.of(P.parse(pbn)), want)
+
+# Spots by rank, with bit 12 the ace: A 4096, K 2048, Q 1024, J 512, T 256.
+def tops.checks() -> List<&2, Check>:
+  [
+    Check{"AK in play together is one move", U32.is_eq(Z.tops(6144, 6144), 4096)},
+    Check{"AQ with the K gone is one move", U32.is_eq(Z.tops(5120, 5120), 4096)},
+    Check{"AQ with the K elsewhere is two", U32.is_eq(Z.tops(5120, 7168), 5120)},
+    Check{"K and J with the Q on the table is two", U32.is_eq(Z.tops(2560, 3584), 2560)},
+    Check{"K and J with the Q played earlier is one", U32.is_eq(Z.tops(2560, 2560), 2048)},
+    Check{"a run and a split", U32.is_eq(Z.tops((4096 .|. 2048 .|. 512 .|. 1 : U32), 8191), (4096 .|. 512 .|. 1 : U32))},
+    Check{"the low card of a gap run goes", U32.is_eq(Z.tops((256 .|. 1 : U32), (256 .|. 1 : U32)), 256)},
+    Check{"void", U32.is_eq(Z.tops(0, 8191), 0)}
+  ]
+
+def cut.checks() -> List<&2, Check>:
+  [
+    Check{"already there", U32.is_eq(Z.cut(3, 2, 3), 1)},
+    Check{"out of reach", U32.is_eq(Z.cut(3, 2, 6), 2)},
+    Check{"just in reach is open", U32.is_eq(Z.cut(3, 2, 5), 0)},
+    Check{"one more is open", U32.is_eq(Z.cut(3, 2, 4), 0)},
+    Check{"nothing left decides", U32.is_eq(Z.cut(3, 0, 4), 2)}
+  ]
+
+def after.go(+t: U32, xs: List<&2, U32>, pos: R.Pos) -> R.Pos:
+  match xs:
+    case Nil{}:
+      pos
+    case Con{c, r}:
+      after.go(t, r, R.play(t, pos, c))
+
+# A position from a deal led by North, where a list of cards has been played.
+def after(+t: U32, d: Maybe<&2, C.Deal>, xs: List<&2, U32>) -> R.Pos:
+  match d:
+    case None{}:
+      R.pos.start(C.deal.empty(), 0)
+    case Some{x}:
+      after.go(t, xs, R.pos.start(x, 0))
+
+def order.checks() -> List<&2, Check>:
+  # Hand-worked: East is second to play on the spade Q led by North, holding K J 2,
+  # with the A and T elsewhere. The Q on the table still splits K from J.
+  +p = after(4, P.parse("N:Q.A32.. KJ2.5.. A.KQJ.. T.T98.."), [s(10)])
+  +live01 = R.pos.live01(p)
+  +l01 = (live01 .|. (1024 << 16n) : U32)
+  [
+    Check{"second hand: winner first, then the rest low first; K and J stay apart",
+      ints.eq(Z.gen(4, p, l01, 0), [s(11), s(0), s(9)])},
+    Check{"on lead: the top card in play first, then the rest by suit, high first",
+      ints.eq(Z.gen(4, R.pos.start(C.Deal{C.Hand{(4096 .|. 1 : U32), (2048 : U32), 0, 0}, C.Hand{2, 4096, 0, 0}, C.Hand{4, 1, 0, 0}, C.Hand{8, 2, 0, 0}}, 0), (((4096 .|. 15) << 16n) .|. (4096 .|. 2048 .|. 3) : U32), 0),
+        [s(12), s(0), h(11)])}
+  ]
+
+def search.checks() -> List<&2, Check>:
+  [
+    Check{"search: one trick",
+      search.is("N:A... K... Q... J...", [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0])},
+    Check{"search: four suits",
+      search.is("N:A... .A.. ..A. ...A", [1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0])},
+    Check{"search: no cards",
+      search.is("N:... ... ... ...", [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])},
+    # Two cards each, where the second trick depends on the first.
+    Check{"search: agrees with brute on a two-card ending",
+      ints.eq(search.of(P.parse("N:AK... Q.J.. J..A. T..K.")), table.of(P.parse("N:AK... Q.J.. J..A. T..K.")))}
+  ]
+
+# ---------------------------------------------------------------------------
 # Dealer
 
 def dealer.checks() -> List<&2, Check>:
   [
     Check{"deal 42", String.eq(P.print(D.random(42)), full())},
-    Check{"a deal has 13 cards each", B.deal.even(D.random(7)) && U32.is_eq(B.deal.cards(D.random(7)), 52)}
+    Check{"a deal has 13 cards each", B.deal.even(D.random(7)) && U32.is_eq(B.deal.cards(D.random(7)), 52)},
+    Check{"an ending has k cards each", B.deal.even(D.ending(7, 5)) && U32.is_eq(B.deal.cards(D.ending(7, 5)), 20)},
+    Check{"a 13-card ending is a whole deal", B.deal.even(D.ending(7, 13)) && U32.is_eq(B.deal.cards(D.ending(7, 13)), 52)}
   ]
 
 # ---------------------------------------------------------------------------
@@ -197,7 +277,11 @@ def checks() -> List<&2, Check>:
     List.append(&2, Check, moves.checks(),
       List.append(&2, Check, beats.checks(),
         List.append(&2, Check, trick.checks(),
-          List.append(&2, Check, brute.checks(), dealer.checks())))))
+          List.append(&2, Check, brute.checks(),
+            List.append(&2, Check, tops.checks(),
+              List.append(&2, Check, cut.checks(),
+                List.append(&2, Check, order.checks(),
+                  List.append(&2, Check, search.checks(), dealer.checks())))))))))
 
 def main() -> IO(Unit):
   do IO<Unit>:

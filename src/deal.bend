@@ -78,3 +78,36 @@ def from_seats(xs: List<&2, U32>, +i: U32, d: C.Deal) -> C.Deal:
 # The deal for one seed.
 def random(+seed: U32) -> C.Deal:
   from_seats(seats(52n, seed, 13, 13, 13, 13), 0, C.deal.empty())
+
+# Spreads a seed out: LCG outputs from nearby seeds start out close together.
+def mix(+seed: U32) -> U32:
+  lcg(lcg((seed * 2654435761 .^. (seed >> 15n) : U32)))
+
+def ending.add(keep: Bool, +seat: U32, +i: U32, d: C.Deal) -> C.Deal:
+  match keep:
+    case True{}:
+      C.deal.add(U32.to_nat(seat), U32.to_nat((i / 13 : U32)), (1 << U32.to_nat((12 - i % 13 : U32)) : U32), d)
+    case False{}:
+      d
+
+# Deals the remaining n cards of the deck, from card number i. Each card goes to a
+# seat or stays out, with probability proportional to the places each still has.
+def ending.go(n: Nat, +i: U32, +seed: U32, +a: U32, +b: U32, +c: U32, +e: U32, +out: U32, d: C.Deal) -> C.Deal:
+  match n:
+    case 0n:
+      d
+    case 1n+p:
+      +x = lcg(seed)
+      +r = ((x >> 16n) % (a + b + c + e + out) : U32)
+      +keep = U32.is_ge(r, out)
+      +seat = pick((r - out : U32), a, b, c)
+      +in0 = keep && U32.is_eq(seat, 0)
+      +in1 = keep && U32.is_eq(seat, 1)
+      +in2 = keep && U32.is_eq(seat, 2)
+      +in3 = keep && U32.is_eq(seat, 3)
+      ending.go(p, (i + 1 : U32), x, dec(in0, a), dec(in1, b), dec(in2, c), dec(in3, e), dec(Bool.not(keep), out),
+        ending.add(keep, seat, i, d))
+
+# A random ending for one seed, with k cards in each hand.
+def ending(+seed: U32, +k: U32) -> C.Deal:
+  ending.go(52n, 0, mix(seed), k, k, k, k, (52 - 4 * k : U32), C.deal.empty())

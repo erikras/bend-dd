@@ -31,9 +31,22 @@ echo "== build"
 bend hand.bend -o hand
 bend dd.bend -o dd
 bend tests/unit.bend -o tests/unit
+bend tests/oracle.bend -o tests/oracle
+mkdir -p build
+bend bench/gpu.bend -o build/gpu
 
 echo "== unit tests"
 tests/unit
+
+echo "== search against brute force, inside Bend"
+if [ $quick = 1 ]; then
+  tests/oracle 2000 3
+  tests/oracle 500 4
+else
+  tests/oracle 5000 3
+  tests/oracle 5000 4
+  tests/oracle 200 5
+fi
 
 echo "== hand output"
 want=$(cat tests/data/hand.sha256)
@@ -66,12 +79,28 @@ echo "== round trip"
 echo "== DDS lists"
 .venv/bin/python tools/check.py lists
 
+echo "== search against brute force, from Python"
+if [ $quick = 1 ]; then
+  .venv/bin/python tools/check.py oracle --count 500 --cards 3 4
+else
+  .venv/bin/python tools/check.py oracle --count 2000 --cards 3 4
+  .venv/bin/python tools/check.py oracle --count 2000 --cards 3 4 --suits 2
+  .venv/bin/python tools/check.py oracle --count 100 --cards 5
+fi
+
 echo "== endings against DDS"
 if [ $quick = 1 ]; then
   .venv/bin/python tools/check.py endings --count 200 --cards 3 4
+  .venv/bin/python tools/check.py endings --count 200 --cards 3 --brute
+  .venv/bin/python tools/check.py endings --count 20 --cards 7
 else
   .venv/bin/python tools/check.py endings --count 2000 --cards 3 4
-  .venv/bin/python tools/check.py endings --count 200 --cards 5
+  .venv/bin/python tools/check.py endings --count 1000 --cards 3 4 --brute
+  .venv/bin/python tools/check.py endings --count 200 --cards 5 --brute
+  .venv/bin/python tools/check.py endings --count 500 --cards 5 6
+  .venv/bin/python tools/check.py endings --count 300 --cards 7
+  .venv/bin/python tools/check.py endings --count 200 --cards 8
+  .venv/bin/python tools/check.py endings --count 200 --cards 6 --suits 2
 fi
 
 echo "ALL TESTS PASS"

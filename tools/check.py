@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Compare dd's results against DDS.
 
-  check.py endings [--count N] [--cards 3 4 5] [--seed S] [--threads T] [--brute]
+  check.py endings [--count N] [--cards 3 4 5] [--seed S] [--threads T] [--suits N] [--brute]
       Deals random endings, solves them with `dd` (or `dd --brute`) and with DDS
       (through the endplay package) in every strain with every leader, and
       compares. Also reports dd's node rate.
 
-  check.py oracle [--count N] [--cards 3 4 5] [--seed S] [--threads T]
+  check.py oracle [--count N] [--cards 3 4 5] [--seed S] [--threads T] [--suits N]
       Deals random endings and solves them with `dd` and `dd --brute`, which must
       agree. Reports the node counts of both and their times. Needs no DDS.
 
-  check.py nodes [--count N] [--cards 7 8] [--seed S] [--threads T]
+  check.py nodes [--count N] [--cards 7 8] [--seed S] [--threads T] [--suits N]
       Reports dd's node counts and times without checking them, with the median
       and worst deal, for sizes too slow to check against DDS or brute force.
 
@@ -72,9 +72,11 @@ def with_deals(deals, fn):
 # Endings
 
 
-def random_ending(rng, cards):
-    """A random deal with this many cards in each hand, as PBN."""
-    deck = rng.sample(range(52), 4 * cards)
+def random_ending(rng, cards, suits=4):
+    """A random deal with this many cards in each hand, as PBN. With fewer suits,
+    the cards come from that many of them, which makes long runs and voids common."""
+    pool = [c for s in rng.sample(range(4), suits) for c in range(s * 13, (s + 1) * 13)]
+    deck = rng.sample(pool, 4 * cards)
     hands = []
     for seat in range(4):
         mine = sorted(deck[seat * cards : (seat + 1) * cards])
@@ -105,7 +107,7 @@ def check_endings(args):
     rng = random.Random(args.seed)
     total = rate_nodes = rate_ms = 0
     for cards in args.cards:
-        deals = [random_ending(rng, cards) for _ in range(args.count)]
+        deals = [random_ending(rng, cards, args.suits) for _ in range(args.count)]
         t0 = time.time()
         flags = ["--brute"] if args.brute else []
         lines, err = with_deals(deals, lambda p: run_dd(flags + [p], args.threads))
@@ -154,7 +156,7 @@ def check_oracle(args):
     print("cards  deals   searches    nodes (brute)    nodes (search)  ratio   ms (brute)  ms (search)")
     total = 0
     for cards in args.cards:
-        deals = [random_ending(rng, cards) for _ in range(args.count)]
+        deals = [random_ending(rng, cards, args.suits) for _ in range(args.count)]
         want, brute_nodes, brute_ms = solve_all(["--brute"], deals, args.threads)
         got, nodes, ms = solve_all([], deals, args.threads)
         for pbn, g, w in zip(deals, got, want):
@@ -176,7 +178,7 @@ def check_nodes(args):
     rng = random.Random(args.seed)
     print("cards  deals  nodes/deal (mean)  (median)     (max)    ms/deal   ms total  nodes/s")
     for cards in args.cards:
-        deals = [random_ending(rng, cards) for _ in range(args.count)]
+        deals = [random_ending(rng, cards, args.suits) for _ in range(args.count)]
         _, nodes, ms = solve_all([], deals, args.threads)
         nodes.sort()
         print(
@@ -263,6 +265,7 @@ def main():
     p.add_argument("--cards", type=int, nargs="+", default=[3, 4, 5])
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--threads", type=int)
+    p.add_argument("--suits", type=int, default=4, choices=[1, 2, 3, 4])
     p.add_argument("--brute", action="store_true")
     p.set_defaults(fn=check_endings)
 
@@ -271,6 +274,7 @@ def main():
     p.add_argument("--cards", type=int, nargs="+", default=[3, 4, 5])
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--threads", type=int)
+    p.add_argument("--suits", type=int, default=4, choices=[1, 2, 3, 4])
     p.set_defaults(fn=check_oracle)
 
     p = sub.add_parser("nodes")
@@ -278,6 +282,7 @@ def main():
     p.add_argument("--cards", type=int, nargs="+", default=[7, 8])
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--threads", type=int)
+    p.add_argument("--suits", type=int, default=4, choices=[1, 2, 3, 4])
     p.set_defaults(fn=check_nodes)
 
     p = sub.add_parser("lists")

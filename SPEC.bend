@@ -4,6 +4,9 @@ import Base
 import ./src/cards.bend as C
 import ./src/pbn.bend as P
 import ./src/rules.bend as R
+import ./src/brute.bend as B
+import ./src/search.bend as Z
+import ./src/deal.bend as D
 
 # ---------------------------------------------------------------------------
 # PBN
@@ -194,3 +197,245 @@ def beats.all(n: Nat, +t: U32) -> Bool:
       True{}
     case 1n+p:
       Bool.and(beats.lead(4n, t, 0), beats.all(p, (t + 1 : U32)))
+
+# ---------------------------------------------------------------------------
+# Card equivalence
+
+# What a rank may look like. A card in the hand is in play, and k holds it only at
+# the top of a run, so it is dropped only when the card in play just above it is
+# also in the hand. Any other rank must stay out of k.
+def tops.step.ok(in_m: Bool, in_live: Bool, in_k: Bool, run: Bool) -> Bool:
+  match in_m in_live:
+    case True{} True{}:
+      bool.eq(in_k, Bool.not(run))
+    case True{} False{}:
+      False{}
+    case False{} _:
+      Bool.not(in_k)
+
+# run says the last card in play above this rank was in the hand. A rank with no
+# card in play leaves it alone, so gaps do not split a run.
+def tops.step.run(in_m: Bool, in_live: Bool, run: Bool) -> Bool:
+  match in_live:
+    case True{}:
+      in_m
+    case False{}:
+      run
+
+def bit.in(+m: U32, +bit: U32) -> Bool:
+  U32.is_ne((m .&. bit : U32), 0)
+
+# Whether k is exactly the top card of each run of holding m, where a run is a
+# stretch of cards of m with no other card in play between them. Walks the ranks
+# from the ace down.
+def tops.exact(n: Nat, +bit: U32, +m: U32, +live: U32, +k: U32, +run: Bool) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      +im = bit.in(m, bit)
+      +il = bit.in(live, bit)
+      Bool.and(tops.step.ok(im, il, bit.in(k, bit), run),
+        tops.exact(p, (bit >> 1n : U32), m, live, k, tops.step.run(im, il, run)))
+
+def tops.ok(+m: U32, +live: U32) -> Bool:
+  tops.exact(13n, 4096, m, live, Z.tops(m, live), False{})
+
+# Every way to split n ranks, from this bit up, into not in play, in play
+# elsewhere, and in the hand.
+def tops.walk(+n: Nat, +bit: U32, +m: U32, +live: U32) -> Bool:
+  match n:
+    case 0n:
+      tops.ok(m, live)
+    case 1n+p:
+      +up = (bit << 1n : U32)
+      Bool.and(tops.walk(p, up, m, live),
+        Bool.and(tops.walk(p, up, m, (live .|. bit : U32)),
+          tops.walk(p, up, (m .|. bit : U32), (live .|. bit : U32))))
+
+# Every holding, with all 13 cards in play.
+def tops.all(n: Nat, +m: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(tops.ok(m, 8191), tops.all(p, (m + 1 : U32)))
+
+# ---------------------------------------------------------------------------
+# Target cutoffs
+
+def cut.claim(+code: U32, +v: U32, +target: U32) -> Bool:
+  (U32.is_ne(code, 1) || U32.is_ge(v, target)) && (U32.is_ne(code, 2) || U32.is_lt(v, target))
+
+# For each final result v from won to won + left: what the cut says about the
+# target holds for v.
+def cut.v(n: Nat, +v: U32, +won: U32, +left: U32, +target: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(cut.claim(Z.cut(won, left, target), v, target), cut.v(p, (v + 1 : U32), won, left, target))
+
+def cut.targets(n: Nat, +target: U32, +won: U32, +left: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(cut.v(1n+U32.to_nat(left), won, won, left, target), cut.targets(p, (target + 1 : U32), won, left))
+
+def cut.lefts(n: Nat, +left: U32, +won: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(cut.targets(15n, 0, won, left), cut.lefts(p, (left + 1 : U32), won))
+
+# Every won and left with won + left at most 13, and every target from 0 to 14.
+def cut.all(+n: Nat, +won: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(cut.lefts(1n+p, 0, won), cut.all(p, (won + 1 : U32)))
+
+# ---------------------------------------------------------------------------
+# The driver
+
+# Z.narrow, with the search replaced by what it must answer when the true result
+# is v: whether target is at most v.
+def driver.run(fuel: Nat, done: Bool, +target: U32, +v: U32, +lo: U32, +hi: U32) -> U32:
+  match fuel done:
+    case 0n _:
+      lo
+    case 1n+p True{}:
+      lo
+    case 1n+p False{}:
+      +ok = U32.is_le(target, v)
+      +lo2 = Z.driver.lo(ok, target, lo)
+      +hi2 = Z.driver.hi(ok, target, hi)
+      driver.run(p, U32.is_ge(lo2, hi2), Z.driver.next(ok, lo2, hi2), v, lo2, hi2)
+
+# Z.solve in the same way: the driver finds v with Z.solve's fuel.
+def driver.ok(+g: U32, +v: U32, +lo: U32, +hi: U32) -> Bool:
+  U32.is_eq(driver.run(14n, U32.is_ge(lo, hi), Z.driver.first(g, lo, hi), v, lo, hi), v)
+
+def driver.guess(n: Nat, +g: U32, +v: U32, +lo: U32, +hi: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(driver.ok(g, v, lo, hi), driver.guess(p, (g + 1 : U32), v, lo, hi))
+
+def driver.v(n: Nat, +v: U32, +lo: U32, +hi: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(driver.guess(14n, 0, v, lo, hi), driver.v(p, (v + 1 : U32), lo, hi))
+
+def driver.hi(n: Nat, +width: U32, +lo: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(driver.v(1n+U32.to_nat(width), lo, lo, (lo + width : U32)), driver.hi(p, (width + 1 : U32), lo))
+
+# Every lo <= v <= hi up to 13, and every guess from 0 to 13.
+def driver.all(+n: Nat, +lo: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(driver.hi(1n+p, 0, lo), driver.all(p, (lo + 1 : U32)))
+
+# ---------------------------------------------------------------------------
+# Move ordering
+
+# Whether a list holds each card of these four holdings exactly once.
+def order.exact(xs: List<&2, U32>, +k0: U32, +k1: U32, +k2: U32, +k3: U32) -> Bool:
+  match xs:
+    case Nil{}:
+      U32.is_zero((k0 .|. k1 .|. k2 .|. k3 : U32))
+    case Con{+c, t}:
+      +s = C.card.suit(c)
+      +bit = C.card.bit(c)
+      +is0 = U32.is_eq(s, 0)
+      +is1 = U32.is_eq(s, 1)
+      +is2 = U32.is_eq(s, 2)
+      +is3 = U32.is_eq(s, 3)
+      bit.in(R.pick(U32.to_nat(s), k0, k1, k2, k3), bit) &&
+        order.exact(t, (k0 .^. R.sel(is0, bit, 0) : U32), (k1 .^. R.sel(is1, bit, 0) : U32), (k2 .^. R.sel(is2, bit, 0) : U32), (k3 .^. R.sel(is3, bit, 0) : U32))
+
+def order.ok(+first: Bool, +mine: Bool, +k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0: U32, +w1: U32, +w2: U32, +w3: U32) -> Bool:
+  order.exact(Z.order(first, mine, k0, k1, k2, k3, w0, w1, w2, w3), k0, k1, k2, k3)
+
+def order.modes(+k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0: U32, +w1: U32, +w2: U32, +w3: U32) -> Bool:
+  order.ok(True{}, True{}, k0, k1, k2, k3, w0, w1, w2, w3) &&
+    order.ok(True{}, False{}, k0, k1, k2, k3, w0, w1, w2, w3) &&
+    order.ok(False{}, True{}, k0, k1, k2, k3, w0, w1, w2, w3) &&
+    order.ok(False{}, False{}, k0, k1, k2, k3, w0, w1, w2, w3)
+
+# Each subset w of k, in a suit, walking down from k: w takes each subset once.
+def order.subsets(n: Nat, +k: U32, +w: U32, +k1: U32, +w1: U32) -> Bool:
+  match n:
+    case 0n:
+      order.modes(k, k1, 4097, 8191, w, w1, 1, 4096)
+    case 1n+p:
+      Bool.and(order.subsets(p, k, ((w - 1) .&. k : U32), k1, w1), order.modes(k, k1, 4097, 8191, w, w1, 1, 4096))
+
+# ---------------------------------------------------------------------------
+# Winners
+
+# Whether a card counts as a winner exactly when it beats the card winning.
+def wins.ok(+t: U32, +best: U32, +c: U32) -> Bool:
+  bool.eq(U32.is_ne(Z.wins(False{}, C.card.suit(c), C.card.bit(c), 8191, t, best), 0), R.beats(t, best, c))
+
+def wins.c.rank(n: Nat, +t: U32, +best: U32, +s: U32, +r: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(wins.ok(t, best, C.card.make(s, r)), wins.c.rank(p, t, best, s, (r + 1 : U32)))
+
+def wins.c.suit(n: Nat, +t: U32, +best: U32, +s: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(wins.c.rank(13n, t, best, s, 0), wins.c.suit(p, t, best, (s + 1 : U32)))
+
+# Best is any card of suit s: the suit led, or a trump on top of it.
+def wins.best(n: Nat, +t: U32, +s: U32, +r: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(wins.c.suit(4n, t, C.card.make(s, r), 0), wins.best(p, t, s, (r + 1 : U32)))
+
+# ---------------------------------------------------------------------------
+# The search against brute force
+
+def tables.eq(a: List<&2, U32>, b: List<&2, U32>) -> Bool:
+  match a b:
+    case Nil{} Nil{}:
+      True{}
+    case Con{x, s} Con{y, t}:
+      Bool.and(U32.is_eq(x, y), tables.eq(s, t))
+    case _ _:
+      False{}
+
+def table.tricks(t: B.Table) -> List<&2, U32>:
+  match t:
+    case B.Table{ts, _}:
+      ts
+
+def oracle.ok(+deal: C.Deal) -> Bool:
+  tables.eq(table.tricks(Z.table(deal)), table.tricks(B.table(deal)))
+
+# Whole tables of the endings from these seeds with k cards in each hand.
+def oracle.all(n: Nat, +seed: U32, +k: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(oracle.ok(D.ending(seed, k)), oracle.all(p, (seed + 1 : U32), k))

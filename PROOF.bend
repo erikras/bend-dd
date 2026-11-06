@@ -346,3 +346,36 @@ def Laws.trick_winner_nt():
 
 def Laws.moves_holding():
   {==}
+
+def Laws.tops_low_ranks():
+  {==}
+
+def Laws.tops_high_ranks():
+  {==}
+
+def Laws.tops_all_in_play():
+  {==}
+
+def Laws.tops_void(live):
+  {==}
+
+def Laws.cut_sound():
+  {==}
+
+def Laws.driver_finds():
+  {==}
+
+def Laws.order_keeps_moves():
+  {==}
+
+def Laws.wins_hearts_with_spade_trumps():
+  {==}
+
+def Laws.wins_spades_with_spade_trumps():
+  {==}
+
+def Laws.wins_spades_at_no_trumps():
+  {==}
+
+def Laws.search_is_brute():
+  {==}
