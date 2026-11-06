@@ -63,6 +63,9 @@ N:A8.J94.KQ62.KT86 K64.873.A3.Q5432 QJ73.AKQ65.98.AJ T952.T2.JT754.97
 
 ## Roadmap
 
+The full plan, with the algorithm choices and the testing strategy, is in
+[docs/PLAN.md](docs/PLAN.md). In short:
+
 1. Deal and print hands (done).
 2. Represent the deal as bitboards and generate legal plays.
 3. Solve a single strain and lead with alpha-beta search.
