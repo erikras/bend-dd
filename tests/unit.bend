@@ -282,6 +282,62 @@ def search.checks() -> List<&2, Check>:
   ]
 
 # ---------------------------------------------------------------------------
+# Transposition table
+
+def pos.of(d: Maybe<&2, C.Deal>) -> R.Pos:
+  match d:
+    case None{}:
+      R.Pos{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+    case Some{+x}:
+      R.pos.start(x, 0)
+
+def tt.answer(p: Array<U32> & U32) -> U32:
+  match p:
+    case (_, +v):
+      (v .&. 3 : U32)
+
+# What probing b for need more tricks says, after storing that position a reaches 2
+# more, resting on the ranks w01, in a table otherwise empty.
+def tt.after(+ok: Bool, +a: R.Pos, +b: R.Pos, +w01: U32, +need: U32) -> U32:
+  tt.answer(Z.tt.probe(Z.tt.save(True{}, Z.tt.ready(12n, [Z.mem.none() : U32^12n]), Z.tt.key(True{}, 4, 3, a), ok, 2, 3, w01, 0, R.pos.live01(a), R.pos.live23(a)), Z.tt.key(True{}, 4, 3, b), need))
+
+def tt.pos.a() -> R.Pos:
+  pos.of(P.parse("N:AK5... QJ4... T98... 763..."))
+
+# With the 5 and the 4 swapped.
+def tt.pos.low() -> R.Pos:
+  pos.of(P.parse("N:AK4... QJ5... T98... 763..."))
+
+# With the K and the Q swapped.
+def tt.pos.high() -> R.Pos:
+  pos.of(P.parse("N:AQ5... KJ4... T98... 763..."))
+
+# With other lengths.
+def tt.pos.long() -> R.Pos:
+  pos.of(P.parse("N:AK.5.. QJ4... T98... 763..."))
+
+def tt.checks() -> List<&2, Check>:
+  # The ace counts down to the top card, the king to two, and 3 is every card.
+  +ace = (4096 << 16n : U32)
+  +king = (2048 << 16n : U32)
+  +all = (2 << 16n : U32)
+  [
+    Check{"table: what was stored comes back", U32.is_eq(tt.after(True{}, tt.pos.a(), tt.pos.a(), ace, 2), 1)},
+    Check{"table: a lower target is settled too", U32.is_eq(tt.after(True{}, tt.pos.a(), tt.pos.a(), ace, 1), 1)},
+    Check{"table: a higher target is not", U32.is_eq(tt.after(True{}, tt.pos.a(), tt.pos.a(), ace, 3), 0)},
+    Check{"table: false settles the target and above", U32.is_eq(tt.after(False{}, tt.pos.a(), tt.pos.a(), ace, 3), 2)},
+    Check{"table: false does not settle lower", U32.is_eq(tt.after(False{}, tt.pos.a(), tt.pos.a(), ace, 1), 0)},
+    Check{"table: small cards that don't matter can move", U32.is_eq(tt.after(True{}, tt.pos.a(), tt.pos.low(), king, 2), 1)},
+    Check{"table: small cards that do matter can't", U32.is_eq(tt.after(True{}, tt.pos.a(), tt.pos.low(), all, 2), 0)},
+    Check{"table: a card above the lowest that matters can't move", U32.is_eq(tt.after(True{}, tt.pos.a(), tt.pos.high(), king, 2), 0)},
+    Check{"table: a card below the lowest that matters can", U32.is_eq(tt.after(True{}, tt.pos.a(), tt.pos.high(), ace, 2), 1)},
+    Check{"table: other lengths never match", U32.is_eq(tt.after(True{}, tt.pos.a(), tt.pos.long(), ace, 1), 0)},
+    Check{"table: ranks come back as the lowest that matters", U32.is_eq(Z.kth(2n, 7168), 2048)},
+    Check{"table: a run counts below its top", U32.is_eq(Z.run.below(1024, (512 .|. 256 .|. 64 : U32), (1024 .|. 512 .|. 256 .|. 128 .|. 64 : U32)), (512 .|. 256 : U32))},
+    Check{"table: a run skips cards out of play", U32.is_eq(Z.run.below(1024, (256 .|. 64 : U32), (1024 .|. 256 .|. 128 .|. 64 : U32)), 256)}
+  ]
+
+# ---------------------------------------------------------------------------
 # Dealer
 
 def dealer.checks() -> List<&2, Check>:
@@ -336,7 +392,8 @@ def checks() -> List<&2, Check>:
                 List.append(&2, Check, sure.checks(),
                   List.append(&2, Check, second.checks(),
                     List.append(&2, Check, order.checks(),
-                      List.append(&2, Check, search.checks(), dealer.checks())))))))))))
+                      List.append(&2, Check, search.checks(),
+                        List.append(&2, Check, tt.checks(), dealer.checks()))))))))))))
 
 def main() -> IO(Unit):
   do IO<Unit>:

@@ -6,8 +6,7 @@
 # or a file with one deal per line. Blank lines and lines starting with # are
 # skipped. Each deal prints one line: the 20 entries of its double dummy table,
 # strain then declarer as in DDS's TABLE lines, then the number of positions
-# visited. A summary goes to stderr. There is no transposition table yet, so this
-# is for endings, not full deals.
+# visited. A summary goes to stderr.
 #
 #   dd --grid [deal or file]...
 #

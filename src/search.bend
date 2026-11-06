@@ -12,7 +12,12 @@
 #     in play, only the top one is tried;
 #   - quick tricks and later tricks: at the start of a trick, tricks either side is
 #     already sure of may settle it, and so may the trick in progress after the lead;
-#   - DDS's move weights for each place in the trick, and a memory of best moves.
+#   - DDS's move weights for each place in the trick, and a memory of best moves;
+#   - a transposition table with partition search, from the start of a trick: an
+#     answer also says which cards it rested on, so it holds for every position
+#     that agrees on them;
+#   - the small card filter: a small card is not tried if another that the answers so
+#     far don't rest on has been tried in its suit.
 
 import Base
 import ./cards.bend as C
@@ -28,8 +33,14 @@ import ./brute.bend as B
 # along, including through every search for a deal. A call cannot be destructured
 # in place, so reading it inside the search has to happen in a helper: each Res comes
 # with memo, what the memory holds for the next child of the node it goes to.
+#
+# Going into a node, moves holds its moves. Coming out, w01 and w23 are its winning
+# ranks, packed as a hand is: the answer holds for every position that has the same
+# suit lengths and the same owners for each card down to the lowest of these in its
+# suit. The top bit of w01 says that the answer came from a cut or from the table, so
+# it isn't worth storing.
 type Res is Type:
-  Res{ok: Bool, nodes: Nat, mem: Array<U32>, memo: U32}
+  Res{ok: Bool, nodes: Nat, mem: Array<U32>, memo: U32, moves: List<&2, U32>, w01: U32, w23: U32}
 
 # A driver's result, with the same counters.
 type Val is Type:
@@ -471,6 +482,10 @@ def why.later() -> U32:
 def why.after() -> U32:
   16
 
+# An answer from the transposition table.
+def why.table() -> U32:
+  20
+
 def boundary.side(ns: Bool, +q: U32, +l: U32, +won: U32, +left: U32, +target: U32) -> U32:
   match ns:
     case True{}:
@@ -616,18 +631,19 @@ def stat.nodes() -> U32:
 def stat.searches() -> U32:
   2
 
-# The cuts follow in the order of why, target first, two slots each.
+# The cuts follow in the order of why, target first, two slots each, with answers
+# from the table last.
 def stat.cuts() -> U32:
   4
 
 def stat.moves() -> U32:
-  12
-
-def stat.kept() -> U32:
   14
 
-def stat.log() -> U32:
+def stat.kept() -> U32:
   16
+
+def stat.log() -> U32:
+  18
 
 # The slot of the memory array holding the base of the current entry.
 def stat.current() -> U32:
@@ -708,19 +724,627 @@ def stat.begin(m: Array<U32>, +i: U32) -> Array<U32>:
 # ---------------------------------------------------------------------------
 # The search
 
-# A Res whose memo is slot i of the memory.
-def peek.go(ok: Bool, n: Nat, pair: Array<U32> & U32) -> Res:
+# ---------------------------------------------------------------------------
+# Winning ranks
+
+# Two words, packed as a hand is: one mask per suit.
+type Ranks is Data:
+  Ranks{r01: U32, r23: U32}
+
+def ranks.none() -> Ranks:
+  Ranks{0, 0}
+
+def ranks.sel(b: Bool, x: Ranks, y: Ranks) -> Ranks:
+  match b:
+    case True{}:
+      x
+    case False{}:
+      y
+
+# The mask of a suit as two words.
+def ranks.of(+s: U32, +m: U32) -> Ranks:
+  +x = R.sel(U32.is_zero((s .&. 1 : U32)), (m << 16n : U32), m)
+  ranks.sel(U32.is_lt(s, 2), Ranks{x, 0}, Ranks{0, x})
+
+# The cards below b in holding h that are next to it among the cards in play. The
+# search only tries the top card of such a run, so whatever the top card proved has
+# to be true of all of them.
+def run.below(+b: U32, +h: U32, +live: U32) -> U32:
+  +below = (live .&. (b - 1) : U32)
+  +other = (below .&. U32.not(h) : U32)
+  +mine = (below .&. h : U32)
+  R.sel(U32.is_zero(other), mine, (mine .&. (0 - (2 << U32.log2(other))) : U32))
+
+# The holdings of a position by the seats from the one given, in a suit.
+def hand.suit(+i: U32, +s: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32) -> U32:
+  +k = U32.to_nat((i .&. 3 : U32))
+  R.suit.mask(s, R.pick(k, n01, e01, s01, w01), R.pick(k, n23, e23, s23, w23))
+
+# Why the fourth card of a trick leaves winning ranks. A trick won over another card
+# of the suit was won by rank, and that is all the search compares.
+def trick.ranks.go(+s: U32, +b: U32, pos: R.Pos, +l01: U32, +l23: U32) -> Ranks:
+  match pos:
+    case R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, +tr, _}:
+      +sn = U32.to_nat(s)
+      +h = hand.suit(R.trick.seat(tr), sn, n01, n23, e01, e23, s01, s23, w01, w23)
+      ranks.of(s, (b .|. run.below(b, h, R.suit.mask(sn, l01, l23)) : U32))
+
+# The ranks from a trick that ended with card c, where pos is the position before c
+# and child the one after it, whose seat to play won the trick.
+def trick.ranks(bound: Bool, +t: U32, pos: R.Pos, +c: U32, +child: R.Pos, +l01: U32, +l23: U32) -> Ranks:
+  match bound:
+    case False{}:
+      ranks.none()
+    case True{}:
+      +tr = R.pos.trick(pos)
+      +best = R.trick.best(tr)
+      +win = R.beats(t, best, c)
+      +card = R.sel(win, c, best)
+      +same = U32.is_eq(C.card.suit(c), C.card.suit(best))
+      +rank = same || (R.trick.rank(tr) && Bool.not(win))
+      ranks.sel(rank, trick.ranks.go(C.card.suit(card), C.card.bit(card), child, l01, l23), ranks.none())
+
+# The cards of side above the best card of the rest of the suit.
+def top.run(+side: U32, +all: U32) -> U32:
+  +rest = (all .^. side : U32)
+  R.sel(U32.is_zero(rest), side, (side .&. (0 - (2 << U32.log2(rest))) : U32))
+
+# Quick tricks count how many top cards of each suit the side on lead holds. Given
+# the same lengths, they only rise with these.
+def quick.ranks(+tr: U32, pos: R.Pos) -> Ranks:
+  match pos:
+    case R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, _, _}:
+      +k = U32.to_nat((R.trick.seat(tr) .&. 1 : U32))
+      +a01 = R.pick(k, (n01 .|. s01 : U32), (e01 .|. w01 : U32), 0, 0)
+      +a23 = R.pick(k, (n23 .|. s23 : U32), (e23 .|. w23 : U32), 0, 0)
+      +l01 = (n01 .|. e01 .|. s01 .|. w01 : U32)
+      +l23 = (n23 .|. e23 .|. s23 .|. w23 : U32)
+      Ranks{
+        ((top.run((a01 >> 16n : U32), (l01 >> 16n : U32)) << 16n) .|. top.run((a01 .&. 65535 : U32), (l01 .&. 65535 : U32)) : U32),
+        ((top.run((a23 >> 16n : U32), (l23 >> 16n : U32)) << 16n) .|. top.run((a23 .&. 65535 : U32), (l23 .&. 65535 : U32)) : U32)}
+
+def bit.top.or0(+x: U32) -> U32:
+  R.sel(U32.is_zero(x), 0, bit.top(x))
+
+# Later tricks look at who holds the top card of each suit at no trumps, and the top
+# two trumps otherwise, and otherwise only at lengths.
+def later.ranks(+t: U32, +l01: U32, +l23: U32) -> Ranks:
+  +tm = R.suit.mask(U32.to_nat(t), l01, l23)
+  +top2 = (bit.top.or0(tm) .|. bit.top.or0((tm .^. bit.top.or0(tm) : U32)) : U32)
+  ranks.sel(U32.is_eq(t, 4),
+    Ranks{
+      ((bit.top.or0((l01 >> 16n : U32)) << 16n) .|. bit.top.or0((l01 .&. 65535 : U32)) : U32),
+      ((bit.top.or0((l23 >> 16n : U32)) << 16n) .|. bit.top.or0((l23 .&. 65535 : U32)) : U32)},
+    ranks.of(t, top2))
+
+# The check after the lead rests on the card that wins the trick for sure. If it is
+# still in a hand, it plays that card, so its run counts. If it is the card led, the
+# run of the leader counts.
+def after.ranks.go(+t: U32, +tr: U32, +l01: U32, +l23: U32, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32) -> Ranks:
+  +seat = R.trick.seat(tr)
+  +best = R.trick.best(tr)
+  +l = R.trick.lead(tr)
+  +ln = U32.to_nat(l)
+  +st = U32.to_nat(t)
+  +hi = U32.max(U32.max((16 + C.card.rank(best) : U32), second.power(ln, st, R.pick(U32.to_nat(seat), n01, e01, s01, w01), R.pick(U32.to_nat(seat), n23, e23, s23, w23))),
+    U32.max(second.power(ln, st, R.pick(U32.to_nat(((seat + 1) .&. 3 : U32)), n01, e01, s01, w01), R.pick(U32.to_nat(((seat + 1) .&. 3 : U32)), n23, e23, s23, w23)),
+      second.power(ln, st, R.pick(U32.to_nat(((seat + 2) .&. 3 : U32)), n01, e01, s01, w01), R.pick(U32.to_nat(((seat + 2) .&. 3 : U32)), n23, e23, s23, w23))))
+  +s = R.sel(U32.is_ge(hi, 32), t, l)
+  +sn = U32.to_nat(s)
+  +b = (1 << U32.to_nat((hi .&. 15 : U32)) : U32)
+  +live = R.suit.mask(sn, l01, l23)
+  +h0 = hand.suit((seat + 3 : U32), sn, n01, n23, e01, e23, s01, s23, w01, w23)
+  +h1 = hand.suit(seat, sn, n01, n23, e01, e23, s01, s23, w01, w23)
+  +h2 = hand.suit((seat + 1 : U32), sn, n01, n23, e01, e23, s01, s23, w01, w23)
+  +h3 = hand.suit((seat + 2 : U32), sn, n01, n23, e01, e23, s01, s23, w01, w23)
+  +h = R.sel(U32.is_ne((h1 .&. b : U32), 0), h1, R.sel(U32.is_ne((h2 .&. b : U32), 0), h2, R.sel(U32.is_ne((h3 .&. b : U32), 0), h3, h0)))
+  ranks.of(s, (b .|. run.below(b, h, live) : U32))
+
+def after.ranks(+t: U32, pos: R.Pos, +l01: U32, +l23: U32) -> Ranks:
+  match pos:
+    case R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, +tr, _}:
+      after.ranks.go(t, tr, l01, l23, n01, n23, e01, e23, s01, s23, w01, w23)
+
+# What a cut rests on, by its reason.
+def cut.ranks(why: Nat, +t: U32, +pos: R.Pos) -> Ranks:
+  match why:
+    case 1n:
+      ranks.none()
+    case 2n:
+      quick.ranks(R.pos.trick(pos), pos)
+    case 3n:
+      later.ranks(t, R.pos.live01(pos), R.pos.live23(pos))
+    case _:
+      ranks.none()
+
+# ---------------------------------------------------------------------------
+# The transposition table
+#
+# The table is the rest of the memory array, from slot 1024: buckets of 8 entries of
+# 8 words each, so a bucket is 64 words. Slot 61 of the array holds the number of
+# buckets less one. The whole array has one owner and is handed along, so it is
+# updated in place. Entries of the 5 strains share it.
+#
+# An entry can only be hashed on what every position it matches has in common, and
+# late in a deal many positions have the same lengths. So an entry goes in a bucket by
+# its level, the number of top cards of every suit that matter to it, up to 3, and the
+# hash takes in the owners of that many top cards. A lookup tries each level, highest
+# first. An entry is:
+#
+#   0: a set top bit, the strain, the leader, and the suit lengths of North and East
+#   1: the tricks left, and the suit lengths of South and West
+#   2: the fewest and the most tricks North-South take from here (4 bits each), then
+#      for each suit how many of the top cards in play matter (4 bits each)
+#   3 to 6: for each suit the owners of the cards in play, 2 bits each, the top card
+#      highest. Only as many as the top cards that matter are compared.
+#   7: unused, except in the first entry of a bucket, where it counts stores.
+#
+# The lengths of three suits and the tricks left give the lengths of the fourth, as
+# in DDS, so equal lengths give each hand the same voids.
+
+type TtKey is Data:
+  TtKey{k0: U32, k1: U32, o0: U32, o1: U32, o2: U32, o3: U32, lens: U32}
+
+# Whether to use the table at a position with this many tricks left.
+def tt.on(+left: U32) -> Bool:
+  U32.is_ge(left, 3)
+
+# How big a memory array to make for a deal of this many tricks: a depth, so 2^d
+# slots. An array that small has no room for the table, and tt.on keeps away from it.
+def tt.depth(+left: U32) -> Nat:
+  U32.to_nat(R.sel(U32.is_lt(left, 4), 10, R.sel(U32.is_lt(left, 6), 14, R.sel(U32.is_lt(left, 9), 18, 21))))
+
+def tt.mask.slot() -> U32:
+  61
+
+def tt.ready(+d: Nat, m: Array<U32>) -> Array<U32>:
+  Array.set(U32, m, tt.mask.slot(), ((1 << U32.to_nat(R.sel(U32.is_ge(U32.from_nat(d), 6), (U32.from_nat(d) - 6 : U32), 0))) - 1 : U32))
+
+def own.go(n: Nat, z: Bool, +rest: U32, +a: U32, +b: U32, +at: U32, +acc: U32) -> U32:
+  match n z:
+    case 0n _:
+      acc
+    case 1n+p True{}:
+      acc
+    case 1n+p False{}:
+      +low = bit.low(rest)
+      +r = U32.ctz(low)
+      +o = (((a >> r) .&. 1) .|. (((b >> r) .&. 1) << 1n) : U32)
+      +more = (rest .^. low : U32)
+      own.go(p, U32.is_zero(more), more, a, b, (at + 2 : U32), (acc .|. (o << U32.to_nat(at)) : U32))
+
+# The owners of the cards in play in a suit, 2 bits each and the top card highest,
+# as 0 for North to 3 for West.
+def own(+n: U32, +e: U32, +s: U32, +w: U32) -> U32:
+  +live = (n .|. e .|. s .|. w : U32)
+  own.go(13n, U32.is_zero(live), live, (e .|. w : U32), (s .|. w : U32), 0, 0)
+
+def lens3(+a: U32, +b: U32, +c: U32) -> U32:
+  (C.bits.count(a) .|. (C.bits.count(b) << 4n) .|. (C.bits.count(c) << 8n) : U32)
+
+def tt.key.go(+t: U32, +seat: U32, +left: U32, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32) -> TtKey:
+  +n0 = (n01 >> 16n : U32)
+  +n1 = (n01 .&. 65535 : U32)
+  +n2 = (n23 >> 16n : U32)
+  +n3 = (n23 .&. 65535 : U32)
+  +e0 = (e01 >> 16n : U32)
+  +e1 = (e01 .&. 65535 : U32)
+  +e2 = (e23 >> 16n : U32)
+  +e3 = (e23 .&. 65535 : U32)
+  +s0 = (s01 >> 16n : U32)
+  +s1 = (s01 .&. 65535 : U32)
+  +s2 = (s23 >> 16n : U32)
+  +s3 = (s23 .&. 65535 : U32)
+  +w0 = (w01 >> 16n : U32)
+  +w1 = (w01 .&. 65535 : U32)
+  +w2 = (w23 >> 16n : U32)
+  +w3 = (w23 .&. 65535 : U32)
+  TtKey{
+    ((1 << 31n) .|. (t << 26n) .|. (seat << 24n) .|. (lens3(n0, n1, n2) << 12n) .|. lens3(e0, e1, e2) : U32),
+    ((left << 24n) .|. (lens3(s0, s1, s2) << 12n) .|. lens3(w0, w1, w2) : U32),
+    own(n0, e0, s0, w0), own(n1, e1, s1, w1), own(n2, e2, s2, w2), own(n3, e3, s3, w3),
+    (C.bits.count((n0 .|. e0 .|. s0 .|. w0 : U32)) .|. (C.bits.count((n1 .|. e1 .|. s1 .|. w1 : U32)) << 4n) .|. (C.bits.count((n2 .|. e2 .|. s2 .|. w2 : U32)) << 8n) .|. (C.bits.count((n3 .|. e3 .|. s3 .|. w3 : U32)) << 12n) : U32)}
+
+def tt.key.pos(+t: U32, +left: U32, pos: R.Pos) -> TtKey:
+  match pos:
+    case R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, +tr, _}:
+      tt.key.go(t, R.trick.seat(tr), left, n01, n23, e01, e23, s01, s23, w01, w23)
+
+# The key of a position, or nothing to go on when the table isn't in use there.
+def tt.key(go: Bool, +t: U32, +left: U32, +pos: R.Pos) -> TtKey:
+  match go:
+    case True{}:
+      tt.key.pos(t, left, pos)
+    case False{}:
+      TtKey{0, 0, 0, 0, 0, 0, 0}
+
+def key.own(+i: U32, key: TtKey) -> U32:
+  match key:
+    case TtKey{_, _, a, b, c, d, _}:
+      R.pick(U32.to_nat(i), a, b, c, d)
+
+def key.k0(key: TtKey) -> U32:
+  match key:
+    case TtKey{k, _, _, _, _, _, _}:
+      k
+
+def key.k1(key: TtKey) -> U32:
+  match key:
+    case TtKey{_, k, _, _, _, _, _}:
+      k
+
+def key.lens(key: TtKey) -> U32:
+  match key:
+    case TtKey{_, _, _, _, _, _, l}:
+      l
+
+# The 4 bits of suit i in a packed word.
+def nib(+x: U32, +i: U32) -> U32:
+  ((x >> U32.to_nat((i * 4 : U32))) .&. 15 : U32)
+
+# The owners of the top level cards of suit i, or of all of them if it has fewer.
+def tt.top(+i: U32, +key: TtKey, +level: U32) -> U32:
+  +l = nib(key.lens(key), i)
+  (key.own(i, key) >> U32.to_nat(((l - U32.min(l, level)) * 2 : U32)) : U32)
+
+# The first slot of the bucket of a key at a level, where mask is the number of
+# buckets less one. The first 16 buckets' worth of slots hold the memory and the
+# statistics.
+def tt.bucket(+key: TtKey, +mask: U32, +level: U32) -> U32:
+  +a = ((key.k0(key) * 2654435761) .^. (key.k1(key) * 2246822519) .^. (level * 40503) : U32)
+  +b = ((((((a * 31) .^. tt.top(0, key, level)) * 2654435761) .^. tt.top(1, key, level)) * 2246822519) .^. (tt.top(2, key, level) * 3266489917) .^. (tt.top(3, key, level) * 668265263) : U32)
+  +h = ((b .^. (b >> 15n)) .&. mask : U32)
+  (R.sel(U32.is_lt(h, 16), (h + 16 : U32), h) * 64 : U32)
+
+# What a suit with w of its l cards mattering allows as the level: any, if all of them
+# matter, since then a lookup at any level sees the same cards.
+def lvl.suit(+w: U32, +l: U32) -> U32:
+  R.sel(U32.is_eq(w, l), 3, U32.min(w, 3))
+
+# The level of an entry.
+def tt.level(+ws: U32, +lens: U32) -> U32:
+  U32.min(U32.min(lvl.suit(nib(ws, 0), nib(lens, 0)), lvl.suit(nib(ws, 1), nib(lens, 1))), U32.min(lvl.suit(nib(ws, 2), nib(lens, 2)), lvl.suit(nib(ws, 3), nib(lens, 3))))
+
+# Whether two owner words agree on the top w of their l cards.
+def own.agree(+a: U32, +b: U32, +l: U32, +w: U32) -> Bool:
+  U32.is_zero(((a .^. b) >> U32.to_nat(((l - w) * 2 : U32)) : U32))
+
+def tt.read(go: Bool, m: Array<U32>, +i: U32) -> Array<U32> & U32:
+  match go:
+    case True{}:
+      Array.get(U32, m, i)
+    case False{}:
+      (m, 0)
+
+# Compares the owner words of an entry with the key, for suit i on, where p holds the
+# one at slot at. Answers v if they all agree on the top cards that ws asks for, and
+# 0 if not.
+def tt.owners(k: Nat, ok: Bool, p: Array<U32> & U32, +at: U32, +i: U32, +key: TtKey, +ws: U32, +v: U32) -> Array<U32> & U32:
+  match k ok:
+    case _ False{}:
+      match p:
+        case (m, _):
+          (m, 0)
+    case 0n True{}:
+      match p:
+        case (m, _):
+          (m, v)
+    case 1n+q True{}:
+      match p:
+        case (m, +o):
+          +same = own.agree(o, key.own(i, key), nib(key.lens(key), i), nib(ws, i))
+          tt.owners(q, same, tt.read(same && U32.is_lt(i, 3), m, (at + 1 : U32)), (at + 1 : U32), (i + 1 : U32), key, ws, v)
+
+# What an entry's bounds say about reaching need more tricks: 1 yes, 2 no, 0 nothing.
+def tt.says(+b: U32, +need: U32) -> U32:
+  R.sel(U32.is_ge((b >> 28n : U32), need), 1, R.sel(U32.is_lt(((b >> 24n) .&. 15 : U32), need), 2, 0))
+
+def tt.probe.b(p: Array<U32> & U32, +i: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  match p:
+    case (m, +b):
+      +says = tt.says(b, need)
+      +ws = (b .&. 65535 : U32)
+      tt.owners(4n, U32.is_ne(says, 0), tt.read(U32.is_ne(says, 0), m, (i + 3 : U32)), (i + 3 : U32), 0, key, ws, (says .|. (ws << 8n) : U32))
+
+def tt.probe.k1.go(same: Bool, m: Array<U32>, +i: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  match same:
+    case True{}:
+      tt.probe.b(Array.get(U32, m, (i + 2 : U32)), i, key, need)
+    case False{}:
+      (m, 0)
+
+def tt.probe.k1(p: Array<U32> & U32, +i: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  match p:
+    case (m, +k):
+      tt.probe.k1.go(U32.is_eq(k, key.k1(key)), m, i, key, need)
+
+def tt.probe.k0.go(same: Bool, m: Array<U32>, +i: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  match same:
+    case True{}:
+      tt.probe.k1(Array.get(U32, m, (i + 1 : U32)), i, key, need)
+    case False{}:
+      (m, 0)
+
+def tt.probe.k0(p: Array<U32> & U32, +i: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  match p:
+    case (m, +k):
+      tt.probe.k0.go(U32.is_eq(k, key.k0(key)), m, i, key, need)
+
+def tt.probe.step(miss: Bool, m: Array<U32>, +i: U32, +v: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  match miss:
+    case True{}:
+      tt.probe.k0(Array.get(U32, m, i), i, key, need)
+    case False{}:
+      (m, v)
+
+def tt.probe.scan(n: Nat, p: Array<U32> & U32, +i: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  match n:
+    case 0n:
+      p
+    case 1n+q:
+      match p:
+        case (m, +v):
+          tt.probe.scan(q, tt.probe.step(U32.is_zero(v), m, i, v, key, need), (i + 8 : U32), key, need)
+
+def tt.probe.bucket(miss: Bool, m: Array<U32>, +v: U32, +i: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  match miss:
+    case True{}:
+      tt.probe.scan(8n, (m, 0), i, key, need)
+    case False{}:
+      (m, v)
+
+def tt.probe.levels(+n: Nat, p: Array<U32> & U32, +mask: U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  match n:
+    case 0n:
+      p
+    case 1n+q:
+      match p:
+        case (m, +v):
+          tt.probe.levels(q, tt.probe.bucket(U32.is_zero(v), m, v, tt.bucket(key, mask, U32.from_nat(q)), key, need), mask, key, need)
+
+def tt.probe.go(p: Array<U32> & U32, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  match p:
+    case (m, +mask):
+      tt.probe.levels(4n, (m, 0), mask, key, need)
+
+# Looks a position up: 0 if the table doesn't settle whether North-South reach need
+# more tricks, and otherwise 1 for yes or 2 for no, with above that the number of top
+# cards that matter in each suit.
+def tt.probe(m: Array<U32>, +key: TtKey, +need: U32) -> Array<U32> & U32:
+  tt.probe.go(Array.get(U32, m, tt.mask.slot()), key, need)
+
+# The number of top cards in holding l, down to the lowest card of w.
+def ws.suit(+w: U32, +l: U32) -> U32:
+  R.sel(U32.is_zero(w), 0, C.bits.count((l .&. (0 - bit.low(w)) : U32)))
+
+def ws.of(+w01: U32, +w23: U32, +l01: U32, +l23: U32) -> U32:
+  (ws.suit((w01 >> 16n : U32), (l01 >> 16n : U32)) .|. (ws.suit((w01 .&. 65535 : U32), (l01 .&. 65535 : U32)) << 4n) .|. (ws.suit((w23 >> 16n : U32), (l23 >> 16n : U32)) << 8n) .|. (ws.suit((w23 .&. 65535 : U32), (l23 .&. 65535 : U32)) << 12n) : U32)
+
+# A store: first look for an entry with the same cards that matter, and tighten its
+# bounds. Failing that, replace the next entry of the bucket in turn.
+def tt.find.b.go(+same: Bool, m: Array<U32>, +i: U32, +key: TtKey, +ws: U32) -> Array<U32> & U32:
+  tt.owners(4n, same, tt.read(same, m, (i + 3 : U32)), (i + 3 : U32), 0, key, ws, i)
+
+def tt.find.b(p: Array<U32> & U32, +i: U32, +key: TtKey, +ws: U32) -> Array<U32> & U32:
+  match p:
+    case (m, +b):
+      tt.find.b.go(U32.is_eq((b .&. 65535 : U32), ws), m, i, key, ws)
+
+def tt.find.k1.go(same: Bool, m: Array<U32>, +i: U32, +key: TtKey, +ws: U32) -> Array<U32> & U32:
+  match same:
+    case True{}:
+      tt.find.b(Array.get(U32, m, (i + 2 : U32)), i, key, ws)
+    case False{}:
+      (m, 0)
+
+def tt.find.k1(p: Array<U32> & U32, +i: U32, +key: TtKey, +ws: U32) -> Array<U32> & U32:
+  match p:
+    case (m, +k):
+      tt.find.k1.go(U32.is_eq(k, key.k1(key)), m, i, key, ws)
+
+def tt.find.k0.go(same: Bool, m: Array<U32>, +i: U32, +key: TtKey, +ws: U32) -> Array<U32> & U32:
+  match same:
+    case True{}:
+      tt.find.k1(Array.get(U32, m, (i + 1 : U32)), i, key, ws)
+    case False{}:
+      (m, 0)
+
+def tt.find.k0(p: Array<U32> & U32, +i: U32, +key: TtKey, +ws: U32) -> Array<U32> & U32:
+  match p:
+    case (m, +k):
+      tt.find.k0.go(U32.is_eq(k, key.k0(key)), m, i, key, ws)
+
+def tt.find.step(miss: Bool, m: Array<U32>, +i: U32, +v: U32, +key: TtKey, +ws: U32) -> Array<U32> & U32:
+  match miss:
+    case True{}:
+      tt.find.k0(Array.get(U32, m, i), i, key, ws)
+    case False{}:
+      (m, v)
+
+def tt.find.scan(n: Nat, p: Array<U32> & U32, +i: U32, +key: TtKey, +ws: U32) -> Array<U32> & U32:
+  match n:
+    case 0n:
+      p
+    case 1n+q:
+      match p:
+        case (m, +v):
+          tt.find.scan(q, tt.find.step(U32.is_zero(v), m, i, v, key, ws), (i + 8 : U32), key, ws)
+
+# The bounds word after learning ok about need more tricks, from the word before.
+def bounds.word(ok: Bool, +lo: U32, +hi: U32, +need: U32, +ws: U32) -> U32:
+  match ok:
+    case True{}:
+      ((U32.max(lo, need) << 28n) .|. (hi << 24n) .|. ws : U32)
+    case False{}:
+      ((lo << 28n) .|. (U32.min(hi, (need - 1 : U32)) << 24n) .|. ws : U32)
+
+def tt.tighten(p: Array<U32> & U32, +i: U32, ok: Bool, +need: U32, +ws: U32) -> Array<U32>:
+  match p:
+    case (m, +b):
+      Array.set(U32, m, (i + 2 : U32), bounds.word(ok, (b >> 28n : U32), ((b >> 24n) .&. 15 : U32), need, ws))
+
+def tt.write(p: Array<U32> & U32, +base: U32, +key: TtKey, ok: Bool, +need: U32, +left: U32, +ws: U32) -> Array<U32>:
+  match p:
+    case (m, +n):
+      +i = (base + ((n .&. 7) * 8) : U32)
+      Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, Array.set(U32, m, (base + 7 : U32), (n + 1 : U32)),
+        i, key.k0(key)), (i + 1 : U32), key.k1(key)), (i + 2 : U32), bounds.word(ok, 0, left, need, ws)),
+        (i + 3 : U32), key.own(0, key)), (i + 4 : U32), key.own(1, key)), (i + 5 : U32), key.own(2, key)), (i + 6 : U32), key.own(3, key))
+
+def tt.store.go(found: Bool, m: Array<U32>, +at: U32, +base: U32, +key: TtKey, ok: Bool, +need: U32, +left: U32, +ws: U32) -> Array<U32>:
+  match found:
+    case True{}:
+      tt.tighten(Array.get(U32, m, (at + 2 : U32)), at, ok, need, ws)
+    case False{}:
+      tt.write(Array.get(U32, m, (base + 7 : U32)), base, key, ok, need, left, ws)
+
+def tt.store.at(p: Array<U32> & U32, +base: U32, +key: TtKey, ok: Bool, +need: U32, +left: U32, +ws: U32) -> Array<U32>:
+  match p:
+    case (m, +at):
+      tt.store.go(U32.is_ne(at, 0), m, at, base, key, ok, need, left, ws)
+
+def tt.store.mask(p: Array<U32> & U32, +key: TtKey, ok: Bool, +need: U32, +left: U32, +ws: U32) -> Array<U32>:
+  match p:
+    case (m, +mask):
+      +base = tt.bucket(key, mask, tt.level(ws, key.lens(key)))
+      tt.store.at(tt.find.scan(8n, (m, 0), base, key, ws), base, key, ok, need, left, ws)
+
+# Stores what a search found, if go says to.
+def tt.save(go: Bool, m: Array<U32>, +key: TtKey, ok: Bool, +need: U32, +left: U32, +w01: U32, +w23: U32, +l01: U32, +l23: U32) -> Array<U32>:
+  match go:
+    case True{}:
+      tt.store.mask(Array.get(U32, m, tt.mask.slot()), key, ok, need, left, ws.of(w01, w23, l01, l23))
+    case False{}:
+      m
+
+# The kth of the top cards in holding l, counting from 1, or nothing for k = 0.
+def kth.go(k: Nat, +l: U32) -> U32:
+  match k:
+    case 0n:
+      bit.top.or0(l)
+    case 1n+p:
+      kth.go(p, (l .^. bit.top.or0(l) : U32))
+
+def kth(k: Nat, +l: U32) -> U32:
+  match k:
+    case 0n:
+      0
+    case 1n+p:
+      kth.go(p, l)
+
+# The winning ranks of a table entry, in a position it matches: the lowest card that
+# matters in each suit, which stands for the ones above it.
+def ranks.of.ws(+ws: U32, +l01: U32, +l23: U32) -> Ranks:
+  Ranks{
+    ((kth(U32.to_nat(nib(ws, 0)), (l01 >> 16n : U32)) << 16n) .|. kth(U32.to_nat(nib(ws, 1)), (l01 .&. 65535 : U32)) : U32),
+    ((kth(U32.to_nat(nib(ws, 2)), (l23 >> 16n : U32)) << 16n) .|. kth(U32.to_nat(nib(ws, 3)), (l23 .&. 65535 : U32)) : U32)}
+
+# ---------------------------------------------------------------------------
+# Going into a node
+
+# A Res with no moves, whose memo is slot i of the memory.
+def peek.go(ok: Bool, n: Nat, pair: Array<U32> & U32, moves: List<&2, U32>) -> Res:
   match pair:
     case (m, memo):
-      Res{ok, n, m, memo}
+      Res{ok, n, m, memo, moves, 0, 0}
 
 def peek(ok: Bool, n: Nat, m: Array<U32>, +i: U32) -> Res:
-  peek.go(ok, n, Array.get(U32, m, i))
+  peek.go(ok, n, Array.get(U32, m, i), Nil{})
 
-def peek.res(r: Res, +i: U32) -> Res:
+def peek.moves(ok: Bool, n: Nat, m: Array<U32>, +i: U32, moves: List<&2, U32>) -> Res:
+  peek.go(ok, n, Array.get(U32, m, i), moves)
+
+def peek.keep(ok: Bool, n: Nat, pair: Array<U32> & U32, +a: U32, +b: U32) -> Res:
+  match pair:
+    case (m, memo):
+      Res{ok, n, m, memo, Nil{}, a, b}
+
+# An answer that needs no moves, resting on these ranks.
+def settled(ok: Bool, n: Nat, m: Array<U32>, ranks: Ranks) -> Res:
+  match ranks:
+    case Ranks{+a, +b}:
+      Res{ok, n, m, 0, Nil{}, (a .|. (1 << 31n) : U32), b}
+
+def node.open(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, +t: U32, +child: R.Pos, +c01: U32, +c23: U32, +memo: U32, +here: U32, +ns: Bool, n: Nat, m: Array<U32>) -> Res:
+  peek.moves(Bool.not(ns), 1n+n, st(t, m, child, 0, c01, c23), (here - 1 : U32), gen(t, child, c01, c23, memo, here))
+
+def node.table.hit(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, miss: Bool, +v: U32, +t: U32, +child: R.Pos, +c01: U32, +c23: U32, +memo: U32, +here: U32, +ns: Bool, n: Nat, m: Array<U32>) -> Res:
+  match miss:
+    case True{}:
+      node.open(~st, t, child, c01, c23, memo, here, ns, n, m)
+    case False{}:
+      +ans = (v .&. 3 : U32)
+      settled(U32.is_eq(ans, 1), 1n+n, st(t, m, child, (ans + why.table() : U32), c01, c23), ranks.of.ws((v >> 8n : U32), c01, c23))
+
+def node.table(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, p: Array<U32> & U32, +t: U32, +child: R.Pos, +c01: U32, +c23: U32, +memo: U32, +here: U32, +ns: Bool, n: Nat) -> Res:
+  match p:
+    case (m, +v):
+      node.table.hit(~st, U32.is_zero(v), v, t, child, c01, c23, memo, here, ns, n, m)
+
+def node.try(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, use: Bool, +key: TtKey, +need: U32, +t: U32, +child: R.Pos, +c01: U32, +c23: U32, +memo: U32, +here: U32, +ns: Bool, n: Nat, m: Array<U32>) -> Res:
+  match use:
+    case True{}:
+      node.table(~st, tt.probe(m, key, need), t, child, c01, c23, memo, here, ns, n)
+    case False{}:
+      node.open(~st, t, child, c01, c23, memo, here, ns, n, m)
+
+def after.or.cut(why: Nat, +t: U32, +pos: R.Pos, +l01: U32, +l23: U32) -> Ranks:
+  match why:
+    case 4n:
+      after.ranks(t, pos, l01, l23)
+    case _:
+      cut.ranks(why, t, pos)
+
+# Enters a node: a cut settles it, or the table does, or else it gets its moves.
+def node(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, open: Bool, +code: U32, use: Bool, +key: TtKey, +need: U32, +t: U32, +child: R.Pos, +c01: U32, +c23: U32, +memo: U32, +here: U32, +ns: Bool, n: Nat, m: Array<U32>) -> Res:
+  match open:
+    case True{}:
+      node.try(~st, use, key, need, t, child, c01, c23, memo, here, ns, n, m)
+    case False{}:
+      settled(enter.ok(code, ns), 1n+n, st(t, m, child, code, c01, c23), after.or.cut(U32.to_nat((code >> 2n : U32)), t, child, c01, c23))
+
+# The small card filter. A move that didn't settle a node rests on no card below the
+# lowest of the ranks so far in its suit. So if a card below that has been tried, and
+# this one is below it too, this one comes out the same and isn't worth trying.
+def small.mask(+c: U32, +x01: U32, +x23: U32) -> U32:
+  R.suit.mask(U32.to_nat(C.card.suit(c)), x01, x23)
+
+def small.skip(+c: U32, +x01: U32, +x23: U32, +a01: U32, +a23: U32) -> Bool:
+  +w = small.mask(c, (a01 .&. 2147483647 : U32), a23)
+  +low = R.sel(U32.is_zero(w), 8192, bit.low(w))
+  U32.is_lt(C.card.bit(c), low) && U32.is_ne((small.mask(c, x01, x23) .&. (low - 1) : U32), 0)
+
+# The set of cards tried: first says whether this is the word of suits 0 and 1.
+def tried.add(+first: Bool, +c: U32, +x: U32) -> U32:
+  +s = C.card.suit(c)
+  +b = C.card.bit(c)
+  (x .|. R.sel(first, R.sel(U32.is_eq(s, 0), (b << 16n : U32), R.sel(U32.is_eq(s, 1), b, 0)), R.sel(U32.is_eq(s, 2), (b << 16n : U32), R.sel(U32.is_eq(s, 3), b, 0))) : U32)
+
+def node.skip(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, skip: Bool, +pns: Bool, open: Bool, +code: U32, use: Bool, +key: TtKey, +need: U32, +t: U32, +child: R.Pos, +c01: U32, +c23: U32, +memo: U32, +here: U32, +ns: Bool, n: Nat, m: Array<U32>) -> Res:
+  match skip:
+    case True{}:
+      settled(Bool.not(pns), n, m, ranks.none())
+    case False{}:
+      node(~st, open, code, use, key, need, t, child, c01, c23, memo, here, ns, n, m)
+
+# ---------------------------------------------------------------------------
+# Coming out of a node
+
+def back.go(ok: Bool, n: Nat, m: Array<U32>, +here: U32, +a: U32, +b: U32, ranks: Ranks) -> Res:
+  match ranks:
+    case Ranks{+x, +y}:
+      peek.keep(ok, n, Array.get(U32, m, here), (a .|. x : U32), (b .|. y : U32))
+
+# A child's answer as its parent takes it: stored if it was searched for, with what
+# the trick that just ended adds to its ranks, and the memo for the next child.
+def back(r: Res, save: Bool, +key: TtKey, +need: U32, +left: U32, +c01: U32, +c23: U32, +here: U32, ranks: Ranks) -> Res:
   match r:
-    case Res{ok, n, m, _}:
-      peek(ok, n, m, i)
+    case Res{+ok, n, m, _, _, +w01, +w23}:
+      +a = (w01 .&. 2147483647 : U32)
+      back.go(ok, n, tt.save(save && U32.is_eq(a, w01), m, key, ok, need, left, a, w23, c01, c23), here, a, w23, ranks)
+
+# ---------------------------------------------------------------------------
+# The search
 
 # Tries the moves ms of a position with d cards left. r is the answer so far: a
 # call cannot be destructured in place, so a child's answer rides into the next
@@ -729,56 +1353,79 @@ def peek.res(r: Res, +i: U32) -> Res:
 # move; with no moves left, the answer stands. A move that settles the node goes
 # into the memory, at slot, and last is that move.
 #
-# A child has one card fewer, and a sibling has one move fewer with the same d.
-def search(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, +d: Nat, ms: List<&2, U32>, ns: Bool, r: Res, +slot: U32, +last: U32, +t: U32, +target: U32, +l01: U32, +l23: U32, +pos: R.Pos) -> Res:
-  match d ms ns r:
-    case 0n _ _ x:
+# A node that settles rests on the ranks of the child that settled it. One that
+# doesn't rests on the ranks of all its children: a01 and a23 hold those of the
+# children before the last.
+#
+# A child has one card fewer, and a sibling has one move fewer with the same d. The
+# table is read going into a child, which also decides its moves, and a call can't
+# be destructured in place. So a child starts with first as 1n and takes its moves
+# from r.
+def search(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, +d: Nat, first: Nat, ms: List<&2, U32>, ns: Bool, r: Res, +slot: U32, +last: U32, +a01: U32, +a23: U32, +x01: U32, +x23: U32, +t: U32, +target: U32, +l01: U32, +l23: U32, +pos: R.Pos) -> Res:
+  match d first ms ns r:
+    case 0n _ _ _ x:
       x
-    case 1n+p _ True{} Res{True{}, n, m, _}:
-      Res{True{}, n, Array.set(U32, m, slot, last), 0}
-    case 1n+p _ False{} Res{False{}, n, m, _}:
-      Res{False{}, n, Array.set(U32, m, slot, last), 0}
-    case 1n+p Nil{} _ x:
-      x
-    case 1n+p Con{+c, rest} True{} Res{False{}, n, m, +memo}:
+    case 1n+p 1n+q _ _ Res{ok, n, m, memo, moves, +w01, +w23}:
+      search(~st, 1n+p, q, moves, ns, Res{ok, n, m, memo, Nil{}, w01, w23}, slot, last, a01, a23, x01, x23, t, target, l01, l23, pos)
+    case 1n+p 0n _ True{} Res{True{}, n, m, _, _, +w01, +w23}:
+      Res{True{}, n, Array.set(U32, m, slot, last), 0, Nil{}, w01, w23}
+    case 1n+p 0n _ False{} Res{False{}, n, m, _, _, +w01, +w23}:
+      Res{False{}, n, Array.set(U32, m, slot, last), 0, Nil{}, w01, w23}
+    case 1n+p 0n Nil{} _ Res{ok, n, m, _, _, +w01, +w23}:
+      Res{ok, n, m, 0, Nil{}, (a01 .|. w01 : U32), (a23 .|. w23 : U32)}
+    case 1n+p 0n Con{+c, rest} True{} Res{False{}, n, m, +memo, _, +w01, +w23}:
       +child = R.play(t, pos, c)
       +cns = R.pos.ns(child)
       +tr = R.pos.trick(child)
-      +bound = U32.is_zero(R.trick.played(tr))
-      +code = cut.at(U32.to_nat(R.trick.played(tr)), t, child, R.pos.won(child), U32.from_nat(p), target)
+      +played = R.trick.played(tr)
+      +bound = U32.is_zero(played)
+      +won = R.pos.won(child)
+      +code = cut.at(U32.to_nat(played), t, child, won, U32.from_nat(p), target)
       +c01 = live.at(bound, R.pos.live01(child), l01)
       +c23 = live.at(bound, R.pos.live23(child), l23)
       +here = U32.from_nat(p)
-      search(~st, 1n+p, rest, True{},
-        peek.res(search(~st, p, enter.go(U32.is_zero(code), t, child, c01, c23, memo, here), cns, peek(enter.ok(code, cns), 1n+n, st(t, m, child, code, c01, c23), (here - 1 : U32)), mem.none(), 0, t, target, c01, c23, child), here),
-        U32.from_nat(1n+p), c, t, target, l01, l23, pos)
-    case 1n+p Con{+c, rest} False{} Res{True{}, n, m, +memo}:
+      +left = (here >> 2n : U32)
+      +skip = small.skip(c, x01, x23, (a01 .|. w01 : U32), (a23 .|. w23 : U32))
+      +use = bound && U32.is_zero(code) && tt.on(left) && Bool.not(skip)
+      +key = tt.key(use, t, left, child)
+      +need = (target - won : U32)
+      search(~st, 1n+p, 0n, rest, True{},
+        back(search(~st, p, 1n, Nil{}, cns, node.skip(~st, skip, ns, U32.is_zero(code), code, use, key, need, t, child, c01, c23, memo, here, cns, n, m), mem.none(), 0, 0, 0, 0, 0, t, target, c01, c23, child), use, key, need, left, c01, c23, here, trick.ranks(bound && Bool.not(skip), t, pos, c, child, l01, l23)),
+        U32.from_nat(1n+p), c, (a01 .|. w01 : U32), (a23 .|. w23 : U32), tried.add(True{}, c, x01), tried.add(False{}, c, x23), t, target, l01, l23, pos)
+    case 1n+p 0n Con{+c, rest} False{} Res{True{}, n, m, +memo, _, +w01, +w23}:
       +child = R.play(t, pos, c)
       +cns = R.pos.ns(child)
       +tr = R.pos.trick(child)
-      +bound = U32.is_zero(R.trick.played(tr))
-      +code = cut.at(U32.to_nat(R.trick.played(tr)), t, child, R.pos.won(child), U32.from_nat(p), target)
+      +played = R.trick.played(tr)
+      +bound = U32.is_zero(played)
+      +won = R.pos.won(child)
+      +code = cut.at(U32.to_nat(played), t, child, won, U32.from_nat(p), target)
       +c01 = live.at(bound, R.pos.live01(child), l01)
       +c23 = live.at(bound, R.pos.live23(child), l23)
       +here = U32.from_nat(p)
-      search(~st, 1n+p, rest, False{},
-        peek.res(search(~st, p, enter.go(U32.is_zero(code), t, child, c01, c23, memo, here), cns, peek(enter.ok(code, cns), 1n+n, st(t, m, child, code, c01, c23), (here - 1 : U32)), mem.none(), 0, t, target, c01, c23, child), here),
-        U32.from_nat(1n+p), c, t, target, l01, l23, pos)
+      +left = (here >> 2n : U32)
+      +skip = small.skip(c, x01, x23, (a01 .|. w01 : U32), (a23 .|. w23 : U32))
+      +use = bound && U32.is_zero(code) && tt.on(left) && Bool.not(skip)
+      +key = tt.key(use, t, left, child)
+      +need = (target - won : U32)
+      search(~st, 1n+p, 0n, rest, False{},
+        back(search(~st, p, 1n, Nil{}, cns, node.skip(~st, skip, ns, U32.is_zero(code), code, use, key, need, t, child, c01, c23, memo, here, cns, n, m), mem.none(), 0, 0, 0, 0, 0, t, target, c01, c23, child), use, key, need, left, c01, c23, here, trick.ranks(bound && Bool.not(skip), t, pos, c, child, l01, l23)),
+        U32.from_nat(1n+p), c, (a01 .|. w01 : U32), (a23 .|. w23 : U32), tried.add(True{}, c, x01), tried.add(False{}, c, x23), t, target, l01, l23, pos)
 
 # Runs one search from the start of a trick.
 def ask.go(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, +d: Nat, +t: U32, +pos: R.Pos, +target: U32, r: Res) -> Res:
   match r:
-    case Res{_, n, m, +memo}:
+    case Res{_, n, m, +memo, _, _, _}:
       +ns = R.pos.ns(pos)
       +l01 = R.pos.live01(pos)
       +l23 = R.pos.live23(pos)
-      search(~st, d, gen(t, pos, l01, l23, memo, U32.from_nat(d)), ns, peek(Bool.not(ns), n, m, (U32.from_nat(d) - 1 : U32)), mem.none(), 0, t, target, l01, l23, pos)
+      search(~st, d, 0n, gen(t, pos, l01, l23, memo, U32.from_nat(d)), ns, peek(Bool.not(ns), n, m, (U32.from_nat(d) - 1 : U32)), mem.none(), 0, 0, 0, 0, 0, t, target, l01, l23, pos)
 
 # Runs one search, unless told there is nothing to ask.
 def ask(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, stop: Bool, +d: Nat, +t: U32, +pos: R.Pos, +target: U32, n: Nat, m: Array<U32>) -> Res:
   match stop:
     case True{}:
-      Res{False{}, n, m, 0}
+      Res{False{}, n, m, 0, Nil{}, 0, 0}
     case False{}:
       ask.go(~st, d, t, pos, target, peek(False{}, n, sa(m, target), U32.from_nat(d)))
 
@@ -807,11 +1454,11 @@ def driver.first(+g: U32, +lo: U32, +hi: U32) -> U32:
 # the fuel only has to be more than the tricks left.
 def narrow(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, fuel: Nat, done: Bool, r: Res, +target: U32, +d: Nat, +t: U32, +pos: R.Pos, +lo: U32, +hi: U32) -> Val:
   match fuel done r:
-    case 0n _ Res{_, n, m, _}:
+    case 0n _ Res{_, n, m, _, _, _, _}:
       Val{lo, n, m}
-    case 1n+p True{} Res{_, n, m, _}:
+    case 1n+p True{} Res{_, n, m, _, _, _, _}:
       Val{lo, n, m}
-    case 1n+p False{} Res{+ok, n, m, _}:
+    case 1n+p False{} Res{+ok, n, m, _, _, _, _}:
       +lo2 = driver.lo(ok, target, lo)
       +hi2 = driver.hi(ok, target, hi)
       +stop = U32.is_ge(lo2, hi2)
@@ -892,7 +1539,8 @@ def done.table(r: Solved) -> B.Table:
 
 # The double dummy table of a deal, as B.table gives it.
 def table(+deal: C.Deal) -> B.Table:
-  done.table(table.run(~(+t => m => +p => +c => +a => +b => m), ~(m => +x => m), ~(m => +x => m), deal, [mem.none() : U32*64n]))
+  +d = tt.depth((B.deal.cards(deal) / 4 : U32))
+  done.table(table.run(~(+t => m => +p => +c => +a => +b => m), ~(m => +x => m), ~(m => +x => m), deal, tt.ready(d, [mem.none() : U32^d])))
 
 # The counters of a table, slots 64 to 703 of the array, in order.
 def stats.list(k: Nat, +i: U32, p: Array<U32> & U32, acc: List<&2, U32>) -> List<&2, U32>:
@@ -923,7 +1571,8 @@ def stats.clear(k: Nat, +i: U32, m: Array<U32>) -> Array<U32>:
 
 # The same search, counting.
 def table.report(+deal: C.Deal) -> Report:
-  report.go(table.run(~stat.node, ~stat.ask, ~stat.begin, deal, stats.clear(640n, 64, [mem.none() : U32*1024n])))
+  +d = tt.depth((B.deal.cards(deal) / 4 : U32))
+  report.go(table.run(~stat.node, ~stat.ask, ~stat.begin, deal, stats.clear(640n, 64, tt.ready(d, [mem.none() : U32^d]))))
 
 # ---------------------------------------------------------------------------
 # Sure tricks, for checking

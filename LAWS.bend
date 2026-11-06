@@ -280,3 +280,30 @@ law sure_never_exceeds:
 # thousands of larger ones.
 law search_is_brute:
   {S.oracle.all(4n, 1, 2) == True{} : Bool}
+
+# ---------------------------------------------------------------------------
+# The transposition table
+
+# LAW: an entry's count of top cards and the card it stands for are inverses: the
+# ranks it gives back when it is found are the ones it would store. For every holding
+# of the low 7 ranks and every count.
+law ws_kth_inverse:
+  {S.ws.kth.all(128n, 0) == True{} : Bool}
+
+# LAW: run.below is the run of cards under a card, walking the cards in play, for
+# every holding of the low 7 ranks with all of them in play, and with some gaps.
+law run_below_all_live:
+  {S.run.below.all(128n, 0, 127) == True{} : Bool}
+
+law run_below_gaps:
+  {S.run.below.all(128n, 0, 91) == True{} : Bool}
+
+# LAW: tightening an entry's bounds with an answer makes it give that answer back,
+# for every lo < need <= hi up to 13.
+law bounds_give_back:
+  {S.bounds.all(14n, 0) == True{} : Bool}
+
+# LAW: owner words agree exactly on the top cards asked for, for every pair of two
+# cards each, and for none, one or both of the cards.
+law owners_agree:
+  {S.agree.all(16n, 0) == True{} : Bool}

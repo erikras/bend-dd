@@ -83,6 +83,13 @@ echo "== round trip"
 echo "== DDS lists"
 .venv/bin/python tools/check.py lists
 
+echo "== whole deals against DDS"
+if [ $quick = 1 ]; then
+  .venv/bin/python tools/check.py full --limit 12
+else
+  .venv/bin/python tools/check.py full --limit 100
+fi
+
 echo "== search against brute force, from Python"
 if [ $quick = 1 ]; then
   .venv/bin/python tools/check.py oracle --count 500 --cards 3 4

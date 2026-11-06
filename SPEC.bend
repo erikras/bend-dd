@@ -505,3 +505,101 @@ def sure.all(n: Nat, +seed: U32, +k: U32) -> Bool:
       True{}
     case 1n+p:
       Bool.and(sure.strains(5n, 0, k, D.ending(seed, k)), sure.all(p, (seed + 1 : U32), k))
+
+# ---------------------------------------------------------------------------
+# The transposition table
+
+# Z.kth finds the card that Z.ws.suit counts down to, for every number of top cards.
+def ws.kth.k(n: Nat, +k: U32, +l: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(U32.is_eq(Z.ws.suit(Z.kth(U32.to_nat(k), l), l), k), ws.kth.k(p, (k + 1 : U32), l))
+
+def ws.kth.all(n: Nat, +l: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(ws.kth.k(1n+U32.popcount(l), 0, l), ws.kth.all(p, (l + 1 : U32)))
+
+# Walks down the ranks from x, adding the cards of h, skipping cards not in play, and
+# stopping at a card in play that isn't in h.
+def run.walk.more(n: Nat, in: Bool, +x: U32, +h: U32, +live: U32, +acc: U32) -> U32:
+  match n in:
+    case 0n _:
+      acc
+    case 1n+p False{}:
+      acc
+    case 1n+p True{}:
+      run.walk.more(p, U32.is_ne(((x >> 1n) .&. h : U32), 0) || U32.is_zero(((x >> 1n) .&. live : U32)), (x >> 1n : U32), h, live, (acc .|. (x .&. h .&. live) : U32))
+
+def run.spec(+b: U32, +h: U32, +live: U32) -> U32:
+  run.walk.more(13n, U32.is_ne(((b >> 1n) .&. h : U32), 0) || U32.is_zero(((b >> 1n) .&. live : U32)), (b >> 1n : U32), h, live, 0)
+
+def run.below.bits(n: Nat, +b: U32, +h: U32, +live: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(U32.is_eq(Z.run.below(b, h, live), run.spec(b, h, live)), run.below.bits(p, (b << 1n : U32), h, live))
+
+# Every holding h of the low 7 ranks, for each card of them, with these in play.
+def run.below.all(n: Nat, +h: U32, +live: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(run.below.bits(7n, 1, (h .&. live : U32), live), run.below.all(p, (h + 1 : U32), live))
+
+# Bounds tightened by an answer about need settle need that way.
+def bounds.need(n: Nat, +need: U32, +lo: U32, +hi: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(
+        Bool.and(U32.is_eq(Z.tt.says(Z.bounds.word(True{}, lo, hi, need, 0), need), 1), U32.is_eq(Z.tt.says(Z.bounds.word(False{}, lo, hi, need, 0), need), 2)),
+        bounds.need(p, (need + 1 : U32), lo, hi))
+
+# Every lo < need <= hi up to 13: an answer about need is only asked for between
+# the bounds, since others are settled already.
+def bounds.hi(n: Nat, +hi: U32, +lo: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(bounds.need(U32.to_nat((hi - lo : U32)), (lo + 1 : U32), lo, hi), bounds.hi(p, (hi + 1 : U32), lo))
+
+def bounds.all(+n: Nat, +lo: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(bounds.hi(1n+p, lo, lo), bounds.all(p, (lo + 1 : U32)))
+
+def bool.same(a: Bool, b: Bool) -> Bool:
+  match a:
+    case True{}:
+      b
+    case False{}:
+      Bool.not(b)
+
+# Owner words agree exactly on the top cards asked for, here with two cards each.
+def agree.b(n: Nat, +a: U32, +b: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(
+        Bool.and(Z.own.agree(a, b, 2, 0),
+          Bool.and(bool.same(Z.own.agree(a, b, 2, 1), U32.is_eq((a >> 2n : U32), (b >> 2n : U32))), bool.same(Z.own.agree(a, b, 2, 2), U32.is_eq(a, b)))),
+        agree.b(p, a, (b + 1 : U32)))
+
+def agree.all(n: Nat, +a: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(agree.b(16n, a, 0), agree.all(p, (a + 1 : U32)))

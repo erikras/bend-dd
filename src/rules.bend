@@ -30,7 +30,8 @@ type Pos is Data:
 
 # seat: the seat to play (2 bits). played: cards on the table (2 bits). lead:
 # the suit led, or none() (3 bits). owner: the seat winning so far (2 bits).
-# best: the card winning so far (6 bits).
+# best: the card winning so far (6 bits). The bit above them, trick.rank, says the
+# card winning has beaten another card of its suit, so it is winning by rank.
 def trick.make(+seat: U32, +played: U32, +lead: U32, +owner: U32, +best: U32) -> U32:
   (seat .|. (played << 2n) .|. (lead << 4n) .|. (owner << 7n) .|. (best << 9n) : U32)
 
@@ -48,6 +49,9 @@ def trick.owner(+t: U32) -> U32:
 
 def trick.best(+t: U32) -> U32:
   ((t >> 9n) .&. 63 : U32)
+
+def trick.rank(+t: U32) -> Bool:
+  U32.is_ne(((t >> 15n) .&. 1 : U32), 0)
 
 # A new trick with this seat on lead.
 def trick.start(+seat: U32) -> U32:
@@ -70,21 +74,23 @@ def sel(b: Bool, x: U32, y: U32) -> U32:
     case False{}:
       y
 
-def trick.next.go(first: Bool, last: Bool, +win: Bool, +seat: U32, +played: U32, +lead: U32, +owner: U32, +best: U32, +c: U32) -> U32:
+def trick.next.go(first: Bool, last: Bool, +win: Bool, +rank: Bool, +seat: U32, +played: U32, +lead: U32, +owner: U32, +best: U32, +c: U32) -> U32:
   match first last:
     case True{} _:
       trick.make(((seat + 1) .&. 3 : U32), 1, C.card.suit(c), seat, c)
     case False{} True{}:
       trick.start(sel(win, seat, owner))
     case False{} False{}:
-      trick.make(((seat + 1) .&. 3 : U32), (played + 1 : U32), lead, sel(win, seat, owner), sel(win, c, best))
+      (trick.make(((seat + 1) .&. 3 : U32), (played + 1 : U32), lead, sel(win, seat, owner), sel(win, c, best)) .|. (Bool.to_u32(rank) << 15n) : U32)
 
 # The trick word after the seat to play plays card c. The fourth card of a
 # trick starts a new one, led by the seat that won.
 def trick.next(+tr: U32, +t: U32, +c: U32) -> U32:
   +played = trick.played(tr)
   +best = trick.best(tr)
-  trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), beats(t, best, c),
+  +win = beats(t, best, c)
+  +same = U32.is_eq(C.card.suit(c), C.card.suit(best))
+  trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, same || (trick.rank(tr) && Bool.not(win)),
     trick.seat(tr), played, trick.lead(tr), trick.owner(tr), best, c)
 
 # North-South's trick count after moving to trick word tr. A word with no cards

@@ -168,10 +168,10 @@ def seat.name(+s: U32) -> String:
   str.at(s, "NESW")
 
 def rows.head() -> String:
-  str.pad("", 3) ++ str.pad("decl", 5) ++ str.pad("lead", 5) ++ str.pad("tricks", 7) ++ str.pad("nodes", 12) ++ str.pad("searches", 9) ++ str.pad("targets", 18) ++ str.pad("target", 11) ++ str.pad("quick", 11) ++ str.pad("later", 11) ++ str.pad("after", 11) ++ str.pad("moves", 13) ++ "kept"
+  str.pad("", 3) ++ str.pad("decl", 5) ++ str.pad("lead", 5) ++ str.pad("tricks", 7) ++ str.pad("nodes", 12) ++ str.pad("searches", 9) ++ str.pad("targets", 18) ++ str.pad("target", 11) ++ str.pad("quick", 11) ++ str.pad("later", 11) ++ str.pad("after", 11) ++ str.pad("table", 11) ++ str.pad("moves", 13) ++ "kept"
 
 def row.counts(+e: U32, +xs: List<&2, U32>) -> String:
-  cell(field(e, Z.stat.cuts(), xs), 11) ++ cell(field(e, (Z.stat.cuts() + 2 : U32), xs), 11) ++ cell(field(e, (Z.stat.cuts() + 4 : U32), xs), 11) ++ cell(field(e, (Z.stat.cuts() + 6 : U32), xs), 11) ++ cell(field(e, Z.stat.moves(), xs), 13) ++ Nat.show(field(e, Z.stat.kept(), xs))
+  cell(field(e, Z.stat.cuts(), xs), 11) ++ cell(field(e, (Z.stat.cuts() + 2 : U32), xs), 11) ++ cell(field(e, (Z.stat.cuts() + 4 : U32), xs), 11) ++ cell(field(e, (Z.stat.cuts() + 6 : U32), xs), 11) ++ cell(field(e, (Z.stat.cuts() + 8 : U32), xs), 11) ++ cell(field(e, Z.stat.moves(), xs), 13) ++ Nat.show(field(e, Z.stat.kept(), xs))
 
 # One line for table entry e.
 def row(+e: U32, +tricks: U32, +xs: List<&2, U32>) -> String:
@@ -188,10 +188,10 @@ def rows(ts: List<&2, U32>, +e: U32, +xs: List<&2, U32>) -> String:
       row(e, h, xs) ++ "\n" ++ rows(t, (e + 1 : U32), xs)
 
 def totals(+xs: List<&2, U32>) -> String:
-  str.pad("all", 20) ++ cell(total(Z.stat.nodes(), xs), 12) ++ cell(total(Z.stat.searches(), xs), 27) ++ cell(total(Z.stat.cuts(), xs), 11) ++ cell(total((Z.stat.cuts() + 2 : U32), xs), 11) ++ cell(total((Z.stat.cuts() + 4 : U32), xs), 11) ++ cell(total((Z.stat.cuts() + 6 : U32), xs), 11) ++ cell(total(Z.stat.moves(), xs), 13) ++ Nat.show(total(Z.stat.kept(), xs))
+  str.pad("all", 20) ++ cell(total(Z.stat.nodes(), xs), 12) ++ cell(total(Z.stat.searches(), xs), 27) ++ cell(total(Z.stat.cuts(), xs), 11) ++ cell(total((Z.stat.cuts() + 2 : U32), xs), 11) ++ cell(total((Z.stat.cuts() + 4 : U32), xs), 11) ++ cell(total((Z.stat.cuts() + 6 : U32), xs), 11) ++ cell(total((Z.stat.cuts() + 8 : U32), xs), 11) ++ cell(total(Z.stat.moves(), xs), 13) ++ Nat.show(total(Z.stat.kept(), xs))
 
 # Everything counted for a deal: the grid, then a line per strain and declarer.
 def report(r: Z.Report) -> String:
   match r:
     case Z.Report{+ts, _, +xs}:
-      grid(ts) ++ "\nTargets are North-South's tricks. The cut columns count positions settled by\ntarget too low or high, quick tricks, later tricks, and the check after the lead.\nMoves are the legal moves, and kept is what is left of them after equivalence.\n\n" ++ rows.head() ++ "\n" ++ rows(ts, 0, xs) ++ totals(xs)
+      grid(ts) ++ "\nTargets are North-South's tricks. The cut columns count positions settled by\ntarget too low or high, quick tricks, later tricks, the check after the lead, and\nthe transposition table. Moves are the legal moves, and kept is what is left of them after equivalence.\n\n" ++ rows.head() ++ "\n" ++ rows(ts, 0, xs) ++ totals(xs)

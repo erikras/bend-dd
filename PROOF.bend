@@ -379,3 +379,18 @@ def Laws.sure_never_exceeds():
 
 def Laws.search_is_brute():
   {==}
+
+def Laws.ws_kth_inverse():
+  {==}
+
+def Laws.run_below_all_live():
+  {==}
+
+def Laws.run_below_gaps():
+  {==}
+
+def Laws.bounds_give_back():
+  {==}
+
+def Laws.owners_agree():
+  {==}
