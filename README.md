@@ -44,18 +44,18 @@ Deal 42
 
             North
             ♠ A8
-            ♥ J94
-            ♦ KQ62
+            ❤︎ J94
+            ◆ KQ62
             ♣ KT86
 West                    East
 ♠ T952                  ♠ K64
-♥ T2                    ♥ 873
-♦ JT754                 ♦ A3
+❤︎ T2                    ❤︎ 873
+◆ JT754                 ◆ A3
 ♣ 97                    ♣ Q5432
             South
             ♠ QJ73
-            ♥ AKQ65
-            ♦ 98
+            ❤︎ AKQ65
+            ◆ 98
             ♣ AJ
 
 N:A8.J94.KQ62.KT86 K64.873.A3.Q5432 QJ73.AKQ65.98.AJ T952.T2.JT754.97

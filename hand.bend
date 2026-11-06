@@ -112,9 +112,20 @@ def deal(n: Nat, +seed: U32, +a: U32, +b: U32, +c: U32, +d: U32) -> List<&2, U32
 def rank(+i: U32) -> String:
   str.at((i % 13 : U32), "AKQJT98765432")
 
+# Some terminal fonts draw U+2665 and U+2666 hollow, so the heart is U+2764
+# followed by U+FE0E (an invisible text-style selector) and the diamond is
+# U+25C6. The selector counts as a character for str.pad but takes up no
+# column on screen.
+def suit.selector(heart: Bool) -> String:
+  match heart:
+    case True{}:
+      "︎"
+    case False{}:
+      ""
+
 # The symbol of a suit.
 def suit.symbol(+s: U32) -> String:
-  str.at(s, "♠♥♦♣")
+  str.at(s, "♠❤◆♣") ++ suit.selector(U32.is_eq(s, 1))
 
 def emit(keep: Bool, +i: U32, rest: String) -> String:
   match keep:
@@ -175,7 +186,7 @@ def diagram(+seats: List<&2, U32>) -> String:
     sp ++ line(seats, 0, 3),
     str.pad("West", 24) ++ "East",
     str.pad(line(seats, 3, 0), 24) ++ line(seats, 1, 0),
-    str.pad(line(seats, 3, 1), 24) ++ line(seats, 1, 1),
+    str.pad(line(seats, 3, 1), 25) ++ line(seats, 1, 1),
     str.pad(line(seats, 3, 2), 24) ++ line(seats, 1, 2),
     str.pad(line(seats, 3, 3), 24) ++ line(seats, 1, 3),
     sp ++ "South",
