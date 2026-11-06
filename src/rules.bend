@@ -121,6 +121,20 @@ def suit.mask(suit: Nat, +h01: U32, +h23: U32) -> U32:
     case _:
       0
 
+# The same for a suit or strain among the four, where no trumps has no holding.
+def pick5(s: Nat, a: U32, b: U32, c: U32, d: U32) -> U32:
+  match s:
+    case 0n:
+      a
+    case 1n:
+      b
+    case 2n:
+      c
+    case 3n:
+      d
+    case _:
+      0
+
 # Pushes the cards of a holding onto acc, lowest first, so the highest ends up
 # at the head. n bounds the loop: a holding has at most 13 cards.
 def moves.peel(n: Nat, z: Bool, +suit: U32, +m: U32, acc: List<&2, U32>) -> List<&2, U32>:
