@@ -17,11 +17,26 @@ import ./cards.bend as C
 import ./rules.bend as R
 import ./brute.bend as B
 
-# A true or false answer with the positions visited so far. Nat counts them: it
-# is a machine word at run time, and it stops the program at 2^48 instead of
-# wrapping, which takes days at this solver's rates.
-type Res is Data:
-  Res{ok: Bool, nodes: Nat}
+# A true or false answer with the positions visited so far, and the memory of best
+# moves. Nat counts the positions: it is a machine word at run time, and it stops
+# the program at 2^48 instead of wrapping, which takes days at this solver's rates.
+#
+# The memory holds, for each number of cards left, the card that last settled a node
+# with that many left. It has one owner, so it is updated in place as it is handed
+# along, including through every search for a deal. A call cannot be destructured
+# in place, so reading it inside the search has to happen in a helper: each Res comes
+# with memo, what the memory holds for the next child of the node it goes to.
+type Res is Type:
+  Res{ok: Bool, nodes: Nat, mem: Array<U32>, memo: U32}
+
+# A driver's result, with the same counters.
+type Val is Type:
+  Val{value: U32, nodes: Nat, mem: Array<U32>}
+
+# The memory slot written when there is nothing to remember, and what memory starts
+# with: a card code that is never in a holding.
+def mem.none() -> U32:
+  63
 
 # ---------------------------------------------------------------------------
 # Card equivalence
@@ -97,7 +112,7 @@ def push.all(+high: Bool, +a: U32, +b: U32, +c: U32, +d: U32, acc: List<&2, U32>
 # winners, then the rest, high cards first in each suit. When partner is winning the trick,
 # the cheapest cards first and any that overtake last. Otherwise the cheapest
 # winner first, then the cheapest of the rest.
-def order(+first: Bool, +mine: Bool, +k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0: U32, +w1: U32, +w2: U32, +w3: U32) -> List<&2, U32>:
+def order.go(+first: Bool, +mine: Bool, +k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0: U32, +w1: U32, +w2: U32, +w3: U32) -> List<&2, U32>:
   +front = Bool.or(first, Bool.not(mine))
   +a0 = R.sel(front, w0, (k0 .^. w0 : U32))
   +a1 = R.sel(front, w1, (k1 .^. w1 : U32))
@@ -105,6 +120,24 @@ def order(+first: Bool, +mine: Bool, +k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0
   +a3 = R.sel(front, w3, (k3 .^. w3 : U32))
   push.all(first, a0, a1, a2, a3,
     push.all(first, (k0 .^. a0 : U32), (k1 .^. a1 : U32), (k2 .^. a2 : U32), (k3 .^. a3 : U32), Nil{}))
+
+def order.lift(has: Bool, +memo: U32, xs: List<&2, U32>) -> List<&2, U32>:
+  match has:
+    case True{}:
+      memo <> xs
+    case False{}:
+      xs
+
+# Takes a card out of a holding if the holding is of that card's suit.
+def clear(+s: U32, +suit: U32, +bit: U32, +k: U32) -> U32:
+  (k .&. U32.not(R.sel(U32.is_eq(s, suit), bit, 0)) : U32)
+
+# The same, with the card from the memory of best moves first if it is a move here.
+def order(+first: Bool, +mine: Bool, +k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0: U32, +w1: U32, +w2: U32, +w3: U32, +memo: U32) -> List<&2, U32>:
+  +ms = C.card.suit(memo)
+  +bit = C.card.bit(memo)
+  +has = U32.is_ne((R.pick5(U32.to_nat(ms), k0, k1, k2, k3) .&. bit : U32), 0)
+  order.lift(has, memo, order.go(first, mine, clear(0, ms, bit, k0), clear(1, ms, bit, k1), clear(2, ms, bit, k2), clear(3, ms, bit, k3), clear(0, ms, bit, w0), clear(1, ms, bit, w1), clear(2, ms, bit, w2), clear(3, ms, bit, w3)))
 
 # ---------------------------------------------------------------------------
 # Move generation
@@ -114,7 +147,7 @@ def order(+first: Bool, +mine: Bool, +k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0
 def legal(+free: Bool, +s: U32, +lead: U32, +m: U32) -> U32:
   R.sel(free || U32.is_eq(s, lead), m, 0)
 
-def gen.go(+t: U32, +l01: U32, +l23: U32, +h01: U32, +h23: U32, +tr: U32) -> List<&2, U32>:
+def gen.go(+t: U32, +l01: U32, +l23: U32, +h01: U32, +h23: U32, +tr: U32, +memo: U32) -> List<&2, U32>:
   +lead = R.trick.lead(tr)
   +seat = R.trick.seat(tr)
   +best = R.trick.best(tr)
@@ -132,15 +165,281 @@ def gen.go(+t: U32, +l01: U32, +l23: U32, +h01: U32, +h23: U32, +tr: U32) -> Lis
   +k3 = tops(legal(free, 3, lead, (h23 .&. 65535 : U32)), l3)
   order(first, mine, k0, k1, k2, k3,
     wins(first, 0, k0, l0, t, best), wins(first, 1, k1, l1, t, best),
-    wins(first, 2, k2, l2, t, best), wins(first, 3, k3, l3, t, best))
+    wins(first, 2, k2, l2, t, best), wins(first, 3, k3, l3, t, best), memo)
 
-# The moves to try in a position, where l01 and l23 are the cards in play at the
-# start of this trick. The trick word starts with no cards played.
-def gen(+t: U32, pos: R.Pos, +l01: U32, +l23: U32) -> List<&2, U32>:
+# The best a hand can do in this trick: its top card of the suit led if it has one,
+# otherwise its top trump, otherwise nothing.
+def power(+f: U32, +x: U32) -> U32:
+  R.sel(U32.is_ne(f, 0), (16 + U32.from_nat(U32.log2(f)) : U32), R.sel(U32.is_ne(x, 0), (32 + U32.from_nat(U32.log2(x)) : U32), 0))
+
+def second.power(+l: Nat, +t: Nat, +h01: U32, +h23: U32) -> U32:
+  power(R.suit.mask(l, h01, h23), R.suit.mask(t, h01, h23))
+
+# ---------------------------------------------------------------------------
+# DDS's move weights
+#
+# These follow chapter 5 of DDS's algorithm notes, with one set for each place in the
+# trick. A weight can go negative there, so here they all start from 512. A move's
+# key is its weight above its card code, and lists of keys run from the biggest down.
+
+def key(+w: U32, +c: U32) -> U32:
+  ((w << 6n) .|. c : U32)
+
+def key.insert(xs: List<&2, U32>, +k: U32) -> List<&2, U32>:
+  match xs:
+    case Nil{}:
+      [k]
+    case Con{+h, t}:
+      U32.max(k, h) <> key.insert(t, U32.min(k, h))
+
+# Adds a suit's keys to acc, where the top key of each suit gets ahead of every other
+# card, which makes for a good mix of suits at the front of the list.
+def key.merge(xs: List<&2, U32>, +bonus: U32, acc: List<&2, U32>) -> List<&2, U32>:
+  match xs:
+    case Nil{}:
+      acc
+    case Con{+h, t}:
+      key.merge(t, 0, key.insert(acc, (h + bonus : U32)))
+
+def keys.cards(xs: List<&2, U32>) -> List<&2, U32>:
+  match xs:
+    case Nil{}:
+      Nil{}
+    case Con{+h, t}:
+      (h .&. 63 : U32) <> keys.cards(t)
+
+def bit.top(+x: U32) -> U32:
+  (1 << U32.log2(x) : U32)
+
+def bit.low(+x: U32) -> U32:
+  (x .&. (0 - x) : U32)
+
+# Whether the card just below b in play is also in m.
+def equivalent(+b: U32, +m: U32, +all: U32) -> Bool:
+  +below = (all .&. (b - 1) : U32)
+  U32.is_ne(below, 0) && U32.is_ne((m .&. bit.top(below) : U32), 0)
+
+def rank.of(+b: U32) -> U32:
+  (U32.from_nat(U32.ctz(b)) + 2 : U32)
+
+# What a weight needs to know about the suit and the trick. x0 to x3 depend on the
+# place in the trick.
+type Ctx is Data:
+  Ctx{s: U32, t: U32, l: U32, me: U32, all: U32, add: U32, mine: U32, theirs: U32, x0: U32, x1: U32, x2: U32, x3: U32}
+
+def ctx.s(c: Ctx) -> U32:
+  match c:
+    case Ctx{s, _, _, _, _, _, _, _, _, _, _, _}:
+      s
+
+# Keys for the cards rest of a holding, walking from the lowest up.
+def walk(~f: @+c:Ctx -> @+b:U32 -> U32, n: Nat, z: Bool, +c: Ctx, +rest: U32, acc: List<&2, U32>) -> List<&2, U32>:
+  match n z:
+    case 0n _:
+      acc
+    case 1n+p True{}:
+      acc
+    case 1n+p False{}:
+      +b = bit.low(rest)
+      +more = (rest .^. b : U32)
+      walk(~f, p, U32.is_zero(more), c, more, key.insert(acc, key(f(c, b), C.card.make(ctx.s(c), U32.from_nat(U32.ctz(b))))))
+
+# The power of card b of suit s in this trick.
+def card.power(+s: U32, +l: U32, +t: U32, +b: U32) -> U32:
+  +r = U32.from_nat(U32.ctz(b))
+  R.sel(U32.is_eq(s, l), (16 + r : U32), R.sel(U32.is_eq(s, t), (32 + r : U32), 0))
+
+# On lead. x0 is the base of the suit, x1 is the right-hand opponent's holding in it,
+# mine and theirs are partner's holding and the left-hand opponent's, x2 packs what
+# kind of holding it is, and x3 is the card from the memory of best moves.
+def w.lead(+c: Ctx, +b: U32) -> U32:
+  match c:
+    case Ctx{+s, _, _, +me, +all, +add, +p, +a, +base, +o, +kind, +memo}:
+      +r = rank.of(b)
+      +top = bit.top(all)
+      +win = U32.is_gt(U32.max(b, p), (a .|. o : U32)) && U32.is_zero(add)
+      +low = Bool.not(win)
+      +hit = U32.is_eq(C.card.make(s, U32.from_nat(U32.ctz(b))), memo)
+      +extra = R.sel(hit, R.sel(win, 52, 20), 0)
+      +v0 = R.sel(win, (40 - r : U32), (29 - r : U32))
+      +v1 = R.sel(win, (50 - r : U32), (44 - r : U32))
+      +v2 = R.sel(U32.is_eq(b, top), R.sel(win, 31, 25), R.sel(win, (19 - r : U32), (13 - r : U32)))
+      +v3 = R.sel(win, (35 - r : U32), (29 - r : U32))
+      +v4 = R.sel(win, 40, 29)
+      +v5 = R.sel(win, (30 - r : U32), (13 - r : U32))
+      +v = R.pick6(U32.to_nat(kind), v0, v1, v2, v3, v4, v5)
+      (base + v + extra : U32)
+
+# The cards of one suit on lead, as keys added to acc.
+def lead.suit(+s: U32, +t: U32, +d: U32, +memo: U32, +m: U32, +p: U32, +a: U32, +o: U32, +mt: U32, +at: U32, +bt: U32, acc: List<&2, U32>) -> List<&2, U32>:
+  +all = (m .|. p .|. a .|. o : U32)
+  +top = bit.top(all)
+  +rest = (all .^. top : U32)
+  +second = R.sel(U32.is_zero(rest), 0, bit.top(rest))
+  +la = C.bits.count(a)
+  +lb = C.bits.count(o)
+  +side = U32.is_ne(s, t)
+  +ruff = side && ((U32.is_zero(a) && U32.is_ne(at, 0)) || (U32.is_zero(o) && U32.is_ne(bt, 0)))
+  +own = U32.is_ne((m .&. top : U32), 0)
+  +par = U32.is_ne((p .&. top : U32), 0)
+  +cl = R.sel(U32.is_zero(a), (d + 4 : U32), (la * 4 : U32))
+  +cr = R.sel(U32.is_zero(o), (d + 4 : U32), (lb * 4 : U32))
+  +up = R.sel(side && U32.is_eq(C.bits.count(m), 1) && U32.is_ne(mt, 0) && par && U32.is_ge(C.bits.count(p), 2), 16, 0)
+  +down = (R.sel(ruff, 10, 0) + R.sel(U32.is_ne((o .&. (top .|. second) : U32), 0), 18, 0) : U32)
+  +base = (512 + up - down - ((cl + cr) * 32) / 15 : U32)
+  +single = U32.is_eq(a, top) || U32.is_eq(o, top)
+  +own2 = U32.is_ne((m .&. second : U32), 0)
+  +par2 = U32.is_ne((p .&. second : U32), 0)
+  +eq2 = own2 && equivalent(second, m, all)
+  +kind = R.sel(single, 0, R.sel(own, R.sel(par2, 1, 2), R.sel(par, R.sel(own2, 1, 3), R.sel(eq2, 4, 5))))
+  key.merge(walk(~w.lead, 13n, U32.is_zero(m), Ctx{s, t, s, m, all, Bool.to_u32(ruff), p, a, base, o, kind, memo}, tops(m, all), Nil{}), 1048576, acc)
+
+def gen.lead(+t: U32, +d: U32, +memo: U32, +m01: U32, +m23: U32, +a01: U32, +a23: U32, +p01: U32, +p23: U32, +b01: U32, +b23: U32) -> List<&2, U32>:
+  +st = U32.to_nat(t)
+  +mt = R.suit.mask(st, m01, m23)
+  +at = R.suit.mask(st, a01, a23)
+  +bt = R.suit.mask(st, b01, b23)
+  keys.cards(
+    lead.suit(0, t, d, memo, (m01 >> 16n : U32), (p01 >> 16n : U32), (a01 >> 16n : U32), (b01 >> 16n : U32), mt, at, bt,
+      lead.suit(1, t, d, memo, (m01 .&. 65535 : U32), (p01 .&. 65535 : U32), (a01 .&. 65535 : U32), (b01 .&. 65535 : U32), mt, at, bt,
+        lead.suit(2, t, d, memo, (m23 >> 16n : U32), (p23 >> 16n : U32), (a23 >> 16n : U32), (b23 >> 16n : U32), mt, at, bt,
+          lead.suit(3, t, d, memo, (m23 .&. 65535 : U32), (p23 .&. 65535 : U32), (a23 .&. 65535 : U32), (b23 .&. 65535 : U32), mt, at, bt, Nil{})))))
+
+# Second to play. mine is partner's power and theirs is the best of the rest; x0 and
+# x1 are the holdings in the suit led of the leader's partner and of my partner, x2
+# the leader's, and x3 the card led as a bit.
+def w.second(+c: Ctx, +b: U32) -> U32:
+  match c:
+    case Ctx{+s, +t, +l, +me, +all, +add, +mine, +theirs, +f3, +f4, +lm, +c0}:
+      +r = rank.of(b)
+      +win = U32.is_gt(U32.max(card.power(s, l, t, b), mine), theirs)
+      +eq = equivalent(b, me, all)
+      +low3 = U32.is_ne(f3, 0) && U32.is_gt(bit.low(f3), b)
+      +low4 = U32.is_ne(f4, 0) && U32.is_gt(bit.low(f4), b)
+      +over = U32.is_gt(b, c0)
+      +mid = U32.is_ne(lm, 0) && U32.is_ne((f4 .&. (0 - (c0 << 1n)) .&. (bit.top(lm) - 1) : U32), 0)
+      +top_lead = U32.is_zero(lm) || U32.is_gt(b, bit.top(lm))
+      +follow_win = R.sel(low3, 45, R.sel(mid, 60, R.sel(over, R.sel(low4, 75, R.sel(top_lead, 70, R.sel(eq, 60, 45))), R.sel(U32.is_ne(f4, 0), R.sel(eq, 50, 45), 45))))
+      +follow_lose = R.sel(low3 || low4, 0, R.sel(over, R.sel(eq, 20, 10), 0))
+      +trump = U32.is_eq(s, t)
+      +void_v = R.sel(win, R.sel(trump, 30, 60), R.sel(trump, 15, 0))
+      +v = R.sel(U32.is_eq(s, l), R.sel(win, follow_win, follow_lose), (void_v + add : U32))
+      (512 + v - r : U32)
+
+# Third to play. mine is the power of the card winning if it is partner's, otherwise
+# 0, and theirs is the power of the rest. x0 is the power of the card winning.
+def w.third(+c: Ctx, +b: U32) -> U32:
+  match c:
+    case Ctx{+s, +t, +l, +me, +all, +add, +mine, +theirs, +pb, _, _, _}:
+      +r = rank.of(b)
+      +px = card.power(s, l, t, b)
+      +win = U32.is_gt(U32.max(px, mine), theirs)
+      +trump = U32.is_eq(s, t)
+      +top = U32.is_gt(px, pb)
+      +pard = U32.is_ne(mine, 0)
+      +eq = equivalent(b, me, all)
+      +rest = (all .^. bit.top(all) : U32)
+      +is2 = U32.is_ne(rest, 0) && U32.is_eq(bit.top(rest), b)
+      +void_win = R.sel(pard, R.sel(trump && U32.is_ne(l, t), 30, 60), R.sel(trump && top, 70, R.sel(trump, 15, 30)))
+      +void_lose = R.sel(trump && top, 40, 0)
+      +under = trump && Bool.not(top)
+      +void_v = (R.sel(win, void_win, void_lose) + add - R.sel(under && Bool.not(win), 15, 0) : U32)
+      +follow_lose = R.sel(top, R.sel(is2, (25 + r : U32), R.sel(eq, 20, 10)), (0 - 10 : U32))
+      +v = R.sel(U32.is_eq(s, l), R.sel(win, 60, follow_lose), void_v)
+      (512 + v - r : U32)
+
+# Last to play. mine says partner is winning the trick, and theirs is the power of
+# the card winning.
+def w.fourth(+c: Ctx, +b: U32) -> U32:
+  match c:
+    case Ctx{+s, +t, +l, _, _, +add, +mine, +theirs, _, _, _, _}:
+      +r = rank.of(b)
+      +px = card.power(s, l, t, b)
+      +trump = U32.is_eq(s, t)
+      +pard = U32.is_ne(mine, 0)
+      +void_v = R.sel(pard, (R.sel(trump, 14, 30) + add : U32), R.sel(trump, R.sel(U32.is_gt(px, theirs), (30 + add : U32), 0), (14 + add : U32)))
+      +follow = R.sel(pard || U32.is_gt(px, theirs), 30, 14)
+      (512 + R.sel(U32.is_eq(s, l), follow, void_v) - r : U32)
+
+# The bonus a suit gets when a hand is void in the suit led.
+def discard.add(+m: U32, +all: U32) -> U32:
+  +n = C.bits.count(m)
+  +rest = (all .^. bit.top(all) : U32)
+  +has2 = U32.is_ne(rest, 0) && U32.is_ne((m .&. bit.top(rest) : U32), 0)
+  ((n * 64) / 36 - R.sel(U32.is_eq(n, 2) && has2, 2, 0) : U32)
+
+# The cards of one suit when void in the suit led, with the top one of each suit
+# ahead of the rest, as keys added to acc.
+def void.suit(~f: @+c:Ctx -> @+b:U32 -> U32, +s: U32, +t: U32, +l: U32, +m: U32, +all: U32, +mine: U32, +theirs: U32, +x0: U32, +x1: U32, +x2: U32, +x3: U32, acc: List<&2, U32>) -> List<&2, U32>:
+  key.merge(walk(~f, 13n, U32.is_zero(m), Ctx{s, t, l, m, all, discard.add(m, all), mine, theirs, x0, x1, x2, x3}, tops(m, all), Nil{}), 1048576, acc)
+
+# The moves of a hand following suit or not, where the holdings of the suit led are
+# f, and so on for a void, all weighed by f.
+def gen.follow(~f: @+c:Ctx -> @+b:U32 -> U32, follows: Bool, +t: U32, +l: U32, +m01: U32, +m23: U32, +l01: U32, +l23: U32, +mine: U32, +theirs: U32, +x0: U32, +x1: U32, +x2: U32, +x3: U32) -> List<&2, U32>:
+  match follows:
+    case True{}:
+      +ln = U32.to_nat(l)
+      +ma = R.suit.mask(ln, m01, m23)
+      +al = R.suit.mask(ln, l01, l23)
+      keys.cards(walk(~f, 13n, U32.is_zero(ma), Ctx{l, t, l, ma, al, 0, mine, theirs, x0, x1, x2, x3}, tops(ma, al), Nil{}))
+    case False{}:
+      keys.cards(
+        void.suit(~f, 0, t, l, (m01 >> 16n : U32), (l01 >> 16n : U32), mine, theirs, x0, x1, x2, x3,
+          void.suit(~f, 1, t, l, (m01 .&. 65535 : U32), (l01 .&. 65535 : U32), mine, theirs, x0, x1, x2, x3,
+            void.suit(~f, 2, t, l, (m23 >> 16n : U32), (l23 >> 16n : U32), mine, theirs, x0, x1, x2, x3,
+              void.suit(~f, 3, t, l, (m23 .&. 65535 : U32), (l23 .&. 65535 : U32), mine, theirs, x0, x1, x2, x3, Nil{})))))
+
+# The power of the card winning the trick: a card of the suit led, or else a trump.
+def best.power(+best: U32, +l: U32) -> U32:
+  (R.sel(U32.is_eq(C.card.suit(best), l), 16, 32) + C.card.rank(best) : U32)
+
+# Whether partner is winning the trick.
+def best.pard(+tr: U32) -> Bool:
+  U32.is_zero(((R.trick.seat(tr) .^. R.trick.owner(tr)) .&. 1 : U32))
+
+# Dispatches on the number of cards on the table. a is the hand after this one, p
+# is partner, and b is the hand before it.
+def gen.at(played: Nat, +t: U32, +tr: U32, +d: U32, +memo: U32, +l01: U32, +l23: U32, +m01: U32, +m23: U32, +a01: U32, +a23: U32, +p01: U32, +p23: U32, +b01: U32, +b23: U32) -> List<&2, U32>:
+  match played:
+    case 0n:
+      gen.lead(t, d, memo, m01, m23, a01, a23, p01, p23, b01, b23)
+    case 1n:
+      +st = U32.to_nat(t)
+      +l = R.trick.lead(tr)
+      +ln = U32.to_nat(l)
+      +best = R.trick.best(tr)
+      gen.follow(~w.second, U32.is_ne(R.suit.mask(ln, m01, m23), 0), t, l, m01, m23, l01, l23,
+        second.power(ln, st, p01, p23), U32.max(best.power(best, l), second.power(ln, st, a01, a23)),
+        R.suit.mask(ln, a01, a23), R.suit.mask(ln, p01, p23), R.suit.mask(ln, b01, b23), C.card.bit(best))
+    case 2n:
+      +st = U32.to_nat(t)
+      +l = R.trick.lead(tr)
+      +ln = U32.to_nat(l)
+      +pb = best.power(R.trick.best(tr), l)
+      +pard = best.pard(tr)
+      gen.follow(~w.third, U32.is_ne(R.suit.mask(ln, m01, m23), 0), t, l, m01, m23, l01, l23,
+        R.sel(pard, pb, 0), U32.max(R.sel(pard, 0, pb), second.power(ln, st, a01, a23)), pb, 0, 0, 0)
+    case _:
+      +l = R.trick.lead(tr)
+      +ln = U32.to_nat(l)
+      gen.follow(~w.fourth, U32.is_ne(R.suit.mask(ln, m01, m23), 0), t, l, m01, m23, l01, l23,
+        R.sel(best.pard(tr), 1, 0), best.power(R.trick.best(tr), l), 0, 0, 0, 0)
+
+# The moves to try in a position with d cards left, where l01 and l23 are the cards
+# in play at the start of this trick, and memo is the card from the memory.
+def gen(+t: U32, pos: R.Pos, +l01: U32, +l23: U32, +memo: U32, +d: U32) -> List<&2, U32>:
   match pos:
-    case R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, +tr, won}:
-      +seat = U32.to_nat(R.trick.seat(tr))
-      gen.go(t, l01, l23, R.pick(seat, n01, e01, s01, w01), R.pick(seat, n23, e23, s23, w23), tr)
+    case R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, +tr, _}:
+      +seat = R.trick.seat(tr)
+      +i = U32.to_nat(seat)
+      +j = U32.to_nat(((seat + 1) .&. 3 : U32))
+      +k = U32.to_nat(((seat + 2) .&. 3 : U32))
+      +o = U32.to_nat(((seat + 3) .&. 3 : U32))
+      gen.at(U32.to_nat(R.trick.played(tr)), t, tr, d, memo, l01, l23,
+        R.pick(i, n01, e01, s01, w01), R.pick(i, n23, e23, s23, w23),
+        R.pick(j, n01, e01, s01, w01), R.pick(j, n23, e23, s23, w23),
+        R.pick(k, n01, e01, s01, w01), R.pick(k, n23, e23, s23, w23),
+        R.pick(o, n01, e01, s01, w01), R.pick(o, n23, e23, s23, w23))
 
 # ---------------------------------------------------------------------------
 # Target cutoffs
@@ -319,14 +618,6 @@ def boundary(+t: U32, +pos: R.Pos, +won: U32, +left: U32, +target: U32) -> U32:
 # ---------------------------------------------------------------------------
 # After the lead
 
-# The best a hand can do in this trick: its top card of the suit led if it has one,
-# otherwise its top trump, otherwise nothing.
-def power(+f: U32, +x: U32) -> U32:
-  R.sel(U32.is_ne(f, 0), (16 + U32.from_nat(U32.log2(f)) : U32), R.sel(U32.is_ne(x, 0), (32 + U32.from_nat(U32.log2(x)) : U32), 0))
-
-def second.power(+l: Nat, +t: Nat, +h01: U32, +h23: U32) -> U32:
-  power(R.suit.mask(l, h01, h23), R.suit.mask(t, h01, h23))
-
 # Once a card is led, the side with the hand of highest power is sure of this trick:
 # that hand plays its best and nothing beats it. So left counts this trick.
 def second.go(+t: U32, +tr: U32, +won: U32, +left: U32, +target: U32, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32) -> U32:
@@ -371,10 +662,10 @@ def cut.at(played: Nat, +t: U32, +pos: R.Pos, +won: U32, +d: U32, +target: U32) 
       0
 
 # The moves to try after a cut: none when it settled the position.
-def enter.go(go: Bool, +t: U32, +pos: R.Pos, +l01: U32, +l23: U32) -> List<&2, U32>:
+def enter.go(go: Bool, +t: U32, +pos: R.Pos, +l01: U32, +l23: U32, +memo: U32, +d: U32) -> List<&2, U32>:
   match go:
     case True{}:
-      gen(t, pos, l01, l23)
+      gen(t, pos, l01, l23, memo, d)
     case False{}:
       Nil{}
 
@@ -393,24 +684,39 @@ def live.at(bound: Bool, +x: U32, +old: U32) -> U32:
 # ---------------------------------------------------------------------------
 # The search
 
+# A Res whose memo is slot i of the memory.
+def peek.go(ok: Bool, n: Nat, pair: Array<U32> & U32) -> Res:
+  match pair:
+    case (m, memo):
+      Res{ok, n, m, memo}
+
+def peek(ok: Bool, n: Nat, m: Array<U32>, +i: U32) -> Res:
+  peek.go(ok, n, Array.get(U32, m, i))
+
+def peek.res(r: Res, +i: U32) -> Res:
+  match r:
+    case Res{ok, n, m, _}:
+      peek(ok, n, m, i)
+
 # Tries the moves ms of a position with d cards left. r is the answer so far: a
 # call cannot be destructured in place, so a child's answer rides into the next
 # sibling as an argument. The answer settles a node once it says true for
 # North-South or false for East-West, and otherwise the node goes on to the next
-# move; with no moves left, the answer stands.
+# move; with no moves left, the answer stands. A move that settles the node goes
+# into the memory, at slot, and last is that move.
 #
 # A child has one card fewer, and a sibling has one move fewer with the same d.
-def search(+d: Nat, ms: List<&2, U32>, ns: Bool, r: Res, +t: U32, +target: U32, +l01: U32, +l23: U32, +pos: R.Pos) -> Res:
+def search(+d: Nat, ms: List<&2, U32>, ns: Bool, r: Res, +slot: U32, +last: U32, +t: U32, +target: U32, +l01: U32, +l23: U32, +pos: R.Pos) -> Res:
   match d ms ns r:
     case 0n _ _ x:
       x
+    case 1n+p _ True{} Res{True{}, n, m, _}:
+      Res{True{}, n, Array.set(U32, m, slot, last), 0}
+    case 1n+p _ False{} Res{False{}, n, m, _}:
+      Res{False{}, n, Array.set(U32, m, slot, last), 0}
     case 1n+p Nil{} _ x:
       x
-    case 1n+p _ True{} Res{True{}, n}:
-      Res{True{}, n}
-    case 1n+p _ False{} Res{False{}, n}:
-      Res{False{}, n}
-    case 1n+p Con{c, rest} True{} Res{False{}, n}:
+    case 1n+p Con{+c, rest} True{} Res{False{}, n, m, +memo}:
       +child = R.play(t, pos, c)
       +cns = R.pos.ns(child)
       +tr = R.pos.trick(child)
@@ -418,10 +724,11 @@ def search(+d: Nat, ms: List<&2, U32>, ns: Bool, r: Res, +t: U32, +target: U32, 
       +code = cut.at(U32.to_nat(R.trick.played(tr)), t, child, R.pos.won(child), U32.from_nat(p), target)
       +c01 = live.at(bound, R.pos.live01(child), l01)
       +c23 = live.at(bound, R.pos.live23(child), l23)
+      +here = U32.from_nat(p)
       search(1n+p, rest, True{},
-        search(p, enter.go(U32.is_zero(code), t, child, c01, c23), cns, Res{enter.ok(code, cns), 1n+n}, t, target, c01, c23, child),
-        t, target, l01, l23, pos)
-    case 1n+p Con{c, rest} False{} Res{True{}, n}:
+        peek.res(search(p, enter.go(U32.is_zero(code), t, child, c01, c23, memo, here), cns, peek(enter.ok(code, cns), 1n+n, m, (here - 1 : U32)), mem.none(), 0, t, target, c01, c23, child), here),
+        U32.from_nat(1n+p), c, t, target, l01, l23, pos)
+    case 1n+p Con{+c, rest} False{} Res{True{}, n, m, +memo}:
       +child = R.play(t, pos, c)
       +cns = R.pos.ns(child)
       +tr = R.pos.trick(child)
@@ -429,20 +736,27 @@ def search(+d: Nat, ms: List<&2, U32>, ns: Bool, r: Res, +t: U32, +target: U32, 
       +code = cut.at(U32.to_nat(R.trick.played(tr)), t, child, R.pos.won(child), U32.from_nat(p), target)
       +c01 = live.at(bound, R.pos.live01(child), l01)
       +c23 = live.at(bound, R.pos.live23(child), l23)
+      +here = U32.from_nat(p)
       search(1n+p, rest, False{},
-        search(p, enter.go(U32.is_zero(code), t, child, c01, c23), cns, Res{enter.ok(code, cns), 1n+n}, t, target, c01, c23, child),
-        t, target, l01, l23, pos)
+        peek.res(search(p, enter.go(U32.is_zero(code), t, child, c01, c23, memo, here), cns, peek(enter.ok(code, cns), 1n+n, m, (here - 1 : U32)), mem.none(), 0, t, target, c01, c23, child), here),
+        U32.from_nat(1n+p), c, t, target, l01, l23, pos)
 
-# Runs one search from the start of a trick, unless told there is nothing to ask.
-def ask(stop: Bool, +d: Nat, +t: U32, +pos: R.Pos, +target: U32, n: Nat) -> Res:
-  match stop:
-    case True{}:
-      Res{False{}, n}
-    case False{}:
+# Runs one search from the start of a trick.
+def ask.go(+d: Nat, +t: U32, +pos: R.Pos, +target: U32, r: Res) -> Res:
+  match r:
+    case Res{_, n, m, +memo}:
       +ns = R.pos.ns(pos)
       +l01 = R.pos.live01(pos)
       +l23 = R.pos.live23(pos)
-      search(d, gen(t, pos, l01, l23), ns, Res{Bool.not(ns), n}, t, target, l01, l23, pos)
+      search(d, gen(t, pos, l01, l23, memo, U32.from_nat(d)), ns, peek(Bool.not(ns), n, m, (U32.from_nat(d) - 1 : U32)), mem.none(), 0, t, target, l01, l23, pos)
+
+# Runs one search, unless told there is nothing to ask.
+def ask(stop: Bool, +d: Nat, +t: U32, +pos: R.Pos, +target: U32, n: Nat, m: Array<U32>) -> Res:
+  match stop:
+    case True{}:
+      Res{False{}, n, m, 0}
+    case False{}:
+      ask.go(d, t, pos, target, peek(False{}, n, m, U32.from_nat(d)))
 
 # ---------------------------------------------------------------------------
 # The driver
@@ -467,27 +781,27 @@ def driver.first(+g: U32, +lo: U32, +hi: U32) -> U32:
 # Moves the bounds until they meet. done says they already had before this step,
 # and r is the answer about target. Each step closes the gap by at least one, so
 # the fuel only has to be more than the tricks left.
-def narrow(fuel: Nat, done: Bool, r: Res, +target: U32, +d: Nat, +t: U32, +pos: R.Pos, +lo: U32, +hi: U32) -> B.Res:
+def narrow(fuel: Nat, done: Bool, r: Res, +target: U32, +d: Nat, +t: U32, +pos: R.Pos, +lo: U32, +hi: U32) -> Val:
   match fuel done r:
-    case 0n _ Res{_, n}:
-      B.Res{lo, n}
-    case 1n+p True{} Res{_, n}:
-      B.Res{lo, n}
-    case 1n+p False{} Res{+ok, n}:
+    case 0n _ Res{_, n, m, _}:
+      Val{lo, n, m}
+    case 1n+p True{} Res{_, n, m, _}:
+      Val{lo, n, m}
+    case 1n+p False{} Res{+ok, n, m, _}:
       +lo2 = driver.lo(ok, target, lo)
       +hi2 = driver.hi(ok, target, hi)
       +stop = U32.is_ge(lo2, hi2)
       +next = driver.next(ok, lo2, hi2)
-      narrow(p, stop, ask(stop, d, t, pos, next, n), next, d, t, pos, lo2, hi2)
+      narrow(p, stop, ask(stop, d, t, pos, next, n, m), next, d, t, pos, lo2, hi2)
 
 # North-South's tricks from the start of a trick with d cards left, starting from
 # a guess at the answer.
-def solve(+d: Nat, +t: U32, +pos: R.Pos, +guess: U32, n: Nat) -> B.Res:
+def solve(+d: Nat, +t: U32, +pos: R.Pos, +guess: U32, n: Nat, m: Array<U32>) -> Val:
   +lo = R.pos.won(pos)
   +hi = (lo + (U32.from_nat(d) >> 2n) : U32)
   +stop = U32.is_ge(lo, hi)
   +target = driver.first(guess, lo, hi)
-  narrow(14n, stop, ask(stop, d, t, pos, target, n), target, d, t, pos, lo, hi)
+  narrow(14n, stop, ask(stop, d, t, pos, target, n, m), target, d, t, pos, lo, hi)
 
 # ---------------------------------------------------------------------------
 # The table
@@ -495,15 +809,15 @@ def solve(+d: Nat, +t: U32, +pos: R.Pos, +guess: U32, n: Nat) -> B.Res:
 # Fills the table from its last entry to its first, so that it comes out in the
 # order of B.table. r is the result for entry i + 1, and it feeds the guess for
 # entry i: moving the lead by one seat rarely changes the result by much.
-def table.go(k: Nat, r: B.Res, +i: U32, +d: Nat, +left: U32, +deal: C.Deal, acc: List<&2, U32>) -> B.Table:
+def table.go(k: Nat, r: Val, +i: U32, +d: Nat, +left: U32, +deal: C.Deal, acc: List<&2, U32>) -> B.Table:
   match k r:
-    case 0n B.Res{+v, n}:
+    case 0n Val{+v, n, _}:
       B.Table{B.table.entry(U32.is_zero(((i + 1) .&. 1 : U32)), left, v) <> acc, n}
-    case 1n+p B.Res{+v, n}:
+    case 1n+p Val{+v, n, m}:
       +t = (i >> 2n : U32)
       +decl = (i .&. 3 : U32)
       +leader = ((decl + 1) .&. 3 : U32)
-      table.go(p, solve(d, t, R.pos.start(deal, leader), v, n), (i - 1 : U32), d, left, deal,
+      table.go(p, solve(d, t, R.pos.start(deal, leader), v, n, m), (i - 1 : U32), d, left, deal,
         B.table.entry(U32.is_zero(((i + 1) .&. 1 : U32)), left, v) <> acc)
 
 # The double dummy table of a deal, as B.table gives it.
@@ -511,4 +825,4 @@ def table(+deal: C.Deal) -> B.Table:
   +cards = B.deal.cards(deal)
   +d = U32.to_nat(cards)
   +left = (cards / 4 : U32)
-  table.go(19n, solve(d, 4, R.pos.start(deal, 0), ((left + 1) / 2 : U32), 0n), 18, d, left, deal, Nil{})
+  table.go(19n, solve(d, 4, R.pos.start(deal, 0), ((left + 1) / 2 : U32), 0n, [mem.none() : U32*64n]), 18, d, left, deal, Nil{})

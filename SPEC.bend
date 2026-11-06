@@ -367,7 +367,7 @@ def order.exact(xs: List<&2, U32>, +k0: U32, +k1: U32, +k2: U32, +k3: U32) -> Bo
         order.exact(t, (k0 .^. R.sel(is0, bit, 0) : U32), (k1 .^. R.sel(is1, bit, 0) : U32), (k2 .^. R.sel(is2, bit, 0) : U32), (k3 .^. R.sel(is3, bit, 0) : U32))
 
 def order.ok(+first: Bool, +mine: Bool, +k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0: U32, +w1: U32, +w2: U32, +w3: U32) -> Bool:
-  order.exact(Z.order(first, mine, k0, k1, k2, k3, w0, w1, w2, w3), k0, k1, k2, k3)
+  order.exact(Z.order(first, mine, k0, k1, k2, k3, w0, w1, w2, w3, Z.mem.none()), k0, k1, k2, k3)
 
 def order.modes(+k0: U32, +k1: U32, +k2: U32, +k3: U32, +w0: U32, +w1: U32, +w2: U32, +w3: U32) -> Bool:
   order.ok(True{}, True{}, k0, k1, k2, k3, w0, w1, w2, w3) &&

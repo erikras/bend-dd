@@ -209,9 +209,9 @@ def order.checks() -> List<&2, Check>:
   +l01 = (live01 .|. (1024 << 16n) : U32)
   [
     Check{"second hand: winner first, then the rest low first; K and J stay apart",
-      ints.eq(Z.gen(4, p, l01, 0), [s(11), s(0), s(9)])},
+      ints.eq(Z.gen(4, p, l01, 0, Z.mem.none()), [s(11), s(0), s(9)])},
     Check{"on lead: the top card in play first, then the rest by suit, high first",
-      ints.eq(Z.gen(4, R.pos.start(C.Deal{C.Hand{(4096 .|. 1 : U32), (2048 : U32), 0, 0}, C.Hand{2, 4096, 0, 0}, C.Hand{4, 1, 0, 0}, C.Hand{8, 2, 0, 0}}, 0), (((4096 .|. 15) << 16n) .|. (4096 .|. 2048 .|. 3) : U32), 0),
+      ints.eq(Z.gen(4, R.pos.start(C.Deal{C.Hand{(4096 .|. 1 : U32), (2048 : U32), 0, 0}, C.Hand{2, 4096, 0, 0}, C.Hand{4, 1, 0, 0}, C.Hand{8, 2, 0, 0}}, 0), (((4096 .|. 15) << 16n) .|. (4096 .|. 2048 .|. 3) : U32), 0, Z.mem.none()),
         [s(12), s(0), h(11)])}
   ]
 
