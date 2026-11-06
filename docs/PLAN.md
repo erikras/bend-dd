@@ -307,6 +307,7 @@ matches DDS on all 100 deals, except the first, which didn't finish them.
 | Table, hashed on lengths, one table for all 5 strains | 83,758,437 | 2,651,318,416 | 369 s |
 | + small card filter, and hashing on levels of top cards | 11,461,796 | 234,233,597 | 46 s |
 | + hashing on the suits that matter, with a directory, and a table per strain | 6,978,487 | 83,772,644 | 20 s |
+| + 2^23 words per strain instead of 2^21 | 5,989,681 | 55,229,848 | 15 s |
 
 What this changes:
 
@@ -324,15 +325,25 @@ What this changes:
   matter, and hashes on those cards' owners. A lookup tries each pattern that the
   directory word for its lengths has seen. On the first 20 deals, in mean nodes, top
   cards hashed per suit: 1, 7.5M; 2, 5.0M; 3, 4.4M; 4, 4.5M; 6, 5.3M.
-- The table's size hardly matters: at 2^21 words (8 MB) per strain, 2^23, 2^25 and 2^27
-  words save 1% to 2% on ordinary deals. On the two heaviest deals of `list100`, under
-  the older hash, they saved a quarter.
+- With this hash the table's size matters up to a point. On `list100`, words per
+  strain against mean nodes and wall for 100 deals: 2^19, 12.8M, 41 s; 2^20, 8.6M, 26 s;
+  2^21, 7.0M, 20 s; 2^22, 6.2M, 16 s; 2^23, 6.0M, 16 s; 2^24, 5.9M, 16 s; 2^25, 5.9M,
+  16 s. So 2^23, which is 32 MB, and about 390 MB in all on 12 threads.
+- Using the table only from 4 or 5 tricks left costs 18% and 77% in time, and using it
+  from 2 costs 6%, so it stays at 3.
 - 4 entries a bucket cost half as many nodes again as 8.
 - The small card filter cuts nodes by a third (10.1M to 6.6M on the first 20).
 - A best move kept in each entry, as DDS does, gave nothing here (6.60M to 6.69M), so
   it is out: the memory by depth and the weights already find most of it.
-- The table does update in place: the emitted C has no array copy, memory stays at
-  about 100 MB, and a table 64 times bigger takes about the same time.
+- The table does update in place: in the emitted C a store is a `blk_write` to the
+  array's own block, and there is no array copy. A table 64 times bigger takes about
+  the same time.
+- A table can outlive its deal, since an entry is about a position, with relative
+  ranks, not about the deal it came from. But sharing one across the items of a leaf
+  gave no fewer nodes on `list1000`, at any width of the tree, and made node counts
+  depend on the number of threads. So it is out.
+- Leaving a winner's run out of the ranks when its side succeeded, since it only needed
+  that card, passed the tests but saved only 1%, so it is out too.
 - Nearly every position at the start of a trick now ends in the table or a cut, so the
   nodes are mostly the three cards in between. Speed per node is about 8M/s on one
   thread, against 23M with no table.
@@ -353,13 +364,25 @@ tables match both lists exactly, all 1,100.
 
 | File | Deals | `dd`, deals/s | DDS one at a time, deals/s | DDS in batches, deals/s | Behind DDS in batches |
 |---|---|---|---|---|---|
-| `list100` | 100 | 5.0 | 28.0 | 73.9 | 14.7× |
-| `list1000` | 1000 | 7.1 | 24.5 | 68.1 | 9.6× |
+| `list100` | 100 | 6.6 | 28.2 | 81.1 | 12.2× |
+| `list1000` | 1000 | 8.5 | 26.4 | 72.6 | 8.6× |
 
 What this changes:
 
-- Decision 2 asked for throughput over many deals. We are about 10 times behind DDS
-  in batches. Phase 6 is where that gets worked on.
+- Decision 2 asked for throughput over many deals. We are about 9 times behind DDS in
+  batches, and further behind per thread: DDS's batches gain only about 3 times on one
+  at a time here, so it isn't using the cores that `dd` is. Phase 6 is where this gets
+  worked on.
+- The gap looks like nodes more than speed per node. On the first 20 deals of `list100`
+  DDS reports a mean of 520,675 nodes per table, by 20 calls of `SolveBoard`, in 0.078
+  s, against our 4.3M in about 1 s on one thread. We don't know that DDS counts a node
+  as we do: if it only counts the starts of tricks, the real gap in nodes is about 2
+  times and the gap in speed about 3 times, and if not, it is about 8 times and none.
+  Finding out comes first in Phase 6. The profile is flat: the search 31%, the probe
+  15%, the key 5%, the sure tricks 5%, and generating and sorting moves most of the rest.
+- Phase 6b looks doubtful on this machine. The GPU was 29 times slower than the CPU
+  threads on plain minimax (§2.3), every lane would need its own table, and the search
+  now wants 32 MB per strain for its best results.
 - One deal now uses up to 5 threads, a deal of 23M nodes going from 2.3 s to 1.2 s, as
   far as its largest strain allows. A fork nested inside a leaf of the fork tree did
   nothing: the scheduler only hands out tasks until it has enough of them, and a tree
@@ -406,7 +429,7 @@ is at most 13 long.
 2 words, tt: Array<U32>)`. Returning the table alongside the answer is how it
 gets threaded.
 
-**The transposition table** is one `Array<U32>`, 2^21 words (8 MB) per strain of a
+**The transposition table** is one `Array<U32>`, 2^23 words (32 MB) per strain of a
 whole deal. `src/search.bend` has the entry as built, and §2.7 says what changed. As
 first planned, an entry is about 8 words:
 
