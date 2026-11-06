@@ -3,3 +3,9 @@ hand.c
 hand.js
 *.gpu
 .DS_Store
+.venv/
+__pycache__/
+/dd
+/dd.c
+/dd.js
+/build/
