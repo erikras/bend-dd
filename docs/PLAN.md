@@ -111,6 +111,72 @@ What this changes:
   slow part of the tests (`tools/test.sh --quick` skips it). Laws that hold by
   induction are nearly free, so they are worth the extra work.
 
+### 2.4 What Phase 2 measured
+
+`src/search.bend` on the same M1 Max, under Bend 2.0.40. Node counts are exact and
+repeat from run to run. The machine had other work running (load 15 to 80), so
+times and rates are rough. A node is a card played, counted the same way in both
+searches, and each deal is a whole table of 20 searches.
+
+Next to brute force, on 10 threads, totals per row:
+
+| cards per hand | deals | nodes, brute | nodes, search | ratio | ms, brute | ms, search |
+|---|---|---|---|---|---|---|
+| 3 | 2000 | 55,759,338 | 3,607,167 | 15 | 173 | 32 |
+| 4 | 2000 | 2,942,094,712 | 16,079,950 | 183 | 9,153 | 163 |
+| 5 | 1000 | 122,644,356,888 | 43,916,908 | 2,793 | 452,066 | 303 |
+| 6 | 3 | 12,131,516,935 | 559,222 | 21,694 | 149,914 | 9 |
+
+How far the search goes, per deal (7 cards on 1 thread, the rest on 10, with one
+thread per deal at a time):
+
+| cards per hand | deals | mean nodes | median | worst | ms per deal, wall |
+|---|---|---|---|---|---|
+| 7 | 300 | 2,264,479 | 1,241,486 | 38,446,086 | 86 (1 thread) |
+| 8 | 200 | 22,133,476 | 10,689,092 | 236,307,135 | 163 |
+| 9 | 100 | 196,973,248 | 104,623,872 | 2,045,911,207 | 1,518 |
+| 10 | 30 | 1,533,547,481 | 794,510,643 | 8,508,143,932 | 15,625 |
+| 11 | 5 | 9,110,939,553 | 7,605,487,776 | 15,740,756,763 | 123,338 |
+
+What each piece is worth, as mean nodes per deal on 100 7-card endings, with that
+piece taken out:
+
+| search | nodes | against the full search |
+|---|---|---|
+| Full search | 2,434,232 | |
+| No card equivalence | 27,309,629 | 11.2× |
+| No target cutoffs | 8,941,594 | 3.7× |
+| No move ordering | 6,581,147 | 2.7× |
+| No guess from the previous leader | 2,739,520 | 1.13× |
+| Bisection instead of stepping from the guess | 2,592,248 | 1.06× |
+
+What this changes:
+
+- Each extra card costs about 8 times the nodes, which puts a full 13-card table
+  near 6 × 10^11 nodes, or hours. The transposition table has to carry it from
+  there, as planned. Phase 3 should be judged on the 8-card set.
+- The search runs about 26M nodes/s on one thread, against 63M for brute force.
+  Most of the difference is that it generates, collapses and orders moves at every
+  node. Without ordering the rate rose by up to 2×, but it pays for itself by 7
+  cards. This is the first target for the lookup tables of Phase 6.
+- One deal runs on one thread, so large endings waste the other cores: the rate on
+  10 threads falls from 135M at 8 cards to 74M at 11, as a few long deals fill
+  few leaves. The worst deal is 7 to 17 times the mean, so batches need many leaves
+  (§5), and single deals need the fork over strains from Phase 5.
+- `Nat` is a checked 48-bit integer at run time, not a wrapping one, so it is the
+  node counter: `1n+n` costs a test and past 2^48 the program stops with an error.
+  That is days of work at these rates. It runs on the GPU too.
+- The search needs no modes and no fuel (§4), and a cut needs no special return: it
+  enters the child with no moves and the answer already set.
+- Equivalence has to use the cards in play at the *start* of the trick. A card on
+  the table still splits a run (with Q on the table, K and J differ), so the search
+  carries that mask from trick to trick.
+
+Still unproved: the target cutoff law takes for granted that a result lies between
+won and won + left, and equivalence and the search have no law that holds for every
+position. Tests stand in for these so far. Search and brute force also start only
+from the first card of a trick: mid-trick starts come with Phase 7.
+
 ## 3. Data representation
 
 **Cards.** Suit 0..3 = ♠ ♥ ♦ ♣ (as in `hand.bend` and DDS's strain order),
@@ -175,12 +241,14 @@ One def, `search`, implements the DDS pseudo-code:
 3. At the end of a trick, store the result and its winning ranks in the TT.
 
 Because Bend forbids mutual recursion, "search a node" and "try the next
-move" are two modes of the same def, picked by an argument. The fuel is a
-`Nat` large enough to bound the call chain (52 plies × at most 13 siblings),
-so the termination checker accepts it, exactly like `queens`.
+move" are the same def: a call with a position's moves and a starting answer.
+Depth bounds the recursion: a child has one card fewer, and a sibling has the same
+depth with one move fewer, so no separate fuel is needed. A child's answer rides
+into the next sibling as an argument, and that sibling stops at once if the answer
+settles the node.
 
-The **driver** for one strain and leader starts from a guess (quick tricks, or
-the answer for the previous leader) and narrows the bounds with zero-window
+The **driver** for one strain and leader starts from a guess (half the tricks, or
+the answer for the previous leader, later perhaps quick tricks) and narrows the bounds with zero-window
 searches, threading the same TT through every call. The four leaders of one
 strain share one TT, as in DDS.
 
@@ -238,6 +306,7 @@ The `search` def, the target driver, target-too-low-or-high, card
 equivalence, and simple move ordering (high cards and the same suit first).
 *Done when:* it matches the brute-force oracle on all small endings and
 handles 7 to 8 card endings quickly. We log node counts from here on.
+*Done:* see §2.4.
 
 **Phase 3: Cutoffs and ordering.**
 Quick tricks, later tricks, and DDS's move-ordering weights per hand position.
