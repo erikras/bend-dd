@@ -72,7 +72,7 @@ list and the runtime benchmarks in the Bend repo:
 | `~` template arguments are compiled into separate copies | The trump suit can be a template argument, giving five specialised copies of the hot code with the trump checks folded away. |
 | Records of scalars ride in registers; non-tail recursion costs a heap frame; no common-subexpression elimination | Keep the position small and flat, bind values once, and expect per-node overhead to be higher than C. We measure this early (Phase 1). |
 | No C escape from pure code (foreign code is IO only) | Everything in the search is Bend. There is no falling back to a C transposition table. |
-| GPU: Bend's own `queens` search is ~3.5× slower on an M4 GPU than on its CPU cores | GPU is an experiment for later, not a goal. Plan for the CPU. |
+| GPU: Bend's own `queens` search is ~3.5× slower on an M4 GPU than on its CPU cores | The goal is to use every core and the GPU. The CPU path comes first because it is simpler; the GPU path is designed for, then measured (§5). |
 | `Array.fork` plus `Array.atomic.*` exist (marked `@unsafe`) | A shared, lock-free TT across parallel searches is possible later, the way chess engines do it. |
 | The checker normalises a pure `main` slowly; compiled `IO` mains are fast | The solver's `main` is IO and is built with `bend dd.bend -o dd`. |
 
@@ -164,8 +164,16 @@ In order of payoff:
 3. **Inside one search** (research, Phase 6): search several targets at once,
    split the root moves, or share a lock-free TT through `Array.fork` and
    atomics.
-4. **GPU** (experiment): the evidence says search is faster on the CPU. A
-   possible exception is huge batches of small endings that need no TT.
+4. **GPU, as a real target.** Erik wants all the compute in use. Two
+   obstacles: per-lane work in a search diverges (lanes on the same SIMD group
+   wait for each other), and each lane needs its own TT, while the GPU has
+   ~16k lanes and the TT is megabytes. The plan is a GPU batch kernel with a
+   much smaller TT per lane (or none for the deeper part of the tree), fed
+   enough deals to fill the lanes. We then measure deals per second on the GPU
+   against the CPU pool. If both help, a batch is split between them in
+   proportion to their measured rates. Whether a GPU bang and CPU parallel work
+   can actually run at the same time in Bend's runtime is something to test
+   early, since Bend runs one computation at a time between effects.
 
 Each parallel leaf owns its own TT, so the TT size times the number of live
 leaves must fit in memory. The batch tree should therefore go only as wide
@@ -216,8 +224,13 @@ have a throughput figure next to DDS on the same Mac.
 **Phase 6: Performance.**
 Read the emitted C for refcount traffic, precompute lookup tables (relative
 ranks, equivalence, quick-trick tables) where they beat bit loops, tune TT
-size and replacement, and try the intra-search parallelism and GPU experiments
-from §5.
+size and replacement, and try the intra-search parallelism from §5.
+
+**Phase 6b: GPU.**
+A batch kernel on the GPU (§5, item 4): size the per-lane TT, measure deals per
+second against the CPU, and split batches across both if that is faster.
+*Done when:* the batch mode uses the GPU wherever it raises total throughput,
+with results still matching DDS.
 
 **Phase 7: Extras.**
 A `SolveBoard`-style API for mid-play positions (tricks for every legal card),
@@ -303,9 +316,9 @@ Answered by Erik on 2026-11-06:
 1. **Scope:** the 4 × 5 table per deal is the target output.
 2. **Performance bar:** throughput over many deals. Batch mode (§5, item 1)
    is the main event, and single-deal latency matters less.
-3. **`@unsafe`:** not used, since it would break the laws (§7.5).
+3. **`@unsafe`:** not used anywhere.
 4. **Laws:** yes, proved laws in `LAWS.bend`, growing every phase.
-5. **GPU:** an experiment after the CPU version, not a goal.
+5. **Compute:** use all of it, CPU cores and GPU (Phase 6b).
 6. **Tooling:** no GitHub Actions. Tests run on Erik's Mac through
    `tools/test.sh`. Python plus `endplay` as the oracle and the vendored DDS
    lists stay.
