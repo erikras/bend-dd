@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 """Compare dd's results against DDS.
 
-  check.py endings [--count N] [--cards 3 4 5] [--seed S] [--threads T]
-      Deals random endings, solves them with `dd --brute` and with DDS (through
-      the endplay package) in every strain with every leader, and compares.
-      Also reports dd's node rate.
+  check.py endings [--count N] [--cards 3 4 5] [--seed S] [--threads T] [--brute]
+      Deals random endings, solves them with `dd` (or `dd --brute`) and with DDS
+      (through the endplay package) in every strain with every leader, and
+      compares. Also reports dd's node rate.
+
+  check.py oracle [--count N] [--cards 3 4 5] [--seed S] [--threads T]
+      Deals random endings and solves them with `dd` and `dd --brute`, which must
+      agree. Reports the node counts of both and their times. Needs no DDS.
+
+  check.py nodes [--count N] [--cards 7 8] [--seed S] [--threads T]
+      Reports dd's node counts and times without checking them, with the median
+      and worst deal, for sizes too slow to check against DDS or brute force.
 
   check.py lists [--file tests/data/list100.txt ...] [--limit N]
       Checks the vendored DDS lists: dd must read every deal and print it back
@@ -99,7 +107,8 @@ def check_endings(args):
     for cards in args.cards:
         deals = [random_ending(rng, cards) for _ in range(args.count)]
         t0 = time.time()
-        lines, err = with_deals(deals, lambda p: run_dd(["--brute", p], args.threads))
+        flags = ["--brute"] if args.brute else []
+        lines, err = with_deals(deals, lambda p: run_dd(flags + [p], args.threads))
         wall = time.time() - t0
         if len(lines) != len(deals):
             fail("dd answered %d lines for %d deals" % (len(lines), len(deals)))
@@ -130,6 +139,61 @@ def check_endings(args):
     print("OK: %d endings, %d searches" % (total, total * 20))
 
 
+def solve_all(flags, deals, threads):
+    """Solves deals with dd, answering their tables, nodes, and the ms dd reports."""
+    lines, err = with_deals(deals, lambda p: run_dd(flags + [p], threads))
+    if len(lines) != len(deals):
+        fail("dd answered %d lines for %d deals" % (len(lines), len(deals)))
+    fields = [[int(x) for x in line.split()] for line in lines]
+    m = re.search(r"(\d+) ms on (\d+) threads", err)
+    return [f[:20] for f in fields], [f[20] for f in fields], int(m.group(1)) if m else 0
+
+
+def check_oracle(args):
+    rng = random.Random(args.seed)
+    print("cards  deals   searches    nodes (brute)    nodes (search)  ratio   ms (brute)  ms (search)")
+    total = 0
+    for cards in args.cards:
+        deals = [random_ending(rng, cards) for _ in range(args.count)]
+        want, brute_nodes, brute_ms = solve_all(["--brute"], deals, args.threads)
+        got, nodes, ms = solve_all([], deals, args.threads)
+        for pbn, g, w in zip(deals, got, want):
+            for i in range(20):
+                if g[i] != w[i]:
+                    fail(
+                        "%s strain %s declarer %s: search %d, brute %d"
+                        % (pbn, STRAINS[i // 4], SEATS[i % 4], g[i], w[i])
+                    )
+        print(
+            "%5d %6d %10d %16d %17d %6.0f %12d %12d"
+            % (cards, len(deals), len(deals) * 20, sum(brute_nodes), sum(nodes), sum(brute_nodes) / max(sum(nodes), 1), brute_ms, ms)
+        )
+        total += len(deals)
+    print("OK: %d endings, %d searches agree with brute force" % (total, total * 20))
+
+
+def check_nodes(args):
+    rng = random.Random(args.seed)
+    print("cards  deals  nodes/deal (mean)  (median)     (max)    ms/deal   ms total  nodes/s")
+    for cards in args.cards:
+        deals = [random_ending(rng, cards) for _ in range(args.count)]
+        _, nodes, ms = solve_all([], deals, args.threads)
+        nodes.sort()
+        print(
+            "%5d %6d %18d %9d %9d %10.2f %10d %8d"
+            % (
+                cards,
+                len(deals),
+                sum(nodes) // len(nodes),
+                nodes[len(nodes) // 2],
+                nodes[-1],
+                ms / len(deals),
+                ms,
+                sum(nodes) * 1000 // max(ms, 1),
+            )
+        )
+
+
 # ---------------------------------------------------------------------------
 # The DDS lists
 
@@ -157,7 +221,7 @@ def check_lists(args):
             deals = deals[: args.limit]
         if any(len(t) != 20 for _, t in deals):
             fail("%s: a TABLE line without 20 entries" % path)
-        lines, _ = with_deals([p for p, _ in deals], lambda p: run_dd([p]))
+        lines, _ = with_deals([p for p, _ in deals], lambda p: run_dd(["--print", p]))
         for (pbn, _), line in zip(deals, lines):
             if pbn != line:
                 fail("%s: dd printed %s for %s" % (path, line, pbn))
@@ -184,7 +248,7 @@ def check_roundtrip(args):
     for i in range(1, args.count + 1):
         out = subprocess.run([hand, str(i)], capture_output=True, text=True, check=True).stdout
         deals.append(out.strip().splitlines()[-1])
-    lines, _ = with_deals(deals, lambda p: run_dd([p]))
+    lines, _ = with_deals(deals, lambda p: run_dd(["--print", p]))
     if lines != deals:
         fail("dd changed a deal from hand")
     print("OK: %d deals from hand round-trip through dd" % len(deals))
@@ -199,7 +263,22 @@ def main():
     p.add_argument("--cards", type=int, nargs="+", default=[3, 4, 5])
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--threads", type=int)
+    p.add_argument("--brute", action="store_true")
     p.set_defaults(fn=check_endings)
+
+    p = sub.add_parser("oracle")
+    p.add_argument("--count", type=int, default=1000)
+    p.add_argument("--cards", type=int, nargs="+", default=[3, 4, 5])
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--threads", type=int)
+    p.set_defaults(fn=check_oracle)
+
+    p = sub.add_parser("nodes")
+    p.add_argument("--count", type=int, default=100)
+    p.add_argument("--cards", type=int, nargs="+", default=[7, 8])
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--threads", type=int)
+    p.set_defaults(fn=check_nodes)
 
     p = sub.add_parser("lists")
     p.add_argument(

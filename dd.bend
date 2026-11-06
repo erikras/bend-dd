@@ -4,19 +4,24 @@
 #
 # Each argument is either one PBN deal, quoted so that it stays one argument,
 # or a file with one deal per line. Blank lines and lines starting with # are
-# skipped. For now dd prints each deal back in canonical form, starting from
-# North.
+# skipped. Each deal prints one line: the 20 entries of its double dummy table,
+# strain then declarer as in DDS's TABLE lines, then the number of positions
+# visited. A summary goes to stderr. There is no transposition table yet, so this
+# is for endings, not full deals.
 #
 #   dd --brute [deal or file]...
 #
-# Solves small endings by plain minimax. Each deal prints one line: the 20
-# entries of its double dummy table, strain then declarer as in DDS's TABLE
-# lines, then the number of positions visited. A summary goes to stderr.
+# The same, by plain minimax: the oracle, for endings of up to about 5 cards.
+#
+#   dd --print [deal or file]...
+#
+# Prints each deal back in canonical form, starting from North.
 
 import Base
 import ./src/cards.bend as C
 import ./src/pbn.bend as P
 import ./src/brute.bend as B
+import ./src/search.bend as Z
 
 # ---------------------------------------------------------------------------
 # Reading deals
@@ -118,11 +123,11 @@ def show.all(xs: List<&2, String>) -> IO(Unit):
         show.all(t)
 
 # ---------------------------------------------------------------------------
-# Solving endings
+# Solving
 
 # The output of one deal: its line, whether it is a good one, and its nodes.
 type Out is Data:
-  Out{good: Bool, line: String, nodes: U32}
+  Out{good: Bool, line: String, nodes: Nat}
 
 def ints.show(xs: List<&2, U32>, tail: String) -> String:
   match xs:
@@ -131,61 +136,62 @@ def ints.show(xs: List<&2, U32>, tail: String) -> String:
     case Con{h, t}:
       U32.show(h) ++ " " ++ ints.show(t, tail)
 
-def brute.show(t: B.Table) -> Out:
+def table.show(t: B.Table) -> Out:
   match t:
     case B.Table{ts, +n}:
-      Out{True{}, ints.show(ts, U32.show(n)), n}
+      Out{True{}, ints.show(ts, Nat.show(n)), n}
 
-def brute.even(even: Bool, text: String, +deal: C.Deal) -> Out:
+# ~f is the solver, so that each one compiles to its own copy of the batch.
+def one.even(~f: @+deal:C.Deal -> B.Table, even: Bool, text: String, +deal: C.Deal) -> Out:
   match even:
     case True{}:
-      brute.show(B.table(deal))
+      table.show(f(deal))
     case False{}:
-      Out{False{}, "dd: hands differ in length: " ++ text, 0}
+      Out{False{}, "dd: hands differ in length: " ++ text, 0n}
 
-def brute.parsed(+text: String, d: Maybe<&2, C.Deal>) -> Out:
+def one.parsed(~f: @+deal:C.Deal -> B.Table, +text: String, d: Maybe<&2, C.Deal>) -> Out:
   match d:
     case None{}:
-      Out{False{}, "dd: not a PBN deal: " ++ text, 0}
+      Out{False{}, "dd: not a PBN deal: " ++ text, 0n}
     case Some{+deal}:
-      brute.even(B.deal.even(deal), text, deal)
+      one.even(~f, B.deal.even(deal), text, deal)
 
-def brute.one(+text: String) -> Out:
-  brute.parsed(text, P.parse(text))
+def one(~f: @+deal:C.Deal -> B.Table, +text: String) -> Out:
+  one.parsed(~f, text, P.parse(text))
 
-def brute.seq(xs: List<&2, String>) -> List<&2, Out>:
+def seq(~f: @+deal:C.Deal -> B.Table, xs: List<&2, String>) -> List<&2, Out>:
   match xs:
     case Nil{}:
       Nil{}
     case Con{h, t}:
-      brute.one(h) <> brute.seq(t)
+      one(~f, h) <> seq(~f, t)
 
 # Solves a list of n deals over a fork tree of the given depth.
-def brute.batch(+depth: Nat, +n: Nat, +xs: List<&2, String>) -> List<&2, Out>:
+def batch(~f: @+deal:C.Deal -> B.Table, +depth: Nat, +n: Nat, +xs: List<&2, String>) -> List<&2, Out>:
   match depth:
     case 0n:
-      brute.seq(xs)
+      seq(~f, xs)
     case 1n+p:
       +half = Nat.div(n, 2n)
-      a b = brute.batch(p, half, List.take(&2, String, xs, half)) brute.batch(p, Nat.sub(n, half), List.drop(&2, String, xs, half))
+      a b = batch(~f, p, half, List.take(&2, String, xs, half)) batch(~f, p, Nat.sub(n, half), List.drop(&2, String, xs, half))
       List.append(&2, Out, a, b)
 
 # Prints every line, stopping at the first failure.
-def brute.print.go(good: Bool, line: String) -> IO(Unit):
+def out.print.go(good: Bool, line: String) -> IO(Unit):
   match good:
     case True{}:
       IO.print(line)
     case False{}:
       IO.die(Unit, 1, line)
 
-def brute.print(xs: List<&2, Out>) -> IO(Unit):
+def out.print(xs: List<&2, Out>) -> IO(Unit):
   match xs:
     case Nil{}:
       IO.pure(Unit, Unit{})
     case Con{Out{good, line, _}, t}:
       do IO<Unit>:
-        brute.print.go(good, line)
-        brute.print(t)
+        out.print.go(good, line)
+        out.print(t)
 
 # How deep to fork: 64 leaves per thread or so. Tasks never move between threads,
 # and endings differ a lot in size, so many small leaves balance better than one
@@ -195,15 +201,15 @@ def fork.depth(+threads: U32) -> Nat:
 
 # Runs a whole list of deals. The results are forced before the clock is read
 # again, since compiled code is strict, so the time covers the solving.
-def brute.run(+xs: List<&2, String>) -> IO(Unit):
+def run(~f: @+deal:C.Deal -> B.Table, +name: String, +xs: List<&2, String>) -> IO(Unit):
   +n = List.length(&2, String, xs)
   do IO<Unit>:
     +threads : U32 <- IO.thread_count()
     t0 : Nat <- IO.now()
-    +out : List<&2, Out> = brute.batch(fork.depth(threads), n, xs)
+    +out : List<&2, Out> = batch(~f, fork.depth(threads), n, xs)
     t1 : Nat <- IO.now()
-    IO.print_err("brute: " ++ U32.show(U32.from_nat(Nat.sub(t1, t0))) ++ " ms on " ++ U32.show(threads) ++ " threads")
-    brute.print(out)
+    IO.print_err(name ++ ": " ++ U32.show(U32.from_nat(Nat.sub(t1, t0))) ++ " ms on " ++ U32.show(threads) ++ " threads")
+    out.print(out)
 
 def args.tail(xs: List<String>) -> List<String>:
   match xs:
@@ -212,16 +218,26 @@ def args.tail(xs: List<String>) -> List<String>:
     case Con{_, t}:
       t
 
+def brute.table(+deal: C.Deal) -> B.Table:
+  B.table(deal)
+
+def search.table(+deal: C.Deal) -> B.Table:
+  Z.table(deal)
+
 def main.go(xs: List<String>) -> IO(Unit):
   match xs:
     case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{98}, _}}}, t}:
       do IO<Unit>:
         deals : List<&2, String> <- args.read(t)
-        brute.run(deals)
+        run(~brute.table, "brute", deals)
+    case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{112}, _}}}, t}:
+      do IO<Unit>:
+        deals : List<&2, String> <- args.read(t)
+        show.all(deals)
     case _:
       do IO<Unit>:
         deals : List<&2, String> <- args.read(xs)
-        show.all(deals)
+        run(~search.table, "search", deals)
 
 def main() -> IO(Unit):
   do IO<Unit>:

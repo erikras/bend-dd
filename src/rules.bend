@@ -203,6 +203,22 @@ def pos.won(pos: Pos) -> U32:
     case Pos{_, _, _, _, _, _, _, _, _, won}:
       won
 
+def pos.trick(pos: Pos) -> U32:
+  match pos:
+    case Pos{_, _, _, _, _, _, _, _, tr, _}:
+      tr
+
+# The cards still in the four hands, in the same two words as a hand.
+def pos.live01(pos: Pos) -> U32:
+  match pos:
+    case Pos{n01, _, e01, _, s01, _, w01, _, _, _}:
+      (n01 .|. e01 .|. s01 .|. w01 : U32)
+
+def pos.live23(pos: Pos) -> U32:
+  match pos:
+    case Pos{_, n23, _, e23, _, s23, _, w23, _, _}:
+      (n23 .|. e23 .|. s23 .|. w23 : U32)
+
 def hand.pack01(h: C.Hand) -> U32:
   match h:
     case C.Hand{s, x, _, _}:

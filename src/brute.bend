@@ -8,9 +8,10 @@ import Base
 import ./cards.bend as C
 import ./rules.bend as R
 
-# A value with the number of positions visited so far.
+# A value with the number of positions visited so far. Nat counts them: it is a
+# machine word at run time, and it stops the program at 2^48 instead of wrapping.
 type Res is Data:
-  Res{value: U32, nodes: U32}
+  Res{value: U32, nodes: Nat}
 
 def better(ns: Bool, +a: U32, +b: U32) -> U32:
   match ns:
@@ -42,14 +43,14 @@ def search(+d: Nat, ms: List<&2, U32>, +t: U32, +pos: R.Pos, +ns: Bool, +best: U
       Res{R.pos.won(pos), n}
     case 1n+p Nil{} Res{v, n}:
       Res{better(ns, best, v), n}
-    case 1n+p Con{c, rest} Res{v, +n}:
+    case 1n+p Con{c, rest} Res{v, n}:
       +child = R.play(t, pos, c)
       +cns = R.pos.ns(child)
       search(1n+p, rest, t, pos, ns, better(ns, best, v),
-        search(p, R.moves(child), t, child, cns, seed(cns), Res{seed(cns), (n + 1 : U32)}))
+        search(p, R.moves(child), t, child, cns, seed(cns), Res{seed(cns), 1n+n}))
 
 # North-South's tricks from a position with d cards left.
-def solve(+d: Nat, +t: U32, +pos: R.Pos, +nodes: U32) -> Res:
+def solve(+d: Nat, +t: U32, +pos: R.Pos, nodes: Nat) -> Res:
   +ns = R.pos.ns(pos)
   search(d, R.moves(pos), t, pos, ns, seed(ns), Res{seed(ns), nodes})
 
@@ -70,7 +71,7 @@ def deal.even(d: C.Deal) -> Bool:
 # declarer N E S W. Each entry is the tricks declarer's side takes, with the seat
 # on declarer's left on lead.
 type Table is Data:
-  Table{tricks: List<&2, U32>, nodes: U32}
+  Table{tricks: List<&2, U32>, nodes: Nat}
 
 def table.entry(ns: Bool, +left: U32, v: U32) -> U32:
   match ns:
@@ -82,7 +83,7 @@ def table.entry(ns: Bool, +left: U32, v: U32) -> U32:
 def table.add(+decl: U32, +left: U32, r: Res, rest: Table) -> Table:
   match r rest:
     case Res{v, n} Table{ts, m}:
-      Table{table.entry(U32.is_zero((decl .&. 1 : U32)), left, v) <> ts, (m + n : U32)}
+      Table{table.entry(U32.is_zero((decl .&. 1 : U32)), left, v) <> ts, Nat.add(n, m)}
 
 # The entries for declarers 4 - k .. 3 of one strain, on top of rest.
 def table.strain(+k: Nat, +d: Nat, +left: U32, +t: U32, +deal: C.Deal, rest: Table) -> Table:
@@ -92,14 +93,14 @@ def table.strain(+k: Nat, +d: Nat, +left: U32, +t: U32, +deal: C.Deal, rest: Tab
     case 1n+p:
       +decl = (3 - U32.from_nat(p) : U32)
       +leader = ((decl + 1) .&. 3 : U32)
-      table.add(decl, left, solve(d, t, R.pos.start(deal, leader), 0),
+      table.add(decl, left, solve(d, t, R.pos.start(deal, leader), 0n),
         table.strain(p, d, left, t, deal, rest))
 
 # The entries for strains 5 - k .. 4, on top of nothing.
 def table.go(+k: Nat, +d: Nat, +left: U32, +deal: C.Deal) -> Table:
   match k:
     case 0n:
-      Table{Nil{}, 0}
+      Table{Nil{}, 0n}
     case 1n+p:
       table.strain(4n, d, left, (4 - U32.from_nat(p) : U32), deal,
         table.go(p, d, left, deal))
