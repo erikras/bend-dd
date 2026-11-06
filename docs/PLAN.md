@@ -78,28 +78,36 @@ list and the runtime benchmarks in the Bend repo:
 
 ### 2.3 What Phase 1 measured
 
-On an M1 Max (8 performance and 2 efficiency cores) under Bend 2.0.40, running
-plain minimax over 2.8 billion nodes of 4-card endings. The machine had other
-work running, so these are rough. `bench/brute.c` is the same search in C and
-visits exactly the same nodes.
+Plain minimax over 2.85 to 2.94 billion nodes of 4-card endings under Bend 2.0.40.
+`bench/brute.c` is the same search in C and visits exactly the same nodes. The first
+numbers came from an M1 Max (8 performance and 2 efficiency cores) with other work
+running. This project now runs only on an M6 (2 super, 4 performance and 6 efficiency
+cores, a 12-core GPU), measured on 2026-11-06, again with other work on the machine.
 
-| | nodes/s |
-|---|---|
-| C, `clang -O2`, 1 thread | 80M |
-| Bend, 1 thread | 63M |
-| Bend, 2 threads | 124M |
-| Bend, 4 threads | 246M |
-| Bend, 8 threads | 390M |
-| Bend, 10 threads, 16 leaves | 378M |
-| Bend, 10 threads, 1024 leaves | 477M |
+| | M1 Max, nodes/s | M6, nodes/s |
+|---|---|---|
+| C, `clang -O2`, 1 thread | 80M | 145M |
+| Bend, 1 thread | 63M | 112M |
+| Bend, 2 threads | 124M | 207M |
+| Bend, 4 threads | 246M | 335M |
+| Bend, 6 threads | | 473M |
+| Bend, 8 threads | 390M | 551M |
+| Bend, 10 threads, 16 leaves | 378M | |
+| Bend, 10 threads, 1024 leaves | 477M | |
+| Bend, 12 threads, 1024 leaves | | 689M |
 
-`bench/gpu.bend` runs the same search on 3-card endings: 113M to 133M nodes/s on
-the GPU against about 525M on the CPU threads, so the GPU is 4 to 5 times slower.
+`bench/gpu.bend` runs the same search on 3-card endings. The M1's GPU gave 113M to 133M
+nodes/s against about 525M on the CPU threads, 4 to 5 times slower. The M6's GPU gives
+27M against 794M, 29 times slower, and was the same on a second run. Its 12 GPU cores
+are far fewer than the M1 Max's, and we don't know how much else was using the GPU.
+This counts against Phase 6b.
 
 What this changes:
 
-- One Bend thread costs about 27% over C, not the several times §8 feared, even
-  with a position record and a heap move list at every node.
+- One Bend thread costs about 27% over C (29% on the M6), not the several times §8
+  feared, even with a position record and a heap move list at every node.
+- On the M6, 6 threads give 4.2 times one thread and 12 give 6.1 times: the last 6 are
+  efficiency cores, which add less than the first 6.
 - A `Nat` is a machine integer at run time and a shift by a `Nat` is one
   instruction. Depth can bound the recursion, so no separate fuel is needed: the
   child call takes one off `d`, and the sibling keeps `d` and drops a move.
@@ -113,30 +121,36 @@ What this changes:
 
 ### 2.4 What Phase 2 measured
 
-`src/search.bend` on the same M1 Max, under Bend 2.0.40. Node counts are exact and
-repeat from run to run. The machine had other work running (load 15 to 80), so
-times and rates are rough. A node is a card played, counted the same way in both
+The Phase 2 search (commit ca1ebc9) under Bend 2.0.40. Node counts are exact and
+repeat from run to run, on both machines. Both had other work running (load 15 to 80),
+so times and rates are rough. A node is a card played, counted the same way in both
 searches, and each deal is a whole table of 20 searches.
 
-Next to brute force, on 10 threads, totals per row:
+Next to brute force, on 10 threads on the M1 and 12 on the M6, totals per row. The 5-
+and 6-card rows are different deals on the two machines, since the deals depend on
+which rows ran before them:
 
-| cards per hand | deals | nodes, brute | nodes, search | ratio | ms, brute | ms, search |
+| cards per hand | deals | nodes, brute | nodes, search | ratio | ms brute, M1 | ms search, M1 | ms brute, M6 | ms search, M6 |
+|---|---|---|---|---|---|---|---|---|
+| 3 | 2000 | 55,759,338 | 3,607,167 | 15 | 173 | 32 | 86 | 14 |
+| 4 | 2000 | 2,942,094,712 | 16,079,950 | 183 | 9,153 | 163 | 4,447 | 69 |
+| 5, M1 | 1000 | 122,644,356,888 | 43,916,908 | 2,793 | 452,066 | 303 | | |
+| 5, M6 | 1000 | 129,616,911,590 | 43,467,700 | 2,982 | | | 212,194 | 148 |
+| 6, M1 | 3 | 12,131,516,935 | 559,222 | 21,694 | 149,914 | 9 | | |
+| 6, M6 | 3 | 13,031,944,780 | 1,081,736 | 12,047 | | | 65,866 | 16 |
+
+How far the search goes, per deal (7 cards on 1 thread, the rest on all of them, with
+one thread per deal at a time):
+
+| cards per hand | deals | mean nodes | median | worst | ms per deal, M1 | ms per deal, M6 |
 |---|---|---|---|---|---|---|
-| 3 | 2000 | 55,759,338 | 3,607,167 | 15 | 173 | 32 |
-| 4 | 2000 | 2,942,094,712 | 16,079,950 | 183 | 9,153 | 163 |
-| 5 | 1000 | 122,644,356,888 | 43,916,908 | 2,793 | 452,066 | 303 |
-| 6 | 3 | 12,131,516,935 | 559,222 | 21,694 | 149,914 | 9 |
+| 7 | 300 | 2,264,479 | 1,241,486 | 38,446,086 | 86 (1 thread) | 49 (1 thread) |
+| 8 | 200 | 22,133,476 | 10,689,092 | 236,307,135 | 163 | 95 |
+| 9 | 100 | 196,973,248 | 104,623,872 | 2,045,911,207 | 1,518 | 817 |
+| 10 | 30 | 1,533,547,481 | 794,510,643 | 8,508,143,932 | 15,625 | 8,741 |
+| 11 | 5 | 9,110,939,553 | 7,605,487,776 | 15,740,756,763 | 123,338 | 80,830 |
 
-How far the search goes, per deal (7 cards on 1 thread, the rest on 10, with one
-thread per deal at a time):
-
-| cards per hand | deals | mean nodes | median | worst | ms per deal, wall |
-|---|---|---|---|---|---|
-| 7 | 300 | 2,264,479 | 1,241,486 | 38,446,086 | 86 (1 thread) |
-| 8 | 200 | 22,133,476 | 10,689,092 | 236,307,135 | 163 |
-| 9 | 100 | 196,973,248 | 104,623,872 | 2,045,911,207 | 1,518 |
-| 10 | 30 | 1,533,547,481 | 794,510,643 | 8,508,143,932 | 15,625 |
-| 11 | 5 | 9,110,939,553 | 7,605,487,776 | 15,740,756,763 | 123,338 |
+The times of 8 to 10 cards on the M6 had load 30 to 50 from other work.
 
 What each piece is worth, as mean nodes per deal on 100 7-card endings, with that
 piece taken out:
@@ -155,12 +169,14 @@ What this changes:
 - Each extra card costs about 8 times the nodes, which puts a full 13-card table
   near 6 × 10^11 nodes, or hours. The transposition table has to carry it from
   there, as planned. Phase 3 should be judged on the 8-card set.
-- The search runs about 26M nodes/s on one thread, against 63M for brute force.
+- The search runs about 26M nodes/s on one thread on the M1 (46M on the M6), against
+  63M for brute force (112M).
   Most of the difference is probably that it generates, collapses and orders moves at every
   node. Without ordering the rate rose by up to 2×, but it pays for itself by 7
   cards. This is the first target for the lookup tables of Phase 6.
 - One deal runs on one thread, so large endings waste the other cores: the rate on
-  10 threads falls from 135M at 8 cards to 74M at 11, as a few long deals fill
+  the M1's 10 threads falls from 135M at 8 cards to 74M at 11 (M6, 12 threads: 234M to
+  113M), as a few long deals fill
   few leaves. The worst deal is 10 to 17 times the mean from 7 to 9 cards, so batches need many leaves
   (§5), and single deals need the fork over strains from Phase 5.
 - `Nat` is a checked 48-bit integer at run time, not a wrapping one, so it is the
@@ -179,42 +195,52 @@ from the first card of a trick: mid-trick starts come with Phase 7.
 
 ### 2.5 What Phase 3 measured
 
-The same set of 200 random 8-card endings as a whole table per deal, on 10 threads
-under load, adding one piece at a time. Node counts are exact; times are rough.
+The same set of 200 random 8-card endings as a whole table per deal, adding one piece
+at a time, on the M1's 10 threads and the M6's 12, both with other work running. Node
+counts are exact and came out the same on both. M6 times are the best of 3 runs.
 
-| Search | Mean nodes per deal | ms per deal |
-|---|---|---|
-| Phase 2 | 22,133,476 | 163 |
-| + quick tricks, later tricks, the check after the lead | 3,598,543 | about 26 |
-| + best-move memory | 3,294,949 | about 30 |
-| + DDS's weights for all four places in the trick | 830,281 | about 10 |
+| Search | Mean nodes per deal | ms per deal, M1 | ms per deal, M6 |
+|---|---|---|---|
+| Phase 2 | 22,133,476 | 163 | 95 |
+| + quick tricks, later tricks, the check after the lead | 3,598,543 | about 26 | 14.5 |
+| + best-move memory | 3,294,949 | about 30 | 18.4 |
+| + DDS's weights for all four places in the trick | 830,281 | about 10 | 6.3 |
 
 Then with one piece at a time taken out of the final search, or put back to the
-Phase 2 ordering. All of them cost more nodes and more time:
+Phase 2 ordering. The M1 column is from before the driver change of §2.6 and the M6
+column after it, which is why its node counts differ slightly from the M1's. On the
+M1 they all cost more nodes and more time. On the M6, under load 15 to 25, the last
+few are within the noise of the full search for time, so they pay for themselves only
+narrowly, if at all:
 
-| Taken out | Mean nodes | Nodes against full | ms per deal |
-|---|---|---|---|
-| Nothing | 830,281 | | 9.7 |
-| Quick tricks | 1,774,883 | 2.14× | 19.7 |
-| Weights on lead | 1,731,616 | 2.09× | 17.5 |
-| Weights for the last hand | 1,232,748 | 1.48× | 13.1 |
-| Weights for the second hand | 1,154,317 | 1.39× | 13.4 |
-| Later tricks | 1,002,687 | 1.21× | 11.5 |
-| The check after the lead | 980,090 | 1.18× | 10.9 |
-| Weights for the third hand | 921,841 | 1.11× | 11.0 |
-| Best-move memory | 889,353 | 1.07× | 10.4 |
-| The top card of each suit going first | 871,192 | 1.05× | 10.2 |
+| Taken out | Mean nodes, M1 | Mean nodes, M6 | Nodes against full, M6 | ms per deal, M1 | ms per deal, M6 |
+|---|---|---|---|---|---|
+| Nothing | 830,281 | 825,796 | | 9.7 | 6.9 |
+| Quick tricks | 1,774,883 | 1,768,121 | 2.14× | 19.7 | 14.5 |
+| Weights on lead | 1,731,616 | 1,702,397 | 2.06× | 17.5 | 12.1 |
+| Weights for the last hand | 1,232,748 | 1,226,395 | 1.49× | 13.1 | 8.7 |
+| Weights for the second hand | 1,154,317 | 1,149,316 | 1.39× | 13.4 | 8.4 |
+| Later tricks | 1,002,687 | 997,416 | 1.21× | 11.5 | 7.0 |
+| The check after the lead | 980,090 | 974,505 | 1.18× | 10.9 | 6.9 |
+| Weights for the third hand | 921,841 | 920,652 | 1.11× | 11.0 | 6.6 |
+| Best-move memory | 889,353 | 884,428 | 1.07× | 10.4 | 6.6 |
+| The top card of each suit going first | 871,192 | 866,423 | 1.05× | 10.2 | 7.2 |
 
-How far it goes now, a whole table per deal, one thread per deal at a time on 10:
+How far it goes without a table, a whole table per deal, one thread per deal at a time.
+The M6 rows are after the driver change, and the M1's before it:
 
-| Cards per hand | Deals | Mean nodes | Worst | ms per deal, wall |
-|---|---|---|---|---|
-| 7 | 300 | 126,328 | 997,636 | 9.8 (1 thread) |
-| 8 | 200 | 830,281 | 7,698,987 | 63.6 (1 thread), 11.2 (10) |
-| 9 | 100 | 4,762,776 | 29,565,080 | 64 |
-| 10 | 100 | 34,999,956 | 254,237,288 | 517 |
-| 11 | 30 | 342,366,357 | 1,519,005,259 | 6,294 |
-| 12 | 10 | 1,659,368,884 | 5,273,690,194 | 45,473 |
+| Cards per hand | Deals | Mean nodes, M6 | Worst, M6 | ms per deal, M1 | ms per deal, M6 |
+|---|---|---|---|---|---|
+| 3 | 2000 | 409 | 1,370 | | 0.005 |
+| 4 | 2000 | 1,489 | 8,444 | | 0.012 |
+| 5 | 1000 | 5,706 | 36,957 | | 0.05 |
+| 6 | 500 | 24,418 | 187,085 | | 0.18 |
+| 7 | 300 | 125,168 | 1,000,720 | 9.8 (1 thread) | 5.4 (1 thread) |
+| 8 | 200 | 825,796 | 7,668,729 | 63.6 (1 thread), 11.2 (10) | 35.1 (1 thread), 7.0 (12) |
+| 9 | 100 | 4,743,849 | 30,169,311 | 64 | 40 |
+| 10 | 100 | 35,045,873 | 252,577,378 | 517 | 287 |
+| 11 | 30 | 342,093,094 | 1,517,960,014 | 6,294 | 3,735 |
+| 12 | 10 | 1,658,252,702 | 5,277,280,824 | 45,473 | 27,726 |
 
 Next to brute force, totals: 3 cards, 2000 deals: 55.8M against 1.04M nodes (54×).
 4 cards, 2000 deals: 2.94B against 3.27M (899×). 5 cards, 500 deals: 60.2B against
@@ -222,8 +248,8 @@ Next to brute force, totals: 3 cards, 2000 deals: 55.8M against 1.04M nodes (54�
 
 What this changes:
 
-- One thread now does about 13M nodes/s, half of Phase 2's 26M, and 10 threads about
-  74M. Weights are most of that cost, and they more than pay for it: a node is twice
+- One thread now does about 13M nodes/s on the M1 (23M on the M6), half of Phase 2's
+  26M (46M), and all threads about 74M (120M). Weights are most of that cost, and they more than pay for it: a node is twice
   as dear and there are 27 times fewer. Lookup tables in Phase 6 can win some of it
   back, since most of the arguments to a weight only change per suit.
 - A call can't be destructured inside the search, and that affects any array the
@@ -242,6 +268,35 @@ Still unproved: quick and later tricks have no law for every position. They are
 checked against true results on whole deals (`check.py sure`, 1100 deals), on
 endings against DDS, against brute force, and in a law for a sample of 2-card
 endings.
+
+### 2.6 The driver, and whole deals with no table
+
+The driver used to start a strain from the previous strain's result, and it searched
+for answers that the sure tricks already gave, since the cuts don't run on the first
+card of a search. In a table it could step through targets one at a time, as in 2 3 4
+5 6 7 8. Now the sure tricks bound it, and each strain starts from the middle of those
+bounds. On the 200 8-card endings:
+
+| Driver | Mean nodes | Searches per entry, mean | Most searches for one entry |
+|---|---|---|---|
+| Before (e5f0047) | 830,281 | 2.55 | 8 |
+| Sure tricks as bounds, the same guess | 828,222 | 2.29 | 7 |
+| + the middle of the bounds for a new strain | 825,796 | 2.18 | 6 |
+| + bisecting when the gap is 3 or more | about 852,000 | | |
+| A perfect first guess, as a limit | 794,530 | | |
+
+So the stepping looked bad but cost little. Even a perfect guess saves only 4% of
+nodes at 8 cards and 6% at 9, since the work is in the two searches next to the true
+value, and bisecting costs 3% more, since it asks far from the answer. Guessing from
+the trump fit gave about 0.5% fewer nodes but a worse worst case, so it isn't used. At
+10 cards, nodes are level with before.
+
+Whole deals of `list100` with no table, one single-threaded process per deal and 8 at
+a time, with a limit of 40 minutes per deal: of the first 20 started, 16 finished and
+4 hit the limit. All 16 matched DDS. They took 3.1 to 33.7 billion nodes, mean 16.6
+billion, at about 15M nodes/s, so 3.5 to 39 minutes each, and those 4 took more than
+about 36 billion. That is at least 10 times the 12-card mean, near the 8 times that
+§2.4 expected, and far too slow to be useful: a table was needed, as planned.
 
 ## 3. Data representation
 
