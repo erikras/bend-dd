@@ -9,6 +9,20 @@
 # visited. A summary goes to stderr. There is no transposition table yet, so this
 # is for endings, not full deals.
 #
+#   dd --grid [deal or file]...
+#
+# The same, for people: the deal and a grid of tricks, by strain and declarer.
+#
+#   dd -v [deal or file]...         (or --verbose)
+#
+# The hand diagram, the deal, the grid, and for each strain and declarer the nodes,
+# the searches and targets, the cuts by kind, and the moves before and after
+# equivalence, with totals and the speed.
+#
+#   dd --demo [seed] [cards]
+#
+# The same for a random ending from a seed: 1 and 5 cards in each hand by default.
+#
 #   dd --brute [deal or file]...
 #
 # The same, by plain minimax: the oracle, for endings of up to about 5 cards.
@@ -28,6 +42,8 @@ import ./src/cards.bend as C
 import ./src/pbn.bend as P
 import ./src/brute.bend as B
 import ./src/search.bend as Z
+import ./src/show.bend as V
+import ./src/deal.bend as D
 
 # ---------------------------------------------------------------------------
 # Reading deals
@@ -217,6 +233,100 @@ def run(~f: @+deal:C.Deal -> B.Table, +name: String, +xs: List<&2, String>) -> I
     IO.print_err(name ++ ": " ++ U32.show(U32.from_nat(Nat.sub(t1, t0))) ++ " ms on " ++ U32.show(threads) ++ " threads")
     out.print(out)
 
+# ---------------------------------------------------------------------------
+# For people
+
+# The time and speed of the plain search.
+def speed.go(fast: Bool, +ms: Nat, +nodes: Nat) -> String:
+  match fast:
+    case True{}:
+      "under 1 ms"
+    case False{}:
+      Nat.show(ms) ++ " ms, " ++ Nat.show(Nat.div(Nat.mul(1000n, nodes), ms)) ++ " nodes/s"
+
+def speed(+ms: Nat, +nodes: Nat) -> String:
+  speed.go(Nat.is_eq(ms, 0n), ms, nodes)
+
+def table.nodes(t: B.Table) -> Nat:
+  match t:
+    case B.Table{_, n}:
+      n
+
+# The diagram, the PBN line, the grid and every statistic for one deal. The timing
+# is of a plain search, since counting takes longer.
+def deal.verbose(+deal: C.Deal) -> IO(Unit):
+  do IO<Unit>:
+    IO.print(V.diagram(deal))
+    IO.print("")
+    IO.print(P.print(deal))
+    IO.print("")
+    t0 : Nat <- IO.now()
+    +plain : B.Table = Z.table(deal)
+    t1 : Nat <- IO.now()
+    IO.print(V.report(Z.table.report(deal)))
+    IO.print("")
+    +n : Nat = table.nodes(plain)
+    IO.print("Solved all 20 entries, " ++ Nat.show(n) ++ " nodes: " ++ speed(Nat.sub(t1, t0), n) ++ ", on one thread with counting off")
+
+def deal.grid(+deal: C.Deal) -> IO(Unit):
+  do IO<Unit>:
+    IO.print(P.print(deal))
+    IO.print("")
+    IO.print(V.table.grid(Z.table(deal)))
+
+# One deal from its text, through f, or a message if it can't be played.
+def human.even(~f: @+deal:C.Deal -> IO(Unit), even: Bool, text: String, +deal: C.Deal) -> IO(Unit):
+  match even:
+    case True{}:
+      f(deal)
+    case False{}:
+      IO.die(Unit, 1, "dd: hands differ in length: " ++ text)
+
+def human.parsed(~f: @+deal:C.Deal -> IO(Unit), +text: String, d: Maybe<&2, C.Deal>) -> IO(Unit):
+  match d:
+    case None{}:
+      IO.die(Unit, 1, "dd: not a PBN deal: " ++ text)
+    case Some{+deal}:
+      human.even(~f, B.deal.even(deal), text, deal)
+
+def human.all(~f: @+deal:C.Deal -> IO(Unit), xs: List<&2, String>) -> IO(Unit):
+  match xs:
+    case Nil{}:
+      IO.pure(Unit, Unit{})
+    case Con{+h, t}:
+      do IO<Unit>:
+        human.parsed(~f, h, P.parse(h))
+        human.all(~f, t)
+
+def demo.num(r: Maybe<&2, U32>, +fallback: U32) -> U32:
+  match r:
+    case None{}:
+      fallback
+    case Some{x}:
+      x
+
+def demo.go(ok: Bool, +seed: U32, +k: U32) -> IO(Unit):
+  match ok:
+    case True{}:
+      do IO<Unit>:
+        IO.print("Ending " ++ U32.show(seed) ++ ", " ++ U32.show(k) ++ " cards in each hand")
+        IO.print("")
+        deal.verbose(D.ending(seed, k))
+    case False{}:
+      IO.die(Unit, 1, "dd: --demo takes 1 to 13 cards in each hand")
+
+def demo(+seed: U32, +k: U32) -> IO(Unit):
+  demo.go(U32.is_ge(k, 1) && U32.is_le(k, 13), seed, k)
+
+def demo.args(xs: List<String>) -> IO(Unit):
+  match xs:
+    case Con{a, Con{b, _}}:
+      demo(demo.num(U32.read(a), 1), demo.num(U32.read(b), 5))
+    case Con{a, _}:
+      demo(demo.num(U32.read(a), 1), 5)
+    case _:
+      demo(1, 5)
+
 def args.tail(xs: List<String>) -> List<String>:
   match xs:
     case Nil{}:
@@ -235,6 +345,20 @@ def search.bounds(+deal: C.Deal) -> B.Table:
 
 def main.go(xs: List<String>) -> IO(Unit):
   match xs:
+    case Con{SCon{Chr{45}, SCon{Chr{118}, _}}, t}:
+      do IO<Unit>:
+        deals : List<&2, String> <- args.read(t)
+        human.all(~deal.verbose, deals)
+    case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{118}, _}}}, t}:
+      do IO<Unit>:
+        deals : List<&2, String> <- args.read(t)
+        human.all(~deal.verbose, deals)
+    case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{103}, _}}}, t}:
+      do IO<Unit>:
+        deals : List<&2, String> <- args.read(t)
+        human.all(~deal.grid, deals)
+    case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{100}, _}}}, t}:
+      demo.args(t)
     case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{98}, _}}}, t}:
       do IO<Unit>:
         deals : List<&2, String> <- args.read(t)

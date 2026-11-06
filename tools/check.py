@@ -14,6 +14,10 @@
       Reports dd's node counts and times without checking them, with the median
       and worst deal, for sizes too slow to check against DDS or brute force.
 
+  check.py human [--count N] [--cards 4 6 8] [--seed S]
+      Checks dd -v and dd --grid against plain dd on random endings: the same grid
+      and the same nodes, with per-entry rows adding up to the totals.
+
   check.py sure [--file tests/data/list100.txt ...] [--limit N] [--count N] [--cards 4 6 8]
       The tricks the search counts as sure must not exceed the true ones, on whole
       deals from the DDS lists and on random endings against DDS.
@@ -22,6 +26,10 @@
       Checks the vendored DDS lists: dd must read every deal and print it back
       unchanged, and endplay's DDS must reproduce every TABLE line, which pins
       down the order of the table that dd has to match.
+
+  check.py full [--file tests/data/list100.txt] [--limit N] [--threads T]
+      Solves whole deals from a DDS list with dd and compares them with their TABLE
+      lines. Reports node counts and times.
 
   check.py roundtrip [--count N]
       Parses and prints the first N deals from ./hand with dd, which must print
@@ -260,6 +268,60 @@ def check_roundtrip(args):
     print("OK: %d deals from hand round-trip through dd" % len(deals))
 
 
+def check_full(args):
+    deals = read_list(args.file)
+    if args.limit:
+        deals = deals[: args.limit]
+    got, nodes, ms = solve_all([], [p for p, _ in deals], args.threads)
+    for (pbn, want), g in zip(deals, got):
+        if g != want:
+            fail("%s: dd %s, TABLE %s" % (pbn, g, want))
+    nodes.sort()
+    print(
+        "OK: %d whole deals match DDS; mean %d nodes, median %d, worst %d; %d ms (%.0f ms per deal)"
+        % (len(deals), sum(nodes) // len(nodes), nodes[len(nodes) // 2], nodes[-1], ms, ms / len(deals))
+    )
+
+
+def grid_of(lines):
+    """The 20 entries of a printed grid, by strain and then declarer."""
+    start = next(i for i, l in enumerate(lines) if l.split() == ["N", "E", "S", "W"])
+    return [int(x) for l in lines[start + 1 : start + 6] for x in l.split()[-4:]]
+
+
+def check_human(args):
+    rng = random.Random(args.seed)
+    for cards in args.cards:
+        deals = [random_ending(rng, cards) for _ in range(args.count)]
+        tables, nodes, _ = solve_all([], deals, None)
+        for pbn, table, n in zip(deals, tables, nodes):
+            lines, _ = run_dd(["--grid", pbn])
+            if grid_of(lines) != table:
+                fail("%s: dd --grid disagrees with dd" % pbn)
+            lines, _ = run_dd(["-v", pbn])
+            if pbn not in lines or grid_of(lines) != table:
+                fail("%s: dd -v disagrees with dd" % pbn)
+            head = next(i for i, l in enumerate(lines) if l.split()[:1] == ["decl"])
+            rows = [l.split() for l in lines[head + 1 : head + 21]]
+            total = lines[head + 21].split()
+            # nodes, then from the right: searches come after the targets.
+            if sum(int(r[4]) for r in rows) != n or int(total[1]) != n:
+                fail("%s: dd -v has %s nodes in its totals, dd %d" % (pbn, total[1], n))
+            for r, t in zip(rows, table):
+                if int(r[3]) != t:
+                    fail("%s: dd -v row %s against table entry %d" % (pbn, r, t))
+                searches = int(r[5])
+                targets = r[6 : 6 + searches]
+                cuts = r[6 + searches : 6 + searches + 4]
+                moves, kept = int(r[-2]), int(r[-1])
+                if kept > moves or len(cuts) != 4 or searches < 1:
+                    fail("%s: dd -v row %s" % (pbn, r))
+            if str(n) + " nodes" not in lines[-1]:
+                fail("%s: dd -v ends with %s, dd has %d nodes" % (pbn, lines[-1], n))
+        print("%d-card endings: %d deals: dd -v and dd --grid agree with dd" % (cards, len(deals)))
+    print("OK: output for people")
+
+
 def sure_table(deals):
     lines, _ = with_deals(deals, lambda p: run_dd(["--sure", p]))
     if len(lines) != len(deals):
@@ -355,6 +417,18 @@ def main():
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--suits", type=int, default=4, choices=[1, 2, 3, 4])
     p.set_defaults(fn=check_sure)
+
+    p = sub.add_parser("human")
+    p.add_argument("--count", type=int, default=30)
+    p.add_argument("--cards", type=int, nargs="+", default=[3, 5, 7])
+    p.add_argument("--seed", type=int, default=1)
+    p.set_defaults(fn=check_human)
+
+    p = sub.add_parser("full")
+    p.add_argument("--file", default=os.path.join(ROOT, "tests/data/list100.txt"))
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--threads", type=int)
+    p.set_defaults(fn=check_full)
 
     p = sub.add_parser("roundtrip")
     p.add_argument("--count", type=int, default=1000)

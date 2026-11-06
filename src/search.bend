@@ -458,12 +458,25 @@ def later.trump(+m: U32, +p: U32, +a: U32, +b: U32) -> U32:
 # ---------------------------------------------------------------------------
 # Cutoffs at the start of a trick
 
+# A cut's code is its answer, as in cut, plus why above that: see why.
+def why.target() -> U32:
+  4
+
+def why.quick() -> U32:
+  8
+
+def why.later() -> U32:
+  12
+
+def why.after() -> U32:
+  16
+
 def boundary.side(ns: Bool, +q: U32, +l: U32, +won: U32, +left: U32, +target: U32) -> U32:
   match ns:
     case True{}:
-      R.sel(U32.is_ge((won + q : U32), target), 1, R.sel(U32.is_lt((won + left - l : U32), target), 2, 0))
+      R.sel(U32.is_ge((won + q : U32), target), (1 + why.quick() : U32), R.sel(U32.is_lt((won + left - l : U32), target), (2 + why.later() : U32), 0))
     case False{}:
-      R.sel(U32.is_lt((won + left - q : U32), target), 2, R.sel(U32.is_ge((won + l : U32), target), 1, 0))
+      R.sel(U32.is_lt((won + left - q : U32), target), (2 + why.quick() : U32), R.sel(U32.is_ge((won + l : U32), target), (1 + why.later() : U32), 0))
 
 # The sure tricks from the start of a trick: for the side on lead in the low byte,
 # and for its opponents above that.
@@ -516,7 +529,7 @@ def boundary.more(open: Bool, +t: U32, +pos: R.Pos, +won: U32, +left: U32, +targ
     case True{}:
       boundary.pos(t, pos, won, left, target)
     case False{}:
-      code
+      (code + why.target() : U32)
 
 # Every check at the start of a trick, the cheapest first.
 def boundary(+t: U32, +pos: R.Pos, +won: U32, +left: U32, +target: U32) -> U32:
@@ -541,7 +554,7 @@ def second.go(+t: U32, +tr: U32, +won: U32, +left: U32, +target: U32, +n01: U32,
   +theirs = U32.max(led, second.power(l, st, R.pick(j, n01, e01, s01, w01), R.pick(j, n23, e23, s23, w23)))
   # The leader's side is the seat before this one, whose parity differs.
   +ns = Bool.xor(U32.is_gt(mine, theirs), U32.is_ne((seat .&. 1 : U32), 0))
-  R.sel(ns, R.sel(U32.is_ge((won + 1 : U32), target), 1, 0), R.sel(U32.is_lt((won + left - 1 : U32), target), 2, 0))
+  R.sel(ns, R.sel(U32.is_ge((won + 1 : U32), target), (1 + why.after() : U32), 0), R.sel(U32.is_lt((won + left - 1 : U32), target), (2 + why.after() : U32), 0))
 
 def second.pos(+t: U32, pos: R.Pos, +won: U32, +left: U32, +target: U32) -> U32:
   match pos:
@@ -580,7 +593,7 @@ def enter.go(go: Bool, +t: U32, +pos: R.Pos, +l01: U32, +l23: U32, +memo: U32, +
 # The answer a node starts from. With no cut, it is the one that does not settle
 # the node yet: false when North-South choose, true when East-West choose.
 def enter.ok(+code: U32, +ns: Bool) -> Bool:
-  (U32.is_zero(code) && Bool.not(ns)) || U32.is_eq(code, 1)
+  (U32.is_zero(code) && Bool.not(ns)) || U32.is_eq((code .&. 3 : U32), 1)
 
 def live.at(bound: Bool, +x: U32, +old: U32) -> U32:
   match bound:
@@ -588,6 +601,109 @@ def live.at(bound: Bool, +x: U32, +old: U32) -> U32:
       x
     case False{}:
       old
+
+# ---------------------------------------------------------------------------
+# Statistics
+#
+# The search takes three hooks as templates, so each set of hooks compiles to its own
+# copy of it and the plain copy has nothing in it to pay for. The counting copy uses
+# the rest of the memory array: each table entry has 32 slots from 64 + 32 * entry,
+# which hold counters of two words each, low word first, and then a log of targets.
+
+def stat.nodes() -> U32:
+  0
+
+def stat.searches() -> U32:
+  2
+
+# The cuts follow in the order of why, target first, two slots each.
+def stat.cuts() -> U32:
+  4
+
+def stat.moves() -> U32:
+  12
+
+def stat.kept() -> U32:
+  14
+
+def stat.log() -> U32:
+  16
+
+# The slot of the memory array holding the base of the current entry.
+def stat.current() -> U32:
+  60
+
+def stat.carry(c: Bool, p: Array<U32> & U32, +i: U32) -> Array<U32>:
+  match c:
+    case True{}:
+      match p:
+        case (m, +v):
+          Array.set(U32, m, i, (v + 1 : U32))
+    case False{}:
+      match p:
+        case (m, _):
+          m
+
+def stat.add.go(p: Array<U32> & U32, +i: U32, +by: U32) -> Array<U32>:
+  match p:
+    case (m, +lo):
+      +x = (lo + by : U32)
+      stat.carry(U32.is_lt(x, lo), Array.get(U32, Array.set(U32, m, i, x), (i + 1 : U32)), (i + 1 : U32))
+
+def stat.add(m: Array<U32>, +i: U32, +by: U32) -> Array<U32>:
+  stat.add.go(Array.get(U32, m, i), i, by)
+
+def stat.moves.at(go: Bool, m: Array<U32>, +base: U32, +t: U32, +pos: R.Pos, +l01: U32, +l23: U32) -> Array<U32>:
+  match go:
+    case True{}:
+      +legal = U32.from_nat(List.length(&2, U32, R.moves(pos)))
+      +kept = U32.from_nat(List.length(&2, U32, gen(t, pos, l01, l23, mem.none(), 0)))
+      stat.add(stat.add(m, (base + stat.moves() : U32), legal), (base + stat.kept() : U32), kept)
+    case False{}:
+      m
+
+def stat.cut.at(go: Bool, m: Array<U32>, +base: U32, +code: U32) -> Array<U32>:
+  match go:
+    case True{}:
+      m
+    case False{}:
+      # A reason of 1 is the first cut, two slots each.
+      stat.add(m, (base + stat.cuts() + (((code >> 2n) - 1) * 2) : U32), 1)
+
+def stat.node.go(p: Array<U32> & U32, +t: U32, +pos: R.Pos, +code: U32, +l01: U32, +l23: U32) -> Array<U32>:
+  match p:
+    case (m, +base):
+      +go = U32.is_zero(code)
+      stat.moves.at(go, stat.cut.at(go, stat.add(m, (base + stat.nodes() : U32), 1), base, code), base, t, pos, l01, l23)
+
+# Counts a position reached, how it was cut if it was, and its moves if it was not.
+def stat.node(+t: U32, m: Array<U32>, +pos: R.Pos, +code: U32, +l01: U32, +l23: U32) -> Array<U32>:
+  stat.node.go(Array.get(U32, m, stat.current()), t, pos, code, l01, l23)
+
+def stat.log.go(p: Array<U32> & U32, +i: U32, +base: U32, +x: U32) -> Array<U32>:
+  match p:
+    case (m, +v):
+      stat.add(Array.set(U32, m, i, (v .|. x : U32)), (base + stat.searches() : U32), 1)
+
+# Counts a search, and logs its target in the next four bits, up to 16 targets.
+def stat.ask.n(p: Array<U32> & U32, +base: U32, +target: U32) -> Array<U32>:
+  match p:
+    case (m, +n):
+      +i = (base + stat.log() + ((n >> 3n) .&. 1) : U32)
+      +x = (target << U32.to_nat(((n .&. 7) * 4 : U32)) : U32)
+      stat.log.go(Array.get(U32, m, i), i, base, x)
+
+def stat.ask.go(p: Array<U32> & U32, +target: U32) -> Array<U32>:
+  match p:
+    case (m, +base):
+      stat.ask.n(Array.get(U32, m, (base + stat.searches() : U32)), base, target)
+
+def stat.ask(m: Array<U32>, +target: U32) -> Array<U32>:
+  stat.ask.go(Array.get(U32, m, stat.current()), target)
+
+# Starts counting for table entry i.
+def stat.begin(m: Array<U32>, +i: U32) -> Array<U32>:
+  Array.set(U32, m, stat.current(), (64 + 32 * i : U32))
 
 # ---------------------------------------------------------------------------
 # The search
@@ -614,7 +730,7 @@ def peek.res(r: Res, +i: U32) -> Res:
 # into the memory, at slot, and last is that move.
 #
 # A child has one card fewer, and a sibling has one move fewer with the same d.
-def search(+d: Nat, ms: List<&2, U32>, ns: Bool, r: Res, +slot: U32, +last: U32, +t: U32, +target: U32, +l01: U32, +l23: U32, +pos: R.Pos) -> Res:
+def search(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, +d: Nat, ms: List<&2, U32>, ns: Bool, r: Res, +slot: U32, +last: U32, +t: U32, +target: U32, +l01: U32, +l23: U32, +pos: R.Pos) -> Res:
   match d ms ns r:
     case 0n _ _ x:
       x
@@ -633,8 +749,8 @@ def search(+d: Nat, ms: List<&2, U32>, ns: Bool, r: Res, +slot: U32, +last: U32,
       +c01 = live.at(bound, R.pos.live01(child), l01)
       +c23 = live.at(bound, R.pos.live23(child), l23)
       +here = U32.from_nat(p)
-      search(1n+p, rest, True{},
-        peek.res(search(p, enter.go(U32.is_zero(code), t, child, c01, c23, memo, here), cns, peek(enter.ok(code, cns), 1n+n, m, (here - 1 : U32)), mem.none(), 0, t, target, c01, c23, child), here),
+      search(~st, 1n+p, rest, True{},
+        peek.res(search(~st, p, enter.go(U32.is_zero(code), t, child, c01, c23, memo, here), cns, peek(enter.ok(code, cns), 1n+n, st(t, m, child, code, c01, c23), (here - 1 : U32)), mem.none(), 0, t, target, c01, c23, child), here),
         U32.from_nat(1n+p), c, t, target, l01, l23, pos)
     case 1n+p Con{+c, rest} False{} Res{True{}, n, m, +memo}:
       +child = R.play(t, pos, c)
@@ -645,26 +761,26 @@ def search(+d: Nat, ms: List<&2, U32>, ns: Bool, r: Res, +slot: U32, +last: U32,
       +c01 = live.at(bound, R.pos.live01(child), l01)
       +c23 = live.at(bound, R.pos.live23(child), l23)
       +here = U32.from_nat(p)
-      search(1n+p, rest, False{},
-        peek.res(search(p, enter.go(U32.is_zero(code), t, child, c01, c23, memo, here), cns, peek(enter.ok(code, cns), 1n+n, m, (here - 1 : U32)), mem.none(), 0, t, target, c01, c23, child), here),
+      search(~st, 1n+p, rest, False{},
+        peek.res(search(~st, p, enter.go(U32.is_zero(code), t, child, c01, c23, memo, here), cns, peek(enter.ok(code, cns), 1n+n, st(t, m, child, code, c01, c23), (here - 1 : U32)), mem.none(), 0, t, target, c01, c23, child), here),
         U32.from_nat(1n+p), c, t, target, l01, l23, pos)
 
 # Runs one search from the start of a trick.
-def ask.go(+d: Nat, +t: U32, +pos: R.Pos, +target: U32, r: Res) -> Res:
+def ask.go(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, +d: Nat, +t: U32, +pos: R.Pos, +target: U32, r: Res) -> Res:
   match r:
     case Res{_, n, m, +memo}:
       +ns = R.pos.ns(pos)
       +l01 = R.pos.live01(pos)
       +l23 = R.pos.live23(pos)
-      search(d, gen(t, pos, l01, l23, memo, U32.from_nat(d)), ns, peek(Bool.not(ns), n, m, (U32.from_nat(d) - 1 : U32)), mem.none(), 0, t, target, l01, l23, pos)
+      search(~st, d, gen(t, pos, l01, l23, memo, U32.from_nat(d)), ns, peek(Bool.not(ns), n, m, (U32.from_nat(d) - 1 : U32)), mem.none(), 0, t, target, l01, l23, pos)
 
 # Runs one search, unless told there is nothing to ask.
-def ask(stop: Bool, +d: Nat, +t: U32, +pos: R.Pos, +target: U32, n: Nat, m: Array<U32>) -> Res:
+def ask(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, stop: Bool, +d: Nat, +t: U32, +pos: R.Pos, +target: U32, n: Nat, m: Array<U32>) -> Res:
   match stop:
     case True{}:
       Res{False{}, n, m, 0}
     case False{}:
-      ask.go(d, t, pos, target, peek(False{}, n, m, U32.from_nat(d)))
+      ask.go(~st, d, t, pos, target, peek(False{}, n, sa(m, target), U32.from_nat(d)))
 
 # ---------------------------------------------------------------------------
 # The driver
@@ -689,7 +805,7 @@ def driver.first(+g: U32, +lo: U32, +hi: U32) -> U32:
 # Moves the bounds until they meet. done says they already had before this step,
 # and r is the answer about target. Each step closes the gap by at least one, so
 # the fuel only has to be more than the tricks left.
-def narrow(fuel: Nat, done: Bool, r: Res, +target: U32, +d: Nat, +t: U32, +pos: R.Pos, +lo: U32, +hi: U32) -> Val:
+def narrow(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, fuel: Nat, done: Bool, r: Res, +target: U32, +d: Nat, +t: U32, +pos: R.Pos, +lo: U32, +hi: U32) -> Val:
   match fuel done r:
     case 0n _ Res{_, n, m, _}:
       Val{lo, n, m}
@@ -700,40 +816,83 @@ def narrow(fuel: Nat, done: Bool, r: Res, +target: U32, +d: Nat, +t: U32, +pos: 
       +hi2 = driver.hi(ok, target, hi)
       +stop = U32.is_ge(lo2, hi2)
       +next = driver.next(ok, lo2, hi2)
-      narrow(p, stop, ask(stop, d, t, pos, next, n, m), next, d, t, pos, lo2, hi2)
+      narrow(~st, ~sa, p, stop, ask(~st, ~sa, stop, d, t, pos, next, n, m), next, d, t, pos, lo2, hi2)
 
 # North-South's tricks from the start of a trick with d cards left, starting from
 # a guess at the answer.
-def solve(+d: Nat, +t: U32, +pos: R.Pos, +guess: U32, n: Nat, m: Array<U32>) -> Val:
+def solve(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, +d: Nat, +t: U32, +pos: R.Pos, +guess: U32, n: Nat, m: Array<U32>) -> Val:
   +lo = R.pos.won(pos)
   +hi = (lo + (U32.from_nat(d) >> 2n) : U32)
   +stop = U32.is_ge(lo, hi)
   +target = driver.first(guess, lo, hi)
-  narrow(14n, stop, ask(stop, d, t, pos, target, n, m), target, d, t, pos, lo, hi)
+  narrow(~st, ~sa, 14n, stop, ask(~st, ~sa, stop, d, t, pos, target, n, m), target, d, t, pos, lo, hi)
 
 # ---------------------------------------------------------------------------
 # The table
 
+# A finished table with the memory array, which holds any statistics.
+type Solved is Type:
+  Solved{tricks: List<&2, U32>, nodes: Nat, mem: Array<U32>}
+
 # Fills the table from its last entry to its first, so that it comes out in the
 # order of B.table. r is the result for entry i + 1, and it feeds the guess for
 # entry i: moving the lead by one seat rarely changes the result by much.
-def table.go(k: Nat, r: Val, +i: U32, +d: Nat, +left: U32, +deal: C.Deal, acc: List<&2, U32>) -> B.Table:
+def table.go(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, ~sb: @m:Array<U32> -> @+i:U32 -> Array<U32>, k: Nat, r: Val, +i: U32, +d: Nat, +left: U32, +deal: C.Deal, acc: List<&2, U32>) -> Solved:
   match k r:
-    case 0n Val{+v, n, _}:
-      B.Table{B.table.entry(U32.is_zero(((i + 1) .&. 1 : U32)), left, v) <> acc, n}
+    case 0n Val{+v, n, m}:
+      Solved{B.table.entry(U32.is_zero(((i + 1) .&. 1 : U32)), left, v) <> acc, n, m}
     case 1n+p Val{+v, n, m}:
       +t = (i >> 2n : U32)
       +decl = (i .&. 3 : U32)
       +leader = ((decl + 1) .&. 3 : U32)
-      table.go(p, solve(d, t, R.pos.start(deal, leader), v, n, m), (i - 1 : U32), d, left, deal,
+      table.go(~st, ~sa, ~sb, p, solve(~st, ~sa, d, t, R.pos.start(deal, leader), v, n, sb(m, i)), (i - 1 : U32), d, left, deal,
         B.table.entry(U32.is_zero(((i + 1) .&. 1 : U32)), left, v) <> acc)
 
-# The double dummy table of a deal, as B.table gives it.
-def table(+deal: C.Deal) -> B.Table:
+def table.run(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01:U32 -> @+l23:U32 -> Array<U32>, ~sa: @m:Array<U32> -> @+target:U32 -> Array<U32>, ~sb: @m:Array<U32> -> @+i:U32 -> Array<U32>, +deal: C.Deal, m: Array<U32>) -> Solved:
   +cards = B.deal.cards(deal)
   +d = U32.to_nat(cards)
   +left = (cards / 4 : U32)
-  table.go(19n, solve(d, 4, R.pos.start(deal, 0), ((left + 1) / 2 : U32), 0n, [mem.none() : U32*64n]), 18, d, left, deal, Nil{})
+  table.go(~st, ~sa, ~sb, 19n, solve(~st, ~sa, d, 4, R.pos.start(deal, 0), ((left + 1) / 2 : U32), 0n, sb(m, 19)), 18, d, left, deal, Nil{})
+
+def done.table(r: Solved) -> B.Table:
+  match r:
+    case Solved{ts, n, _}:
+      B.Table{ts, n}
+
+# The double dummy table of a deal, as B.table gives it.
+def table(+deal: C.Deal) -> B.Table:
+  done.table(table.run(~(+t => m => +p => +c => +a => +b => m), ~(m => +x => m), ~(m => +x => m), deal, [mem.none() : U32*64n]))
+
+# The counters of a table, slots 64 to 703 of the array, in order.
+def stats.list(k: Nat, +i: U32, p: Array<U32> & U32, acc: List<&2, U32>) -> List<&2, U32>:
+  match k:
+    case 0n:
+      acc
+    case 1n+q:
+      match p:
+        case (m, v):
+          stats.list(q, (i - 1 : U32), Array.get(U32, m, (i - 1 : U32)), v <> acc)
+
+# A table with its statistics, as plain data.
+type Report is Data:
+  Report{tricks: List<&2, U32>, nodes: Nat, stats: List<&2, U32>}
+
+def report.go(r: Solved) -> Report:
+  match r:
+    case Solved{ts, n, m}:
+      Report{ts, n, stats.list(640n, 703, Array.get(U32, m, 703), Nil{})}
+
+# Clears the counters, from slot i on, since the array starts as empty memory.
+def stats.clear(k: Nat, +i: U32, m: Array<U32>) -> Array<U32>:
+  match k:
+    case 0n:
+      m
+    case 1n+p:
+      stats.clear(p, (i + 1 : U32), Array.set(U32, m, i, 0))
+
+# The same search, counting.
+def table.report(+deal: C.Deal) -> Report:
+  report.go(table.run(~stat.node, ~stat.ask, ~stat.begin, deal, stats.clear(640n, 64, [mem.none() : U32*1024n])))
 
 # ---------------------------------------------------------------------------
 # Sure tricks, for checking

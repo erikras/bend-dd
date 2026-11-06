@@ -92,6 +92,10 @@ else
   .venv/bin/python tools/check.py oracle --count 100 --cards 5
 fi
 
+echo "== output for people"
+./dd --demo 1 5 > /dev/null
+.venv/bin/python tools/check.py human
+
 echo "== sure tricks against DDS"
 if [ $quick = 1 ]; then
   .venv/bin/python tools/check.py sure --limit 100 --count 50 --cards 2 4 8

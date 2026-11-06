@@ -244,7 +244,7 @@ def lead.then(+t: U32, d: Maybe<&2, C.Deal>, +c: U32, +won: U32, +left: U32, +ta
     case None{}:
       99
     case Some{x}:
-      Z.second(t, R.play(t, R.pos.start(x, 0), c), won, left, target)
+      (Z.second(t, R.play(t, R.pos.start(x, 0), c), won, left, target) .&. 3 : U32)
 
 # After the lead: the side with the best hand left for this trick is sure of it.
 def second.checks() -> List<&2, Check>:

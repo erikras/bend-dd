@@ -177,6 +177,72 @@ won and won + left, and equivalence and the search have no law that holds for ev
 position. Tests stand in for these so far. Search and brute force also start only
 from the first card of a trick: mid-trick starts come with Phase 7.
 
+### 2.5 What Phase 3 measured
+
+The same set of 200 random 8-card endings as a whole table per deal, on 10 threads
+under load, adding one piece at a time. Node counts are exact; times are rough.
+
+| Search | Mean nodes per deal | ms per deal |
+|---|---|---|
+| Phase 2 | 22,133,476 | 163 |
+| + quick tricks, later tricks, the check after the lead | 3,598,543 | about 26 |
+| + best-move memory | 3,294,949 | about 30 |
+| + DDS's weights for all four places in the trick | 830,281 | about 10 |
+
+Then with one piece at a time taken out of the final search, or put back to the
+Phase 2 ordering. All of them cost more nodes and more time:
+
+| Taken out | Mean nodes | Nodes against full | ms per deal |
+|---|---|---|---|
+| Nothing | 830,281 | | 9.7 |
+| Quick tricks | 1,774,883 | 2.14× | 19.7 |
+| Weights on lead | 1,731,616 | 2.09× | 17.5 |
+| Weights for the last hand | 1,232,748 | 1.48× | 13.1 |
+| Weights for the second hand | 1,154,317 | 1.39× | 13.4 |
+| Later tricks | 1,002,687 | 1.21× | 11.5 |
+| The check after the lead | 980,090 | 1.18× | 10.9 |
+| Weights for the third hand | 921,841 | 1.11× | 11.0 |
+| Best-move memory | 889,353 | 1.07× | 10.4 |
+| The top card of each suit going first | 871,192 | 1.05× | 10.2 |
+
+How far it goes now, a whole table per deal, one thread per deal at a time on 10:
+
+| Cards per hand | Deals | Mean nodes | Worst | ms per deal, wall |
+|---|---|---|---|---|
+| 7 | 300 | 126,328 | 997,636 | 9.8 (1 thread) |
+| 8 | 200 | 830,281 | 7,698,987 | 63.6 (1 thread), 11.2 (10) |
+| 9 | 100 | 4,762,776 | 29,565,080 | 64 |
+| 10 | 100 | 34,999,956 | 254,237,288 | 517 |
+| 11 | 30 | 342,366,357 | 1,519,005,259 | 6,294 |
+| 12 | 10 | 1,659,368,884 | 5,273,690,194 | 45,473 |
+
+Next to brute force, totals: 3 cards, 2000 deals: 55.8M against 1.04M nodes (54×).
+4 cards, 2000 deals: 2.94B against 3.27M (899×). 5 cards, 500 deals: 60.2B against
+2.92M (20,650×).
+
+What this changes:
+
+- One thread now does about 13M nodes/s, half of Phase 2's 26M, and 10 threads about
+  74M. Weights are most of that cost, and they more than pay for it: a node is twice
+  as dear and there are 27 times fewer. Lookup tables in Phase 6 can win some of it
+  back, since most of the arguments to a weight only change per suit.
+- A call can't be destructured inside the search, and that affects any array the
+  search reads. Each `Res` carries the value read for the next child, by a helper.
+  The transposition table probe in Phase 4 has the same shape.
+- The later-tricks rule in the DDS notes that gives more than one trick for two
+  suits topped by the opponents at no trumps is not used: a top card can be forced
+  out as a discard if its suit is never led, so one trick is all that can be
+  claimed by that argument. The notes also give two tricks for the top two trumps
+  without a condition; the code asks that one of those hands has two trumps, since
+  two singletons fall together.
+- The weights are from the notes, which say they only give an idea of DDS's current
+  code. They still leave room to tune.
+
+Still unproved: quick and later tricks have no law for every position. They are
+checked against true results on whole deals (`check.py sure`, 1100 deals), on
+endings against DDS, against brute force, and in a law for a sample of 2-card
+endings.
+
 ## 3. Data representation
 
 **Cards.** Suit 0..3 = ♠ ♥ ♦ ♣ (as in `hand.bend` and DDS's strain order),
@@ -312,6 +378,7 @@ handles 7 to 8 card endings quickly. We log node counts from here on.
 Quick tricks, later tricks, and DDS's move-ordering weights per hand position.
 *Done when:* node counts drop sharply on the 8-card set, with no wrong
 answers.
+*Done:* see §2.5.
 
 **Phase 4: Transposition table.**
 First an exact-position TT (relative ranks, bounds, bucketed array). Then

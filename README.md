@@ -12,12 +12,12 @@ double dummy solver.
 
 ## Status
 
-Phases 0 to 2 of the [plan](docs/PLAN.md) are done. There is a dealer, a PBN
+Phases 0 to 3 of the [plan](docs/PLAN.md) are done. There is a dealer, a PBN
 parser and printer, the rules of play, a brute-force minimax as an oracle, and a
-zero-window search with target cutoffs, card equivalence and simple move ordering.
-The search matches the oracle and DDS on thousands of endings. It solves endings
-of up to about 10 cards in each hand. It can't solve full deals yet: that needs
-the transposition table from Phase 4.
+zero-window search with target cutoffs, card equivalence, quick and later tricks,
+and DDS's move ordering. The search matches the oracle and DDS on thousands of
+endings. It solves endings of up to about 12 cards in each hand in under a minute
+or so. Full deals need the transposition table from Phase 4 to be practical.
 
 ## Requirements
 
@@ -78,11 +78,40 @@ bend dd.bend -o dd
 ./dd "N:AK... Q.J.. J..A. T..K."
 ```
 
-For now it is for endings: a full 13-card deal would take far too long. Runtime
+For now it is for endings: a full 13-card deal takes minutes or more. Runtime
 options go between `+RTS` and `-RTS`, such as `+RTS --threads 8 -RTS`.
 
+To see it work on a random ending, with 5 cards in each hand by default:
+
+```sh
+./dd --demo             # ending number 1, 5 cards in each hand
+./dd --demo 42 8        # ending number 42, 8 cards in each hand
+```
+
+That prints the hand diagram, the deal in PBN, a grid of the tricks declarer takes,
+statistics for each strain and declarer, and the time:
+
+```
+    N   E   S   W
+♠   7   0   7   0
+❤︎   6   0   6   0
+◆   2   4   2   4
+♣   3   5   3   5
+NT  4   0   4   0
+```
+
+`dd --grid` prints only the deal and the grid, and `dd -v` (or `--verbose`) all of it,
+for deals you give it the same way as plain `dd`. The statistics are, per strain and
+declarer: the seat on lead, the nodes, the zero-window searches and their targets, the
+positions cut by target too low or high, quick tricks, later tricks and the check
+after the lead, and the legal moves against those left after equivalence. Then
+totals, and the speed of a plain search. Plain `dd` has the counting compiled out:
+we measured no difference beyond noise, and counting takes about 5 times as long.
+
 `dd --brute` does the same by plain minimax, the oracle the search is checked
-against, for endings of up to about 5 cards in each hand. `dd --print` prints each
+against, for endings of up to about 5 cards in each hand. `dd --sure` prints the
+tricks the search counts as sure at the start of each entry, to check them against
+the true results. `dd --print` prints each
 deal back in canonical form, starting from North.
 
 ## Testing
@@ -105,6 +134,7 @@ The full plan, with the algorithm choices and the testing strategy, is in
 2. Represent the deal as bitboards, generate legal plays and brute-force small
    endings (done).
 3. Solve a single strain and lead with alpha-beta search (done).
-4. Add transposition tables, move ordering and quick tricks.
+4. Add transposition tables, move ordering and quick tricks (ordering and quick
+   tricks done).
 5. Compute the full 4 x 5 table of trick counts, compared against DDS.
 6. Parallelize the search with Bend's parallel calls.
