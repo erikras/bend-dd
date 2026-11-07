@@ -376,7 +376,7 @@ def gen.ok(+t: U32, pos: R.Pos, +l01: U32, +l23: U32, +d: U32) -> Bool:
       +h23 = R.pick(seat, n23, e23, s23, w23)
       +lead = R.trick.lead(tr)
       +free = U32.is_zero(R.suit.mask(U32.to_nat(lead), h01, h23))
-      gen.exact(Z.gen(t, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, l01, l23, Z.mem.none(), d),
+      gen.exact(Z.gen.list(t, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, l01, l23, Z.mem.none(), d),
         Z.tops(legal(free, 0, lead, (h01 >> 16n : U32)), (l01 >> 16n : U32)),
         Z.tops(legal(free, 1, lead, (h01 .&. 65535 : U32)), (l01 .&. 65535 : U32)),
         Z.tops(legal(free, 2, lead, (h23 >> 16n : U32)), (l23 >> 16n : U32)),

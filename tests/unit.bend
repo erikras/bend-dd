@@ -263,9 +263,9 @@ def order.checks() -> List<&2, Check>:
   +l01 = (live01 .|. (1024 << 16n) : U32)
   [
     Check{"second hand keeps K, J and 2 apart, with the Q on the table",
-      U32.is_eq(C.bits.count(list.mask(Z.gen(4, p, l01, 0, Z.mem.none(), 7), 0)), 3)},
+      U32.is_eq(C.bits.count(list.mask(Z.gen.list(4, p, l01, 0, Z.mem.none(), 7), 0)), 3)},
     Check{"without the Q on the table, K and J are one move",
-      U32.is_eq(C.bits.count(list.mask(Z.gen(4, p, live01, 0, Z.mem.none(), 7), 0)), 2)}
+      U32.is_eq(C.bits.count(list.mask(Z.gen.list(4, p, live01, 0, Z.mem.none(), 7), 0)), 2)}
   ]
 
 def search.checks() -> List<&2, Check>:
