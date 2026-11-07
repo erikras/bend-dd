@@ -453,6 +453,11 @@ goes wrong.
   makes a clear gain, so none has changed.
 - *Other sizes:* 2^21, 2^22 and 2^24 words of table, 2 or 4 top cards in the hash, and
   the table from 2 or 4 tricks left. None beat what is there.
+- *Lookup tables for ranks and runs (not built):* `U32.popcount`, `U32.ctz` and so
+  `C.bits.count` compile to CPU instructions in the emitted C, while a read from an
+  `Array` has to thread the array through a block read. So a table can't beat what
+  these use now. The loops that are left, such as `own` and `tops`, are per card and
+  short late in a deal, where most positions are.
 - *The GPU, one more measurement:* 28× slower than the CPU threads on plain minimax,
   the same as before (§2.3), so Phase 6b isn't worth more time on this machine.
 
