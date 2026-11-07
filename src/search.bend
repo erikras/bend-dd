@@ -132,6 +132,10 @@ def keys.cards(xs: Moves) -> Moves:
 def bit.top(+x: U32) -> U32:
   (1 << U32.log2(x) : U32)
 
+# The top card of a holding, or nothing if it is empty.
+def bit.top.of(+x: U32) -> U32:
+  R.sel(U32.is_zero(x), 0, bit.top(x))
+
 def bit.low(+x: U32) -> U32:
   (x .&. (0 - x) : U32)
 
@@ -412,6 +416,28 @@ def run(+m: U32, +all: U32) -> U32:
 def safe(+k: U32, +ha: Bool, +la: U32, +hb: Bool, +lb: U32) -> U32:
   U32.min(k, U32.min(R.sel(ha, la, 13), R.sel(hb, lb, 13)))
 
+# Tricks from a suit whose top card is in hand own, with no ruff to fear, beyond the top
+# cards themselves, as in DDS. If everyone else is out of cards after one round, or two
+# with the second card in the same hand, all of own's cards win. If partner has the
+# second card and both have at least two, that is two tricks, and if the opponents and
+# one of the pair are out after two rounds, the other's cards win as well. Low byte:
+# the tricks. Above that: how many top cards in play they rest on.
+def qs.alt(+own: U32, +par: U32, +a: U32, +b: U32, +all: U32) -> U32:
+  +top = bit.top.of(all)
+  +second = bit.top.of((all .^. top : U32))
+  +lo = C.bits.count(own)
+  +lp = C.bits.count(par)
+  +la = C.bits.count(a)
+  +lb = C.bits.count(b)
+  +mine = U32.is_ne((own .&. top : U32), 0)
+  +two = U32.is_le(la, 2) && U32.is_le(lb, 2)
+  R.sel(Bool.not(mine), 0,
+    R.sel(U32.is_le(la, 1) && U32.is_le(lb, 1) && U32.is_le(lp, 1), (lo .|. (1 << 8n) : U32),
+      R.sel(U32.is_ne((own .&. second : U32), 0) && two && U32.is_le(lp, 2), (lo .|. (2 << 8n) : U32),
+        R.sel(U32.is_ne((par .&. second : U32), 0) && U32.is_gt(lo, 1) && U32.is_gt(lp, 1),
+          (R.sel(two && (U32.is_le(lp, 2) || U32.is_le(lo, 2)), U32.max(lo, lp), 2) .|. (2 << 8n) : U32),
+          0))))
+
 # One suit's part of the count: the leader's safe winners in the low byte, partner's
 # next, and whether the suit is an entry to partner above that. ha1 and hb1 say an
 # opponent has a trump left after the leader's top trumps, ha2 and hb2 after
@@ -426,7 +452,9 @@ def quick.suit(trump: Bool, +m: U32, +p: U32, +a: U32, +b: U32, +ha1: Bool, +hb1
       +lb = C.bits.count(b)
       +kp = run(p, all)
       +enter = U32.is_ne(m, 0) && U32.is_ne(safe(kp, ha1, la, hb1, lb), 0)
-      (safe(run(m, all), ha1, la, hb1, lb) .|. (safe(kp, ha2, la, hb2, lb) << 8n) .|. (Bool.to_u32(enter) << 16n) : U32)
+      +wm = U32.max(safe(run(m, all), ha1, la, hb1, lb), R.sel(ha1 || hb1, 0, (qs.alt(m, p, a, b, all) .&. 255 : U32)))
+      +wp = U32.max(safe(kp, ha2, la, hb2, lb), R.sel(ha2 || hb2, 0, (qs.alt(p, m, a, b, all) .&. 255 : U32)))
+      (wm .|. (wp << 8n) .|. (Bool.to_u32(enter) << 16n) : U32)
 
 # The tricks the side on lead is sure of, from the start of a trick with left
 # tricks to go. The leader cashes top trumps, which also draws trumps, then safe
@@ -1348,18 +1376,26 @@ def node.try(~st: @+t:U32 -> @m:Array<U32> -> @+pos:R.Pos -> @+code:U32 -> @+l01
 # How many top cards of a suit a quick trick count has to keep. c is what the suit
 # adds to the count, and of that it only has to keep what the count can't spare,
 # except that a suit used as the way across to partner keeps one.
-def qk.keep(+c: U32, +slack: U32, +entry: Bool) -> U32:
-  U32.max((c - U32.min(c, slack) : U32), Bool.to_u32(entry))
+def qk.keep(+v: U32, +slack: U32, +entry: Bool) -> U32:
+  +c = (v .&. 255 : U32)
+  U32.max(U32.min((c - U32.min(c, slack) : U32), (v >> 8n : U32)), Bool.to_u32(entry))
 
-def qk.slack(+c: U32, +slack: U32) -> U32:
-  (slack - U32.min(c, slack) : U32)
+def qk.slack(+v: U32, +slack: U32) -> U32:
+  (slack - U32.min((v .&. 255 : U32), slack) : U32)
 
-# What a side suit adds to the count: it mirrors quick.suit.
+# What a side suit adds to the count, as quick.suit does, with above the low byte how
+# many top cards in play that rests on.
 def qk.adds(+m: U32, +p: U32, +a: U32, +b: U32, +ha1: Bool, +hb1: Bool, +ha2: Bool, +hb2: Bool, +across: Bool) -> U32:
   +all = (m .|. p .|. a .|. b : U32)
   +la = C.bits.count(a)
   +lb = C.bits.count(b)
-  (safe(run(m, all), ha1, la, hb1, lb) + R.sel(across, safe(run(p, all), ha2, la, hb2, lb), 0) : U32)
+  +rm = safe(run(m, all), ha1, la, hb1, lb)
+  +rp = R.sel(across, safe(run(p, all), ha2, la, hb2, lb), 0)
+  +am = R.sel(ha1 || hb1, 0, qs.alt(m, p, a, b, all))
+  +ap = R.sel(across && Bool.not(ha2 || hb2), qs.alt(p, m, a, b, all), 0)
+  +c = U32.max((rm + rp : U32), U32.max((am .&. 255 : U32), (ap .&. 255 : U32)))
+  +w = R.sel(U32.is_gt(c, (rm + rp : U32)), R.sel(U32.is_ge((am .&. 255 : U32), (ap .&. 255 : U32)), (am >> 8n : U32), (ap >> 8n : U32)), (rm + rp : U32))
+  (c .|. (w << 8n) : U32)
 
 def qk.way(+m: U32, +p: U32, +a: U32, +b: U32, +ha1: Bool, +hb1: Bool) -> Bool:
   U32.is_ne(m, 0) && U32.is_ne(safe(run(p, (m .|. p .|. a .|. b : U32)), ha1, C.bits.count(a), hb1, C.bits.count(b)), 0)
@@ -1406,14 +1442,14 @@ def quick.tight.go(+s: Nat, +need: U32, +m0: U32, +m1: U32, +m2: U32, +m3: U32, 
   +c1 = R.sel(t1, 0, qk.adds(m1, p1, a1, b1, ha1, hb1, ha2, hb2, across))
   +c2 = R.sel(t2, 0, qk.adds(m2, p2, a2, b2, ha1, hb1, ha2, hb2, across))
   +c3 = R.sel(t3, 0, qk.adds(m3, p3, a3, b3, ha1, hb1, ha2, hb2, across))
-  +total = (tl + R.sel(across, tp, 0) + c0 + c1 + c2 + c3 : U32)
+  +total = (tl + R.sel(across, tp, 0) + (c0 .&. 255) + (c1 .&. 255) + (c2 .&. 255) + (c3 .&. 255) : U32)
   +s0 = (total - U32.min(total, need) : U32)
   +s1 = qk.slack(c0, s0)
   +s2 = qk.slack(c1, s1)
   +s3 = qk.slack(c2, s2)
   +s4 = qk.slack(c3, s3)
   +clear = U32.is_zero((at .|. bt : U32))
-  +tm = R.sel(clear, qk.top(qk.keep((tl + R.sel(across, tp, 0) : U32), s4, viat), allt), top.run((mt .|. pt : U32), allt))
+  +tm = R.sel(clear, qk.top(qk.keep((tl + R.sel(across, tp, 0) .|. (13 << 8n) : U32), s4, viat), allt), top.run((mt .|. pt : U32), allt))
   +r0 = R.sel(t0, tm, qk.top(qk.keep(c0, s0, e0), (m0 .|. p0 .|. a0 .|. b0 : U32)))
   +r1 = R.sel(t1, tm, qk.top(qk.keep(c1, s1, e1), (m1 .|. p1 .|. a1 .|. b1 : U32)))
   +r2 = R.sel(t2, tm, qk.top(qk.keep(c2, s2, e2), (m2 .|. p2 .|. a2 .|. b2 : U32)))
