@@ -456,6 +456,26 @@ def quick.suit(trump: Bool, +m: U32, +p: U32, +a: U32, +b: U32, +ha1: Bool, +hb1
       +wp = U32.max(safe(kp, ha2, la, hb2, lb), R.sel(ha2 || hb2, 0, (qs.alt(p, m, a, b, all) .&. 255 : U32)))
       (wm .|. (wp << 8n) .|. (Bool.to_u32(enter) << 16n) : U32)
 
+# Tricks that rest on lengths alone. In a side suit where the opponents have no cards and
+# no trumps to ruff with, every round is the side's as long as both can follow. In
+# trumps the opponents don't have, the longer hand makes all of them, and one more if
+# partner is no longer and has a suit to ruff that the leader can lead.
+def qs.void(+m: U32, +p: U32, +a: U32, +b: U32, +dry: Bool) -> U32:
+  R.sel(U32.is_zero((a .|. b : U32)) && dry, U32.min(C.bits.count(m), C.bits.count(p)), 0)
+
+def qs.ruffs(+m: U32, +p: U32) -> Bool:
+  U32.is_ne(m, 0) && U32.is_zero(p)
+
+# Sure of one trick by partner's ruff, if the leader can lead a suit partner doesn't
+# have and neither opponent can beat the ruff: 1 if that takes no card in particular,
+# 2 if it takes partner's top trump, and 0 if it can't be done.
+def qs.ruff1(+m: U32, +p: U32, +a: U32, +b: U32, +pt: U32, +at: U32, +bt: U32) -> U32:
+  +voida = U32.is_zero(a) && U32.is_ne(at, 0)
+  +voidb = U32.is_zero(b) && U32.is_ne(bt, 0)
+  R.sel(U32.is_zero(m) || U32.is_ne(p, 0) || U32.is_zero(pt), 0,
+    R.sel(Bool.not(voida || voidb), 1,
+      R.sel(U32.is_gt(pt, R.sel(voida, at, 0)) && U32.is_gt(pt, R.sel(voidb, bt, 0)), 2, 0)))
+
 # The tricks the side on lead is sure of, from the start of a trick with left
 # tricks to go. The leader cashes top trumps, which also draws trumps, then safe
 # winners elsewhere, and then crosses on a card kept for it to partner, who does the
@@ -485,7 +505,14 @@ def quick(+s: Nat, +left: U32, +m0: U32, +m1: U32, +m2: U32, +m3: U32, +p0: U32,
   +wp = (U32.max(tp, (qs.alt(pt, mt, at, bt, allt) .&. 255 : U32)) + ((sum >> 8n) .&. 255) : U32)
   +total = U32.min(left, (wl + R.sel(enter, wp, 0) : U32))
   +clear = U32.is_zero((at .|. bt : U32))
-  U32.max(total, R.sel(clear, U32.max(C.bits.count(mt), C.bits.count(pt)), 0))
+  +t0 = Nat.is_eq(s, 0n)
+  +t1 = Nat.is_eq(s, 1n)
+  +t2 = Nat.is_eq(s, 2n)
+  +t3 = Nat.is_eq(s, 3n)
+  +vd = U32.max(U32.max(R.sel(t0, 0, qs.void(m0, p0, a0, b0, clear)), R.sel(t1, 0, qs.void(m1, p1, a1, b1, clear))), U32.max(R.sel(t2, 0, qs.void(m2, p2, a2, b2, clear)), R.sel(t3, 0, qs.void(m3, p3, a3, b3, clear))))
+  +more = U32.is_ge(C.bits.count(mt), C.bits.count(pt)) && U32.is_ne(pt, 0) && ((Bool.not(t0) && qs.ruffs(m0, p0)) || (Bool.not(t1) && qs.ruffs(m1, p1)) || (Bool.not(t2) && qs.ruffs(m2, p2)) || (Bool.not(t3) && qs.ruffs(m3, p3)))
+  +rf = (R.sel(t0, 0, qs.ruff1(m0, p0, a0, b0, pt, at, bt)) .|. R.sel(t1, 0, qs.ruff1(m1, p1, a1, b1, pt, at, bt)) .|. R.sel(t2, 0, qs.ruff1(m2, p2, a2, b2, pt, at, bt)) .|. R.sel(t3, 0, qs.ruff1(m3, p3, a3, b3, pt, at, bt)) : U32)
+  U32.min(left, U32.max(U32.max(total, U32.max(vd, R.sel(clear, (U32.max(C.bits.count(mt), C.bits.count(pt)) + Bool.to_u32(more) : U32), 0))), R.sel(U32.is_zero(rf), 0, 1)))
 
 # ---------------------------------------------------------------------------
 # Later tricks
@@ -1409,6 +1436,9 @@ def qk.top(+k: U32, +all: U32) -> U32:
 # nothing. Trumps stay whole if the opponents have any, as they also decide which suits
 # are safe. If no opponent has a trump and the longer trump hand is enough, lengths
 # alone do it.
+def t.of(+s: Nat) -> U32:
+  U32.from_nat(s)
+
 def quick.tight.go(+s: Nat, +need: U32, +m0: U32, +m1: U32, +m2: U32, +m3: U32, +p0: U32, +p1: U32, +p2: U32, +p3: U32, +a0: U32, +a1: U32, +a2: U32, +a3: U32, +b0: U32, +b1: U32, +b2: U32, +b3: U32) -> Ranks:
   +mt = R.pick5(s, m0, m1, m2, m3)
   +pt = R.pick5(s, p0, p1, p2, p3)
@@ -1461,8 +1491,14 @@ def quick.tight.go(+s: Nat, +need: U32, +m0: U32, +m1: U32, +m2: U32, +m3: U32, 
   +r1 = R.sel(t1, tm, qk.top(qk.keep(c1, s1, e1), (m1 .|. p1 .|. a1 .|. b1 : U32)))
   +r2 = R.sel(t2, tm, qk.top(qk.keep(c2, s2, e2), (m2 .|. p2 .|. a2 .|. b2 : U32)))
   +r3 = R.sel(t3, tm, qk.top(qk.keep(c3, s3, e3), (m3 .|. p3 .|. a3 .|. b3 : U32)))
-  +longer = U32.is_zero((at .|. bt : U32)) && U32.is_ge(U32.max(C.bits.count(mt), C.bits.count(pt)), need)
-  ranks.sel(longer, ranks.none(), Ranks{((r0 << 16n) .|. r1 : U32), ((r2 << 16n) .|. r3 : U32)})
+  +vd = U32.max(U32.max(R.sel(t0, 0, qs.void(m0, p0, a0, b0, clear)), R.sel(t1, 0, qs.void(m1, p1, a1, b1, clear))), U32.max(R.sel(t2, 0, qs.void(m2, p2, a2, b2, clear)), R.sel(t3, 0, qs.void(m3, p3, a3, b3, clear))))
+  +more = U32.is_ge(C.bits.count(mt), C.bits.count(pt)) && U32.is_ne(pt, 0) && ((Bool.not(t0) && qs.ruffs(m0, p0)) || (Bool.not(t1) && qs.ruffs(m1, p1)) || (Bool.not(t2) && qs.ruffs(m2, p2)) || (Bool.not(t3) && qs.ruffs(m3, p3)))
+  +rf = (R.sel(t0, 0, qs.ruff1(m0, p0, a0, b0, pt, at, bt)) .|. R.sel(t1, 0, qs.ruff1(m1, p1, a1, b1, pt, at, bt)) .|. R.sel(t2, 0, qs.ruff1(m2, p2, a2, b2, pt, at, bt)) .|. R.sel(t3, 0, qs.ruff1(m3, p3, a3, b3, pt, at, bt)) : U32)
+  +longer = U32.is_ge(vd, need) || (clear && U32.is_ge((U32.max(C.bits.count(mt), C.bits.count(pt)) + Bool.to_u32(more) : U32), need))
+  +one = U32.is_le(need, 1)
+  ranks.sel(longer || (one && U32.is_ne((rf .&. 1 : U32), 0)), ranks.none(),
+    ranks.sel(one && U32.is_ne(rf, 0), ranks.of(t.of(s), bit.top.of(pt)),
+      Ranks{((r0 << 16n) .|. r1 : U32), ((r2 << 16n) .|. r3 : U32)}))
 
 def quick.tight.hands(+t: U32, +seat: U32, +need: U32, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32) -> Ranks:
   +i = U32.to_nat(seat)
