@@ -1448,8 +1448,15 @@ def quick.tight(+t: U32, pos: R.Pos, +need: U32, +left: U32) -> Ranks:
 def lead.top(+m: U32, +l: U32, +o: U32) -> U32:
   Bool.to_u32(U32.is_ne(m, 0) && U32.is_zero((o .&. bit.top.or0(l) : U32)))
 
+# The opponents' hold on a suit at no trumps: the top card, if it is theirs and isn't
+# alone in the suit. If the side's top card were lower, it would only make it easier
+# to claim a trick for them, and lengths already say a card is alone.
+def opp.top(+l: U32, +o: U32) -> U32:
+  +top = bit.top.or0(l)
+  R.sel(U32.is_ne((o .&. top : U32), 0) && U32.is_ne(l, top), top, 0)
+
 # The cards later tricks rest on. At no trumps, if the leader can't keep the lead, only
-# the top card of each suit he has matters. Otherwise it is the top card of each suit.
+# the top card of each suit he has matters. Otherwise it is the opponents' top cards.
 # With trumps and with the side on lead out of them, only lengths matter. If one trick
 # is enough and the opponents hold the top trump, it alone matters.
 def later.tight.go(+t: U32, +wanted: U32, +m01: U32, +m23: U32, +o01: U32, +o23: U32, +l01: U32, +l23: U32) -> Ranks:
@@ -1465,7 +1472,9 @@ def later.tight.go(+t: U32, +wanted: U32, +m01: U32, +m23: U32, +o01: U32, +o23:
       Ranks{
         ((R.sel(U32.is_zero((m01 >> 16n : U32)), 0, bit.top.or0((l01 >> 16n : U32))) << 16n) .|. R.sel(U32.is_zero((m01 .&. 65535 : U32)), 0, bit.top.or0((l01 .&. 65535 : U32))) : U32),
         ((R.sel(U32.is_zero((m23 >> 16n : U32)), 0, bit.top.or0((l23 >> 16n : U32))) << 16n) .|. R.sel(U32.is_zero((m23 .&. 65535 : U32)), 0, bit.top.or0((l23 .&. 65535 : U32))) : U32)},
-      later.ranks(t, l01, l23)),
+      Ranks{
+        ((opp.top((l01 >> 16n : U32), (o01 >> 16n : U32)) << 16n) .|. opp.top((l01 .&. 65535 : U32), (o01 .&. 65535 : U32)) : U32),
+        ((opp.top((l23 >> 16n : U32), (o23 >> 16n : U32)) << 16n) .|. opp.top((l23 .&. 65535 : U32), (o23 .&. 65535 : U32)) : U32)}),
     ranks.sel(U32.is_zero(side), ranks.none(), ranks.sel(one, ranks.of(t, top), later.ranks(t, l01, l23))))
 
 def later.tight(+t: U32, pos: R.Pos, +need: U32, +left: U32) -> Ranks:
