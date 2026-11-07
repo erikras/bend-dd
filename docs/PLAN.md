@@ -397,9 +397,10 @@ on the first 20 deals of `list100`, one thread, 20 calls of `SolveBoard` for DDS
 |---|---|---|---|
 | DDS | 520,675 | 0.081 | 156 |
 | `dd` at the start of Phase 6 | 1,435,137 | 0.52 | 361 |
-| `dd` now | 897,144 | 0.27 | 305 |
+| `dd` before the quick tricks port | 897,144 | 0.27 | 305 |
+| `dd` now | 779,297 | 0.27 | 341 |
 
-So on one thread the gap has gone from 6.4× to 3.4×: now 1.7× in search size and 2×
+So on one thread the gap has gone from 6.4× to 3.3×: now 1.5× in search size and 2.2×
 in cost per node. The gap in throughput is smaller than that, because DDS through
 `endplay` gains only about 2.8× from its batches here while `dd` gains 6.1×.
 
@@ -407,8 +408,8 @@ in cost per node. The gap in throughput is smaller than that, because DDS throug
 
 | File | `dd` at the start of Phase 6, deals/s | `dd` now, deals/s | DDS in batches, deals/s | Behind DDS |
 |---|---|---|---|---|
-| `list100` | 6.6 | 14.6 | 80.1 | 5.5× |
-| `list1000` | 8.5 | 15.7 | 72.3 | 4.6× |
+| `list100` | 6.6 | 15.8 | 76.4 | 4.8× |
+| `list1000` | 8.5 | 16.1 | 70.0 | 4.4× |
 
 **Kept**, as measured on `list100` from a mean of 6.0M nodes and 15.9 s of wall:
 
@@ -419,6 +420,7 @@ in cost per node. The gap in throughput is smaller than that, because DDS throug
 | Later tricks rest only on what they looked at | 3.6M | 7.5 s |
 | Trumps trim like other suits when the opponents have none | 3.5M | 7.4 s |
 | At no trumps, later tricks rest only on the opponents' top cards | 3.5M | 7.2 s |
+| Quick tricks from DDS (below) | 3.0M | 6.3 s |
 
 The biggest lesson is that what a cut rests on matters as much as whether it cuts: an
 entry that names fewer cards matches more positions. A count that only rises with the
@@ -461,10 +463,37 @@ goes wrong.
 - *The GPU, one more measurement:* 28× slower than the CPU threads on plain minimax,
   the same as before (§2.3), so Phase 6b isn't worth more time on this machine.
 
+**Quick tricks from DDS.** Ported from `quick_tricks.cpp` one case at a time, each
+checked against DDS and brute force, on `list100` from 3.49M mean nodes:
+
+| Case | Mean nodes | Kept |
+|---|---|---|
+| Long suits once others are out, and second cards in either hand (`qs.alt`) | 3.21M | Yes |
+| Ax opposite Kx as the way across to partner | 3.20M | No: no real change |
+| The same counts in the trump suit, and trumps alone keep only what the target needs | 3.18M | Yes |
+| Tricks on lengths when the opponents are void, and one trick by partner's ruff | 3.03M | Yes |
+| After the lead, a lone trump wins whatever its rank | 3.00M | Yes |
+| The finesse through the left hand opponent | 2.98M | No: its count needs a third card that trimming can drop, which gave wrong tables, for under 1% |
+
+Trick nodes per table on the first 20 deals are now 779,297 against DDS's 520,675, so
+1.5× where they were 1.7×. But time gained less than nodes: the count costs more at
+every start of a trick, so one thread went from 0.27 s to 0.27 s per table, and
+`list1000` from 15.7 to 16.1 deals/s, against 70.0 for DDS (4.4× behind).
+
+These rules need care that the tests only just gave. As first ported, a long suit in
+partner's hand counted once partner's trumps had drawn the opponents'. But partner may
+have to use that suit to get in, and be ruffed or blocked: one 4-card ending in 5,000
+came out wrong. DDS only counts trumps the leader draws, and so do we now. The brute
+force check in `tools/test.sh` caught this, where 8,500 endings against DDS had not. It
+is now a unit test, and 20,000 3-card, 20,000 4-card and 1,000 5-card endings agree
+with brute force, plus 30,000 from two suits.
+
 **What is left.** The profile is flat: the search itself 25%, the table's lookup 15%
-and its key 10%, moves about 20%, sure tricks 5%. Search size is 1.7× DDS's and cost per
-node 2×. Nothing tried has been large since the ranks, so the next step is unclear.
-Quick tricks in DDS handle more cases than ours, which may be where the 1.7× lies.
+and its key 10%, moves about 20%, sure tricks 5% or more. Search size is 1.5× DDS's, and
+time per table is 3.3×. More cases in the count have stopped paying, so the gap left is
+mostly cost per node, spread thinly through what Bend compiles, and no large piece of it
+is known. Working out the count only where the cheaper one fails might win a few
+percent.
 
 ## 3. Data representation
 

@@ -276,6 +276,9 @@ def search.checks() -> List<&2, Check>:
       search.is("N:A... .A.. ..A. ...A", [1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0])},
     Check{"search: no cards",
       search.is("N:... ... ... ...", [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])},
+    # Partner's long suit after drawing trumps can't be counted: East ruffs the way in.
+    Check{"search: agrees with brute where partner's long suit is blocked",
+      ints.eq(search.of(P.parse("N:.KT.T.7 4.4..A5 J.A95.. .Q6.A.K")), table.of(P.parse("N:.KT.T.7 4.4..A5 J.A95.. .Q6.A.K")))},
     # Two cards each, where the second trick depends on the first.
     Check{"search: agrees with brute on a two-card ending",
       ints.eq(search.of(P.parse("N:AK... Q.J.. J..A. T..K.")), table.of(P.parse("N:AK... Q.J.. J..A. T..K.")))}

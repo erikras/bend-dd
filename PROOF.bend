@@ -377,6 +377,9 @@ def Laws.run_high_ranks():
 def Laws.sure_never_exceeds():
   {==}
 
+def Laws.sure_three_cards():
+  {==}
+
 def Laws.search_is_brute():
   {==}
 

@@ -421,7 +421,9 @@ def safe(+k: U32, +ha: Bool, +la: U32, +hb: Bool, +lb: U32) -> U32:
 # with the second card in the same hand, all of own's cards win. If partner has the
 # second card and both have at least two, that is two tricks, and if the opponents and
 # one of the pair are out after two rounds, the other's cards win as well. Low byte:
-# the tricks. Above that: how many top cards in play they rest on.
+# the tricks. Above that: how many top cards in play they rest on. This for partner
+# only counts if the leader's trumps draw the opponents' on their own: partner can only
+# draw them after getting in, and that may use up the very cards that count here.
 def qs.alt(+own: U32, +par: U32, +a: U32, +b: U32, +all: U32) -> U32:
   +top = bit.top.of(all)
   +second = bit.top.of((all .^. top : U32))
@@ -453,7 +455,7 @@ def quick.suit(trump: Bool, +m: U32, +p: U32, +a: U32, +b: U32, +ha1: Bool, +hb1
       +kp = run(p, all)
       +enter = U32.is_ne(m, 0) && U32.is_ne(safe(kp, ha1, la, hb1, lb), 0)
       +wm = U32.max(safe(run(m, all), ha1, la, hb1, lb), R.sel(ha1 || hb1, 0, (qs.alt(m, p, a, b, all) .&. 255 : U32)))
-      +wp = U32.max(safe(kp, ha2, la, hb2, lb), R.sel(ha2 || hb2, 0, (qs.alt(p, m, a, b, all) .&. 255 : U32)))
+      +wp = U32.max(safe(kp, ha2, la, hb2, lb), R.sel(ha1 || hb1, 0, (qs.alt(p, m, a, b, all) .&. 255 : U32)))
       (wm .|. (wp << 8n) .|. (Bool.to_u32(enter) << 16n) : U32)
 
 # Tricks that rest on lengths alone. In a side suit where the opponents have no cards and
@@ -1424,7 +1426,7 @@ def qk.adds(+m: U32, +p: U32, +a: U32, +b: U32, +ha1: Bool, +hb1: Bool, +ha2: Bo
   +rm = safe(run(m, all), ha1, la, hb1, lb)
   +rp = R.sel(across, safe(run(p, all), ha2, la, hb2, lb), 0)
   +am = R.sel(ha1 || hb1, 0, qs.alt(m, p, a, b, all))
-  +ap = R.sel(across && Bool.not(ha2 || hb2), qs.alt(p, m, a, b, all), 0)
+  +ap = R.sel(across && Bool.not(ha1 || hb1), qs.alt(p, m, a, b, all), 0)
   +c = U32.max((rm + rp : U32), U32.max((am .&. 255 : U32), (ap .&. 255 : U32)))
   +w = R.sel(U32.is_gt(c, (rm + rp : U32)), R.sel(U32.is_ge((am .&. 255 : U32), (ap .&. 255 : U32)), (am >> 8n : U32), (ap >> 8n : U32)), (rm + rp : U32))
   (c .|. (w << 8n) : U32)

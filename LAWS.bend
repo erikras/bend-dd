@@ -271,6 +271,12 @@ law run_high_ranks:
 law sure_never_exceeds:
   {S.sure.all(4n, 100, 2) == True{} : Bool}
 
+# LAW: the same, for the rules taken from DDS that need more than two cards to come
+# up: long suits, second cards across the partnership, voids and partner's ruff. Also
+# only a sample, of 3-card endings.
+law sure_three_cards:
+  {S.sure.all(2n, 300, 3) == True{} : Bool}
+
 # ---------------------------------------------------------------------------
 # The search
 
