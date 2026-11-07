@@ -4,6 +4,9 @@
 #   tools/test.sh           everything
 #   tools/test.sh --quick   skip the proof check and shrink the DDS comparison
 #
+# Not run here, since it takes the best part of an hour: build/exhaust 3, every
+# position of 3 cards. Run it after changing a sure trick rule.
+#
 # Needs bend, clang 14+ and python3. The first run makes a .venv with endplay.
 
 set -e
@@ -37,6 +40,11 @@ bend bench/gpu.bend -o build/gpu
 
 echo "== unit tests"
 tests/unit
+
+echo "== every ending of 1 and 2 cards"
+bend tests/exhaust.bend -o build/exhaust
+build/exhaust 1
+build/exhaust 2
 
 echo "== search against brute force, inside Bend"
 if [ $quick = 1 ]; then

@@ -495,6 +495,80 @@ mostly cost per node, spread thinly through what Bend compiles, and no large pie
 is known. Working out the count only where the cheaper one fails might win a few
 percent.
 
+### 2.10 Proving the sure tricks
+
+The goal was a law for each sure trick rule that holds in every position: what the rule
+counts never exceeds what the side really takes against best defence. None of them is
+proved that way yet. What there is instead, and why:
+
+**Every position up to 3 cards, by enumeration.** `src/every.bend` walks every ending
+with k cards in each hand: every split of the cards into suits (longest first, since
+suits only differ by name) and every way to give them out, using the top cards of each
+suit, since only who holds what matters. For each, in all 5 strains with all 4
+leaders, it checks that sure tricks never exceed the truth by brute force and that the
+search gives the same table. `build/exhaust k` runs it compiled:
+
+| Cards per hand | Positions | Wrong | Time on the M6 |
+|---|---|---|---|
+| 1 | 120 | 0 | under 1 s |
+| 2 | 37,800 | 0 | 1 s |
+| 3 | 12,566,400 | 0 | 53 min, under heavy load |
+
+`tools/test.sh` runs 1 and 2 cards every time, and 3 is to be run after any change to a
+rule. This is a check of every position of those sizes, but it isn't a proof in the
+kernel, and it can't reach 4 cards: that is about 10^10 positions, each of over a
+million brute force nodes. Above 3 cards the evidence is still samples. After the port
+of §2.9, 200,000 more 4-card endings (half of them from two suits) and 2,000 5-card
+endings agree with brute force, along with the DDS lists.
+
+**In the checker, enumeration is far too slow.** The same check of every 1-card ending
+as a law took 573 s of CPU for 120 positions, about 5 s each, so 2 cards would take
+days. Laws by enumeration stop at the samples that are there now.
+
+**A proof for every position is a large piece of work, not a step.** The checker sees a
+`U32` as 32 bits (`Word(32n)`), so facts about words can be proved by induction, and
+this works: that `Word.cmp` of a word with itself is `EQ` takes a dozen lines and checks
+in under a second. But a rule's law needs the whole minimax to go through, and before
+any rule comes a foundation that isn't there yet:
+
+1. Order and arithmetic on words: `cmp` being an order, `max` and `min`, adding one
+   without overflow. Base only has `add` commuting.
+2. Bounds on the brute force value, that it lies between the tricks won and those
+   plus the tricks left. That needs every hand to keep the same number of cards, since
+   a node with no moves takes the seed (0 or 13). So it needs the count of a hand to be
+   right, and `popcount` works by bit tricks.
+3. That `R.play` and `R.moves` do what the rules say for every position, past the
+   follow-suit laws that exist.
+4. Then a game argument for each rule: a line of play for the side that takes that
+   many tricks whatever the defence does, carried through four cards a trick and
+   through the bits of every hand.
+
+Each rule is a separate argument on top of that. Quick tricks alone have long suits,
+two hands, entries and ruffs, with trimming of what they rest on. My estimate is
+thousands of lines of proof with no tactics, so it wasn't attempted here past the
+first lemma. The bug of §2.9 shows why it would be worth it: a rule that holds on
+every 3-card position and on most 4-card ones was still wrong.
+
+**Rule by rule**, what holds now:
+
+| Rule | Every position up to | Samples beyond | For every position |
+|---|---|---|---|
+| Target cuts | 3 cards; law for every won, left and target, given that the value lies in range | lists | No: needs foundation 2 |
+| Quick tricks: top runs, safe from ruffs | 3 cards | 4 and 5 cards, lists | No |
+| Quick tricks: long suits and second cards (`qs.alt`) | 3 cards | 4 and 5 cards, lists | No |
+| Quick tricks: the trump suit | 3 cards | 4 and 5 cards, lists | No |
+| Quick tricks: voids and partner's ruff | 3 cards | 4 and 5 cards, lists | No |
+| Later tricks | 3 cards | 4 and 5 cards, lists | No |
+| The check after the lead | 3 cards | 4 and 5 cards, lists | No |
+| What each rule rests on, for the table | 3 cards for the search, though the table is never used under 4 cards | 4 and 5 cards, lists | No |
+
+That last row matters: at 3 cards the table isn't used (it starts at 3 tricks left, and
+the first trick is the root), so the exhaustive check says nothing about winning ranks.
+
+**The kernel check.** `bend PROOF.bend --verdict` rechecks proofs with a kernel proved
+in Lean. It has never run here: Bend 2.0.40 needs Lean 4.34.0 exactly, and only 4.35.0
+is installed.
+
 ## 3. Data representation
 
 **Cards.** Suit 0..3 = ♠ ♥ ♦ ♣ (as in `hand.bend` and DDS's strain order),
