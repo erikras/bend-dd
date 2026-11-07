@@ -908,9 +908,14 @@ def after.ranks.go(+t: U32, +tr: U32, +l01: U32, +l23: U32, +n01: U32, +n23: U32
   +l = R.trick.lead(tr)
   +ln = U32.to_nat(l)
   +st = U32.to_nat(t)
-  +hi = U32.max(U32.max((16 + C.card.rank(best) : U32), second.power(ln, st, R.pick(U32.to_nat(seat), n01, e01, s01, w01), R.pick(U32.to_nat(seat), n23, e23, s23, w23))),
-    U32.max(second.power(ln, st, R.pick(U32.to_nat(((seat + 1) .&. 3 : U32)), n01, e01, s01, w01), R.pick(U32.to_nat(((seat + 1) .&. 3 : U32)), n23, e23, s23, w23)),
-      second.power(ln, st, R.pick(U32.to_nat(((seat + 2) .&. 3 : U32)), n01, e01, s01, w01), R.pick(U32.to_nat(((seat + 2) .&. 3 : U32)), n23, e23, s23, w23))))
+  +p0 = (16 + C.card.rank(best) : U32)
+  +p1 = second.power(ln, st, R.pick(U32.to_nat(seat), n01, e01, s01, w01), R.pick(U32.to_nat(seat), n23, e23, s23, w23))
+  +p2 = second.power(ln, st, R.pick(U32.to_nat(((seat + 1) .&. 3 : U32)), n01, e01, s01, w01), R.pick(U32.to_nat(((seat + 1) .&. 3 : U32)), n23, e23, s23, w23))
+  +p3 = second.power(ln, st, R.pick(U32.to_nat(((seat + 2) .&. 3 : U32)), n01, e01, s01, w01), R.pick(U32.to_nat(((seat + 2) .&. 3 : U32)), n23, e23, s23, w23))
+  +hi = U32.max(U32.max(p0, p1), U32.max(p2, p3))
+  # A lone trump wins by being a trump, whatever its rank. Hands of the side that wins
+  # may have trumps too, so this asks that only one seat's side has any.
+  +ruff = U32.is_ge(hi, 32) && Bool.xor(U32.is_lt(p2, 32), U32.is_lt(U32.max(p1, p3), 32))
   +s = R.sel(U32.is_ge(hi, 32), t, l)
   +sn = U32.to_nat(s)
   +b = (1 << U32.to_nat((hi .&. 15 : U32)) : U32)
@@ -920,7 +925,7 @@ def after.ranks.go(+t: U32, +tr: U32, +l01: U32, +l23: U32, +n01: U32, +n23: U32
   +h2 = hand.suit((seat + 1 : U32), sn, n01, n23, e01, e23, s01, s23, w01, w23)
   +h3 = hand.suit((seat + 2 : U32), sn, n01, n23, e01, e23, s01, s23, w01, w23)
   +h = R.sel(U32.is_ne((h1 .&. b : U32), 0), h1, R.sel(U32.is_ne((h2 .&. b : U32), 0), h2, R.sel(U32.is_ne((h3 .&. b : U32), 0), h3, h0)))
-  ranks.of(s, (b .|. run.below(b, h, live) : U32))
+  ranks.sel(ruff, ranks.none(), ranks.of(s, (b .|. run.below(b, h, live) : U32)))
 
 def after.ranks(+t: U32, pos: R.Pos, +l01: U32, +l23: U32) -> Ranks:
   match pos:
