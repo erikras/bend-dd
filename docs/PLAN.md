@@ -373,13 +373,6 @@ What this changes:
   batches, and further behind per thread: DDS's batches gain only about 3 times on one
   at a time here, so it isn't using the cores that `dd` is. Phase 6 is where this gets
   worked on.
-- The gap looks like nodes more than speed per node. On the first 20 deals of `list100`
-  DDS reports a mean of 520,675 nodes per table, by 20 calls of `SolveBoard`, in 0.078
-  s, against our 4.3M in about 1 s on one thread. We don't know that DDS counts a node
-  as we do: if it only counts the starts of tricks, the real gap in nodes is about 2
-  times and the gap in speed about 3 times, and if not, it is about 8 times and none.
-  Finding out comes first in Phase 6. The profile is flat: the search 31%, the probe
-  15%, the key 5%, the sure tricks 5%, and generating and sorting moves most of the rest.
 - Phase 6b looks doubtful on this machine. The GPU was 29 times slower than the CPU
   threads on plain minimax (§2.3), every lane would need its own table, and the search
   now wants 32 MB per strain for its best results.
@@ -392,6 +385,81 @@ What this changes:
   all nodes before the last hash, and 12 threads give only 4.5 times one, since tasks
   never move and a heavy strain can land on an efficiency core. 6 threads were within
   15% of 12. Splitting a heavy strain by leader would need a table per leader.
+
+### 2.9 What Phase 6 has measured so far
+
+**The comparison with DDS.** The `nodes` that DDS reports is `trickNodes`, which only
+counts positions at the start of a trick (`ab_search.cpp`, once per fourth card). Ours
+counts every card, so the two can't be compared as they stand. Counting ours DDS's way,
+on the first 20 deals of `list100`, one thread, 20 calls of `SolveBoard` for DDS:
+
+| | Trick nodes per table | s per table | ns per trick node |
+|---|---|---|---|
+| DDS | 520,675 | 0.081 | 156 |
+| `dd` at the start of Phase 6 | 1,435,137 | 0.52 | 361 |
+| `dd` now | 897,144 | 0.27 | 305 |
+
+So on one thread the gap has gone from 6.4× to 3.4×: now 1.7× in search size and 2×
+in cost per node. The gap in throughput is smaller than that, because DDS through
+`endplay` gains only about 2.8× from its batches here while `dd` gains 6.1×.
+
+**Where throughput is now**, from `tools/check.py speed`:
+
+| File | `dd` at the start of Phase 6, deals/s | `dd` now, deals/s | DDS in batches, deals/s | Behind DDS |
+|---|---|---|---|---|
+| `list100` | 6.6 | 14.6 | 80.1 | 5.5× |
+| `list1000` | 8.5 | 15.7 | 72.3 | 4.6× |
+
+**Kept**, as measured on `list100` from a mean of 6.0M nodes and 15.9 s of wall:
+
+| Change | Mean nodes | Wall |
+|---|---|---|
+| Moves as a list type of their own, a smaller frame across a child, probing only patterns in the directory, no weighing for a single move | 6.0M | 13.7 s |
+| Quick tricks rest only on the top cards the target needs | 4.1M | 8.4 s |
+| Later tricks rest only on what they looked at | 3.6M | 7.5 s |
+| Trumps trim like other suits when the opponents have none | 3.5M | 7.4 s |
+| At no trumps, later tricks rest only on the opponents' top cards | 3.5M | 7.2 s |
+
+The biggest lesson is that what a cut rests on matters as much as whether it cuts: an
+entry that names fewer cards matches more positions. A count that only rises with the
+top cards it counts need only keep as many of them as the target needs, as DDS does.
+
+Reference counts are per type at run time, and that is the other lesson. A `List`
+shared anywhere in the program (and `dd` shares several) makes every `Con` cell of any
+list get a counted redirect when it is built. A list type of its own for moves removed
+all of that from the search, for 14% of the time. So anything built at every node needs
+a type of its own, and `term_keep` and `rfc_seal` in the emitted C show where this
+goes wrong.
+
+**Tried and not kept.** Each was measured on `list100` against what was current then:
+
+- *A finer fork, with a table per leader:* nodes double (6.0M to 11.6M), and wall goes
+  from 16 s to 29 s. It isn't needed either, as the next point shows.
+- *More threads than cores, to let the OS balance them:* no gain at 16, 24 or 48. On
+  300 deals of `list1000`, 6, 8, 10 and 12 threads give 4.3×, 5.0×, 5.8× and 6.1× one
+  thread, the same 6.1× as plain minimax (§2.3). So a big batch is already at what the
+  machine can do, and the 4.5× of §2.8 came from the heavy tail of `list100`.
+- *DDS's exact weights on lead (`weight_alloc_trump0`, `weight_alloc_nt0`):* worse, 3.5M
+  nodes to 4.0M, or 4.2M with the top card of each suit going first as well. So the
+  weights from the notes stay, and the other positions weren't ported.
+- *Looking in the table before the sure tricks,* as DDS does from 5 tricks left:
+  worse, 6.0M nodes to 6.2M, or 6.5M for all positions.
+- *Working out each suit's part of the hash once per lookup,* and *keeping all 8 first
+  words of a bucket on one cache line:* no gain. A lookup is already about 50 ns.
+- *Leaving a winner's run out of the ranks when its side succeeded:* 3% fewer nodes,
+  but only 1% in time, with no proof, so it is out.
+- *Taking out the best-move memory, the check after the lead, or the top card first,
+  or changing the memory's weight:* all within 5% either way, about the noise. None
+  makes a clear gain, so none has changed.
+- *Other sizes:* 2^21, 2^22 and 2^24 words of table, 2 or 4 top cards in the hash, and
+  the table from 2 or 4 tricks left. None beat what is there.
+- *The GPU, one more measurement:* 28× slower than the CPU threads on plain minimax,
+  the same as before (§2.3), so Phase 6b isn't worth more time on this machine.
+
+**What is left.** The profile is flat: the search itself 25%, the table's lookup 15%
+and its key 10%, moves about 20%, sure tricks 5%. Search size is 1.7× DDS's and cost per
+node 2×. Nothing tried has been large since the ranks, so the next step is unclear.
+Quick tricks in DDS handle more cases than ours, which may be where the 1.7× lies.
 
 ## 3. Data representation
 
@@ -546,7 +614,7 @@ The 20-entry table, parallel over strains, and a batch mode over many deals.
 have a throughput figure next to DDS on the same Mac.
 *Done:* see §2.8, except for `list10000`, which isn't vendored yet.
 
-**Phase 6: Performance.**
+**Phase 6: Performance.** *Under way:* see §2.9.
 Read the emitted C for refcount traffic, precompute lookup tables (relative
 ranks, equivalence, quick-trick tables) where they beat bit loops, tune TT
 size and replacement, and try the intra-search parallelism from §5.

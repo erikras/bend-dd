@@ -17,8 +17,8 @@ and printer, the rules of play, a brute-force minimax as an oracle, and a zero-w
 search with target cutoffs, card equivalence, quick and later tricks, DDS's move
 ordering, and a transposition table with partition search. It solves whole deals, and
 all 1,100 tables of DDS's `list100` and `list1000` match exactly. On an Apple M6 it
-does about 8.5 deals a second on 12 threads, against about 73 for DDS on the same
-machine. Closing that gap is Phase 6.
+does about 16 deals a second on 12 threads, against about 72 for DDS on the same
+machine. Closing that gap is Phase 6, which is under way.
 
 ## Requirements
 
