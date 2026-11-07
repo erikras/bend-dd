@@ -88,6 +88,7 @@ if [ $quick = 1 ]; then
   .venv/bin/python tools/check.py full --limit 12
 else
   .venv/bin/python tools/check.py speed
+  .venv/bin/python tools/check.py full --file tests/data/list10000.txt --limit 10000
 fi
 
 echo "== search against brute force, from Python"
