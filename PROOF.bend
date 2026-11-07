@@ -397,3 +397,78 @@ def Laws.bounds_give_back():
 
 def Laws.owners_agree():
   {==}
+
+# ---------------------------------------------------------------------------
+# The proof foundation
+
+def Laws.popcount_holdings():
+  {==}
+
+# Holding number k of a run that checked out checks out.
+def popcount_at(+n: Nat, +k: Nat, +m: U32, all: {S.popcount.all(n, m) == True{} : Bool}, lt: {Nat.is_lt(k, n) == True{} : Bool}) -> {S.popcount.ok(step(k, m)) == True{} : Bool}:
+  match n k:
+    case 0n 0n:
+      Empty.absurd({S.popcount.ok(m) == True{} : Bool}, no_ft(lt))
+    case 0n 1n+j:
+      Empty.absurd({S.popcount.ok(step(1n+j, m)) == True{} : Bool}, no_ft(lt))
+    case 1n+p 0n:
+      Sigma.fst.bool(S.popcount.ok(m), S.popcount.all(p, U32.inc(m)), and_true(S.popcount.ok(m), S.popcount.all(p, U32.inc(m)), all))
+    case 1n+p 1n+j:
+      popcount_at(p, j, U32.inc(m), Sigma.snd.bool(S.popcount.ok(m), S.popcount.all(p, U32.inc(m)), and_true(S.popcount.ok(m), S.popcount.all(p, U32.inc(m)), all)), lt)
+
+def Laws.popcount_holding(k, lt):
+  %step_from(k) : {S.popcount.ok(_) == True{} : Bool}
+  popcount_at(8192n, k, 0, Laws.popcount_holdings(), lt)
+
+# The word lemmas.
+
+def Laws.from_double(p, k):
+  match k:
+    case 0n:
+      {==}
+    case 1n+j:
+      %Equal.sym(Word(1n+p), S.W.from(1n+p, Nat.double(j)), WCon{False{}, S.W.from(p, j)}, Laws.from_double(p, j)) : {Word.inc(1n+p, Word.inc(1n+p, _)) == WCon{False{}, Word.inc(p, S.W.from(p, j))} : Word(1n+p)}
+      {==}
+
+def Laws.from_odd(p, k):
+  %Equal.sym(Word(1n+p), S.W.from(1n+p, Nat.double(k)), WCon{False{}, S.W.from(p, k)}, Laws.from_double(p, k)) : {Word.inc(1n+p, _) == WCon{True{}, S.W.from(p, k)} : Word(1n+p)}
+  {==}
+
+def Laws.from_zero_width(k):
+  match k:
+    case 0n:
+      {==}
+    case 1n+j:
+      {==}
+
+def Laws.from_to(n, w):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          Laws.from_zero_width(Word.to_nat(0n, WNil{}))
+    case 1n+p:
+      match w:
+        case WCon{False{}, +t}:
+          %Equal.sym(Word(1n+p), S.W.from(1n+p, Nat.double(Word.to_nat(p, t))), WCon{False{}, S.W.from(p, Word.to_nat(p, t))}, Laws.from_double(p, Word.to_nat(p, t))) : {_ == WCon{False{}, t} : Word(1n+p)}
+          %Equal.sym(Word(p), S.W.from(p, Word.to_nat(p, t)), t, Laws.from_to(p, t)) : {WCon{False{}, _} == WCon{False{}, t} : Word(1n+p)}
+          {==}
+        case WCon{True{}, +t}:
+          %Equal.sym(Word(1n+p), S.W.from(1n+p, 1n+Nat.double(Word.to_nat(p, t))), WCon{True{}, S.W.from(p, Word.to_nat(p, t))}, Laws.from_odd(p, Word.to_nat(p, t))) : {_ == WCon{True{}, t} : Word(1n+p)}
+          %Equal.sym(Word(p), S.W.from(p, Word.to_nat(p, t)), t, Laws.from_to(p, t)) : {WCon{True{}, _} == WCon{True{}, t} : Word(1n+p)}
+          {==}
+
+def Laws.u32_from(k):
+  match k:
+    case 0n:
+      {==}
+    case 1n+j:
+      %Equal.sym(U32, U32.from_nat(j), U32{S.W.from(32n, j)}, Laws.u32_from(j)) : {U32.inc(_) == U32{Word.inc(32n, S.W.from(32n, j))} : U32}
+      {==}
+
+def Laws.u32_roundtrip(u):
+  match u:
+    case U32{+w}:
+      %Equal.sym(U32, U32.from_nat(Word.to_nat(32n, w)), U32{S.W.from(32n, Word.to_nat(32n, w))}, Laws.u32_from(Word.to_nat(32n, w))) : {_ == U32{w} : U32}
+      %Equal.sym(Word(32n), S.W.from(32n, Word.to_nat(32n, w)), w, Laws.from_to(32n, w)) : {U32{_} == U32{w} : U32}
+      {==}

@@ -565,6 +565,43 @@ every 3-card position and on most 4-card ones was still wrong.
 That last row matters: at 3 cards the table isn't used (it starts at 3 tricks left, and
 the first trick is the root), so the exhaustive check says nothing about winning ranks.
 
+**The foundation, begun.** Step 1 of the plan for a proof is in `LAWS.bend`:
+
+- `popcount_holding`: `U32.popcount` counts the bits of any holding below 8192, against
+  `S.bits`, which walks the word one bit at a time. It is proved for the 8192 holdings
+  one by one and then lifted to any k below 8192, as `holding_good` is. That covers the
+  whole domain, so it is a proof and not a sample, but it doubled the time of `bend
+  PROOF.bend` to about 13 minutes. Later facts about holdings should share one pass.
+- `from_to` and `u32_roundtrip`: the word that `U32.from_nat` gives for the number of a
+  word is that word, for words of any width. These are proofs by induction, and they
+  check in under a second. They carry facts proved for holding numbers over to the
+  holdings themselves.
+
+**What the rest takes.** Proofs by induction on words go well: each of these took one
+to four tries, at 10 to 20 lines. The plan for steps 2 and 3 needs roughly these, each
+of that size or a few times it:
+
+1. That a holding is below 8192 when its bits above 13 are clear, so `u32_roundtrip`
+   applies (Nat order lemmas, which Base doesn't have).
+2. Facts about each holding in one pass of 8192: its lowest card, `ctz`, a card's code
+   and bit, and that taking the lowest card leaves a holding.
+3. Shifts and masks: the two holdings in a hand's word come back out after a card is
+   taken (shift and `xor`, shift and `and`), by induction over the 16 shifts.
+4. Taking a card that is in a hand leaves one card fewer, by `S.bits`.
+5. Every card that `R.moves` gives is in the hand to play, and there is one when the
+   hand has a card (an induction over `R.moves.peel`).
+6. The trick word: seat, cards played, lead and winner after `R.trick.next`, for every
+   value of each field. They are packed with shifts and masks, so this is like 3.
+7. Hands stay even: with the seat to play and the cards played, each hand has the
+   right number of cards (step 2 of the plan).
+8. Small comparisons and adding one to the tricks won, for values up to 13.
+9. The bounds on the value (step 3), by induction over `B.search`.
+
+That is about 60 to 120 lemmas, or 1,500 to 3,000 lines, before the first sure-trick
+rule. Every check of the whole `PROOF.bend` takes 13 minutes or more, and the facts
+about holdings will make it longer. It can be done; it is days of steady work, not a
+night's.
+
 **The kernel check.** `bend PROOF.bend --verdict` rechecks proofs with a kernel proved
 in Lean. It has never run here: Bend 2.0.40 needs Lean 4.34.0 exactly, and only 4.35.0
 is installed.

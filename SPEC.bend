@@ -603,3 +603,42 @@ def agree.all(n: Nat, +a: U32) -> Bool:
       True{}
     case 1n+p:
       Bool.and(agree.b(16n, a, 0), agree.all(p, (a + 1 : U32)))
+
+# ---------------------------------------------------------------------------
+# The proof foundation: counting cards
+
+# The number of set bits of a word, walking it one bit at a time: the plain statement
+# that U32.popcount computes by bit tricks.
+def word.count(n: Nat, w: Word(n)) -> Nat:
+  match n:
+    case 0n:
+      0n
+    case 1n+p:
+      match w:
+        case WCon{False{}, t}:
+          word.count(p, t)
+        case WCon{True{}, t}:
+          1n+word.count(p, t)
+
+def bits(u: U32) -> Nat:
+  match u:
+    case U32{w}:
+      word.count(32n, w)
+
+def popcount.ok(+m: U32) -> Bool:
+  Nat.is_eq(U32.popcount(m), bits(m))
+
+def popcount.all(n: Nat, +m: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(popcount.ok(m), popcount.all(p, U32.inc(m)))
+
+# The word for number k, by counting up from zero as U32.from_nat does.
+def W.from(+n: Nat, k: Nat) -> Word(n):
+  match k:
+    case 0n:
+      Word.zero(n)
+    case 1n+j:
+      Word.inc(n, W.from(n, j))

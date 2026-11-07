@@ -313,3 +313,47 @@ law bounds_give_back:
 # cards each, and for none, one or both of the cards.
 law owners_agree:
   {S.agree.all(16n, 0) == True{} : Bool}
+
+# ---------------------------------------------------------------------------
+# The proof foundation
+
+# LAW: U32.popcount counts the bits of every holding, for each of the 8192.
+law popcount_holdings:
+  {S.popcount.all(8192n, 0) == True{} : Bool}
+
+# LAW: the same, for any holding number below 8192.
+law popcount_holding:
+  for +k: Nat
+  for lt: {Nat.is_lt(k, 8192n) == True{} : Bool}
+  {S.popcount.ok(U32.from_nat(k)) == True{} : Bool}
+
+# LAW: the word for a number, counted up from zero, is the word whose number it is:
+# for words of any width, and so for every U32. Facts proved for holding numbers carry
+# over to holdings this way.
+
+law from_double:
+  for +p: Nat
+  for +k: Nat
+  {S.W.from(1n+p, Nat.double(k)) == WCon{False{}, S.W.from(p, k)} : Word(1n+p)}
+
+law from_odd:
+  for +p: Nat
+  for +k: Nat
+  {S.W.from(1n+p, 1n+Nat.double(k)) == WCon{True{}, S.W.from(p, k)} : Word(1n+p)}
+
+law from_zero_width:
+  for +k: Nat
+  {S.W.from(0n, k) == WNil{} : Word(0n)}
+
+law from_to:
+  for +n: Nat
+  for w: Word(n)
+  {S.W.from(n, Word.to_nat(n, w)) == w : Word(n)}
+
+law u32_from:
+  for +k: Nat
+  {U32.from_nat(k) == U32{S.W.from(32n, k)} : U32}
+
+law u32_roundtrip:
+  for +u: U32
+  {U32.from_nat(U32.to_nat(u)) == u : U32}
