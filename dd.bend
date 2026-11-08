@@ -22,6 +22,13 @@
 #
 # The same for a random ending from a seed: 1 and 5 cards in each hand by default.
 #
+#   dd --random [seed]
+#
+# Deals a random full deal and solves it: the hand diagram, the deal in PBN, and
+# the double dummy table with declarers down and strains across. The seed picks
+# the deal, so the same seed always gives the same one; without one it picks a
+# seed at random and prints it.
+#
 #   dd --brute [deal or file]...
 #
 # The same, by plain minimax: the oracle, for endings of up to about 5 cards.
@@ -440,6 +447,56 @@ def args.tail(xs: List<String>) -> List<String>:
     case Con{_, t}:
       t
 
+# ---------------------------------------------------------------------------
+# A random deal
+
+# The table of one deal, with each strain on a thread of its own.
+def fork.two(+a: U32, +b: U32, +deal: C.Deal) -> B.Table:
+  x y = Z.strain.table(a, deal) Z.strain.table(b, deal)
+  Z.table.join(x, y)
+
+def fork.three(+deal: C.Deal) -> B.Table:
+  x y = Z.strain.table(2, deal) fork.two(3, 4, deal)
+  Z.table.join(x, y)
+
+def table.fork(+deal: C.Deal) -> B.Table:
+  x y = fork.two(0, 1, deal) fork.three(deal)
+  Z.table.join(x, y)
+
+def random.show(+seed: U32) -> IO(Unit):
+  +deal = D.random(seed)
+  do IO<Unit>:
+    IO.print("Deal " ++ U32.show(seed))
+    IO.print("")
+    IO.print(V.diagram(deal))
+    IO.print("")
+    IO.print(P.print(deal))
+    IO.print("")
+    t0 : Nat <- IO.now()
+    +t : B.Table = table.fork(deal)
+    t1 : Nat <- IO.now()
+    IO.print("Double dummy tricks for each declarer:")
+    IO.print("")
+    IO.print(V.table.by.decl(t))
+    IO.print("")
+    IO.print("Solved in " ++ Nat.show(Nat.sub(t1, t0)) ++ " ms. Run dd --random " ++ U32.show(seed) ++ " to see this deal again.")
+
+def random.seed.go(r: Maybe<&2, U32>, +fallback: U32) -> U32:
+  match r:
+    case None{}:
+      fallback
+    case Some{x}:
+      x
+
+def random.args(xs: List<String>) -> IO(Unit):
+  match xs:
+    case Con{a, _}:
+      random.show(random.seed.go(U32.read(a), 1))
+    case _:
+      do IO<Unit>:
+        r : U32 <- IO.try(U32, IO.random_u32())
+        random.show((r % 1000000 + 1 : U32))
+
 def brute.table(+deal: C.Deal) -> B.Table:
   B.table(deal)
 
@@ -462,6 +519,8 @@ def main.go(xs: List<String>) -> IO(Unit):
         human.all(~deal.grid, deals)
     case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{100}, _}}}, t}:
       demo.args(t)
+    case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{114}, _}}}, t}:
+      random.args(t)
     case Con{SCon{Chr{45}, SCon{Chr{45}, SCon{Chr{98}, _}}}, t}:
       do IO<Unit>:
         deals : List<&2, String> <- args.read(t)

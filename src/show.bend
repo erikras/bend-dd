@@ -195,3 +195,22 @@ def report(r: Z.Report) -> String:
   match r:
     case Z.Report{+ts, _, +xs}:
       grid(ts) ++ "\nTargets are North-South's tricks. The cut columns count positions settled by\ntarget too low or high, quick tricks, later tricks, the check after the lead, and\nthe transposition table. Moves are the legal moves, and kept is what is left of them after equivalence.\n\n" ++ rows.head() ++ "\n" ++ rows(ts, 0, xs) ++ totals(xs)
+
+# ---------------------------------------------------------------------------
+# The table by declarer
+
+# The same table the other way round, as bridge players usually read it: declarers
+# down, in the order N S E W, and strains across, NT first.
+def decl.cell(+s: U32, +decl: U32, +xs: List<&2, U32>) -> String:
+  str.pad(U32.show(at(U32.to_nat((s * 4 + decl : U32)), xs)), 4)
+
+def decl.row(+decl: U32, +xs: List<&2, U32>) -> String:
+  str.pad(seat.name(decl), 4) ++ decl.cell(4, decl, xs) ++ decl.cell(0, decl, xs) ++ decl.cell(1, decl, xs) ++ decl.cell(2, decl, xs) ++ U32.show(at(U32.to_nat((12 + decl : U32)), xs))
+
+def by.decl(+xs: List<&2, U32>) -> String:
+  "    NT  " ++ strain.pad(0, 4) ++ strain.pad(1, 4) ++ strain.pad(2, 4) ++ strain.name(False{}, 3) ++ "\n" ++ decl.row(0, xs) ++ "\n" ++ decl.row(2, xs) ++ "\n" ++ decl.row(1, xs) ++ "\n" ++ decl.row(3, xs)
+
+def table.by.decl(t: B.Table) -> String:
+  match t:
+    case B.Table{+ts, _}:
+      by.decl(ts)

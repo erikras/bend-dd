@@ -69,6 +69,27 @@ West                    East
 N:A8.J94.KQ62.KT86 K64.873.A3.Q5432 QJ73.AKQ65.98.AJ T952.T2.JT754.97
 ```
 
+To deal a random hand and see its double dummy table, run:
+
+```sh
+tools/deal.sh           # a random deal
+tools/deal.sh 42        # deal number 42
+```
+
+It builds `dd` if needed and runs `dd --random`, which prints the hand diagram,
+the deal in PBN, and the tricks each declarer takes in each strain:
+
+```
+    NT  ♠   ❤︎   ◆   ♣
+N   11  11  11  9   10
+S   11  11  11  9   10
+E   2   2   2   4   3
+W   2   2   2   4   3
+```
+
+A full deal takes well under a second, with each strain on its own thread. The
+seed is printed with the deal, so `tools/deal.sh <seed>` shows it again.
+
 `dd` reads PBN deals, from its arguments (quoted, one deal per argument) or
 from files with one deal per line, and solves them. Each deal prints the 20
 entries of its double dummy table, by strain (♠ ♥ ♦ ♣ NT) and then declarer
@@ -79,7 +100,7 @@ bend dd.bend -o dd
 ./dd "N:AK... Q.J.. J..A. T..K."
 ```
 
-For now it is for endings: a full 13-card deal takes minutes or more. Runtime
+Runtime
 options go between `+RTS` and `-RTS`, such as `+RTS --threads 8 -RTS`.
 
 To see it work on a random ending, with 5 cards in each hand by default:
