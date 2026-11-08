@@ -580,6 +580,13 @@ the first trick is the root), so the exhaustive check says nothing about winning
   number, so a fact about holding number k is a fact about the holding.
 - `card_code`: a card's code gives back its suit and rank, for every suit below 4 and
   rank below 13.
+- Words as sets of bits, all by induction for any word (31 laws, under "Words as sets
+  of bits"): `Sub(a, b)`, every bit of a is in b, and how it goes with `and`, `xor` and
+  shifts (`and_sub_left`, `sub_trans`, `and_mono`, `shr_mono`, `shrn_mono`, `shl_sub`,
+  `shln_sub`); taking a bit that is in w leaves one fewer (`count_xor`); taking bits of
+  a valid hand word keeps it valid (`xor_sub`), and a valid word's two holdings are
+  holdings (`hi_holding`, `lo_holding`); a word with nothing in either half is zero
+  (`split_zero`); and words that compare equal are equal (`cmp_eq`, `u32_eq`).
 
 The one pass over 8192 holdings is what the gate pays for: `bend PROOF.bend` takes
 about 15 minutes now, against 6.5 before the foundation.
@@ -590,9 +597,9 @@ of that size or a few times it:
 
 1. *Done:* that a holding is below 8192 when its bits above 13 are clear.
 2. *Done:* facts about each holding in one pass of 8192, and card codes.
-3. Shifts and masks: the two holdings in a hand's word come back out after a card is
-   taken (shift and `xor`, shift and `and`), by induction over the 16 shifts.
-4. Taking a card that is in a hand leaves one card fewer, by `S.bits`.
+3. *Done:* shifts and masks, by subsets rather than by recomputing the holdings: a
+   card in a holding is in the hand's word, and validity is kept.
+4. *Done:* taking a card that is in a hand leaves one card fewer, by `S.bits`.
 5. Every card that `R.moves` gives is in the hand to play, and there is one when the
    hand has a card (an induction over `R.moves.peel`).
 6. The trick word: seat, cards played, lead and winner after `R.trick.next`, for every
