@@ -625,15 +625,68 @@ def bits(u: U32) -> Nat:
     case U32{w}:
       word.count(32n, w)
 
-def popcount.ok(+m: U32) -> Bool:
-  Nat.is_eq(U32.popcount(m), bits(m))
+# What the laws about holdings and words are stated with.
 
-def popcount.all(n: Nat, +m: U32) -> Bool:
+def pow2(j: Nat) -> Nat:
+  match j:
+    case 0n:
+      1n
+    case 1n+i:
+      Nat.double(pow2(i))
+
+# The word of width n whose first j bits are set.
+def ones(n: Nat, +j: Nat) -> Word(n):
+  match n:
+    case 0n:
+      WNil{}
+    case 1n+p:
+      match j:
+        case 0n:
+          WCon{False{}, ones(p, 0n)}
+        case 1n+i:
+          WCon{True{}, ones(p, i)}
+
+def w.tail(-p: Nat, w: Word(1n+p)) -> Word(p):
+  match w:
+    case WCon{_, t}:
+      t
+
+def w.head(-p: Nat, w: Word(1n+p)) -> Bool:
+  match w:
+    case WCon{h, _}:
+      h
+
+def u.word(u: U32) -> Word(32n):
+  match u:
+    case U32{w}:
+      w
+
+# What every holding m satisfies, about its lowest card b: popcount counts it, b is in
+# it, and if it isn't empty, b is one card below the 13th whose rank ctz finds, and
+# taking it leaves a holding with one card fewer.
+def facts(+m: U32) -> Bool:
+  +b = (m .&. (0 - m) : U32)
+  +z = U32.is_eq(m, 0)
+  +rest = (m .^. b : U32)
+  Bool.and(Nat.is_eq(U32.popcount(m), bits(m)),
+    Bool.and(U32.is_eq((b .&. m : U32), b),
+      Bool.or(Bool.and(z, U32.is_eq(b, 0)),
+        Bool.and(Bool.not(z),
+          Bool.and(Nat.is_lt(U32.ctz(b), 13n),
+            Bool.and(U32.is_eq((1 << U32.ctz(b) : U32), b),
+              Bool.and(Nat.is_eq(U32.popcount(rest), Nat.sub(U32.popcount(m), 1n)), U32.is_eq((rest .&. 8191 : U32), rest))))))))
+
+def facts.all(n: Nat, +m: U32) -> Bool:
   match n:
     case 0n:
       True{}
     case 1n+p:
-      Bool.and(popcount.ok(m), popcount.all(p, U32.inc(m)))
+      Bool.and(facts(m), facts.all(p, U32.inc(m)))
+
+# What a card's code says: its suit and its rank come back out.
+def code.ok(+s: Nat, +r: Nat) -> Bool:
+  +c = C.card.make(U32.from_nat(s), U32.from_nat(r))
+  Bool.and(U32.is_eq(C.card.suit(c), U32.from_nat(s)), U32.is_eq(C.card.rank(c), U32.from_nat(r)))
 
 # The word for number k, by counting up from zero as U32.from_nat does.
 def W.from(+n: Nat, k: Nat) -> Word(n):

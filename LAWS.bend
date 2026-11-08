@@ -317,15 +317,66 @@ law owners_agree:
 # ---------------------------------------------------------------------------
 # The proof foundation
 
-# LAW: U32.popcount counts the bits of every holding, for each of the 8192.
-law popcount_holdings:
-  {S.popcount.all(8192n, 0) == True{} : Bool}
+# LAW: the facts about holdings that the proofs need: popcount counts a holding, and
+# its lowest card is in it, is one card that ctz finds, and taking it leaves a holding
+# with one card fewer. Checked for each of the 8192 holdings, then for any number
+# below 8192, then, by the laws below about words and numbers, for any holding.
 
-# LAW: the same, for any holding number below 8192.
-law popcount_holding:
+law lt_dbl:
+  for +x: Nat
+  for +y: Nat
+  for e: {Nat.is_lt(x, y) == True{} : Bool}
+  {Nat.is_lt(Nat.double(x), Nat.double(y)) == True{} : Bool}
+
+law lt_dbl1:
+  for +x: Nat
+  for +y: Nat
+  for e: {Nat.is_lt(x, y) == True{} : Bool}
+  {Nat.is_lt(1n+Nat.double(x), Nat.double(y)) == True{} : Bool}
+
+law lt_one:
+  for +x: Nat
+  for e: {Nat.is_lt(x, 1n) == True{} : Bool}
+  {Nat.is_lt(Nat.double(x), 1n) == True{} : Bool}
+
+law pow2_pos:
+  for +j: Nat
+  {Nat.is_lt(0n, S.pow2(j)) == True{} : Bool}
+
+law bound:
+  for +n: Nat
+  for +j: Nat
+  for +w: Word(n)
+  for e: {Word.and(n, w, S.ones(n, j)) == w : Word(n)}
+  {Nat.is_lt(Word.to_nat(n, w), S.pow2(j)) == True{} : Bool}
+
+law mask_ones:
+  {(8191 : U32) == U32{S.ones(32n, 13n)} : U32}
+
+law holding_lt:
+  for +u: U32
+  for h: {(u .&. 8191 : U32) == u : U32}
+  {Nat.is_lt(U32.to_nat(u), 8192n) == True{} : Bool}
+
+law facts_all:
+  {S.facts.all(8192n, 0) == True{} : Bool}
+
+law facts_nat:
   for +k: Nat
   for lt: {Nat.is_lt(k, 8192n) == True{} : Bool}
-  {S.popcount.ok(U32.from_nat(k)) == True{} : Bool}
+  {S.facts(U32.from_nat(k)) == True{} : Bool}
+
+law facts_holding:
+  for +u: U32
+  for h: {(u .&. 8191 : U32) == u : U32}
+  {S.facts(u) == True{} : Bool}
+
+law card_code:
+  for +s: Nat
+  for +r: Nat
+  for ls: {Nat.is_lt(s, 4n) == True{} : Bool}
+  for lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  {S.code.ok(s, r) == True{} : Bool}
 
 # LAW: the word for a number, counted up from zero, is the word whose number it is:
 # for words of any width, and so for every U32. Facts proved for holding numbers carry

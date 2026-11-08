@@ -401,24 +401,6 @@ def Laws.owners_agree():
 # ---------------------------------------------------------------------------
 # The proof foundation
 
-def Laws.popcount_holdings():
-  {==}
-
-# Holding number k of a run that checked out checks out.
-def popcount_at(+n: Nat, +k: Nat, +m: U32, all: {S.popcount.all(n, m) == True{} : Bool}, lt: {Nat.is_lt(k, n) == True{} : Bool}) -> {S.popcount.ok(step(k, m)) == True{} : Bool}:
-  match n k:
-    case 0n 0n:
-      Empty.absurd({S.popcount.ok(m) == True{} : Bool}, no_ft(lt))
-    case 0n 1n+j:
-      Empty.absurd({S.popcount.ok(step(1n+j, m)) == True{} : Bool}, no_ft(lt))
-    case 1n+p 0n:
-      Sigma.fst.bool(S.popcount.ok(m), S.popcount.all(p, U32.inc(m)), and_true(S.popcount.ok(m), S.popcount.all(p, U32.inc(m)), all))
-    case 1n+p 1n+j:
-      popcount_at(p, j, U32.inc(m), Sigma.snd.bool(S.popcount.ok(m), S.popcount.all(p, U32.inc(m)), and_true(S.popcount.ok(m), S.popcount.all(p, U32.inc(m)), all)), lt)
-
-def Laws.popcount_holding(k, lt):
-  %step_from(k) : {S.popcount.ok(_) == True{} : Bool}
-  popcount_at(8192n, k, 0, Laws.popcount_holdings(), lt)
 
 # The word lemmas.
 
@@ -472,3 +454,225 @@ def Laws.u32_roundtrip(u):
       %Equal.sym(U32, U32.from_nat(Word.to_nat(32n, w)), U32{S.W.from(32n, Word.to_nat(32n, w))}, Laws.u32_from(Word.to_nat(32n, w))) : {_ == U32{w} : U32}
       %Equal.sym(Word(32n), S.W.from(32n, Word.to_nat(32n, w)), w, Laws.from_to(32n, w)) : {U32{_} == U32{w} : U32}
       {==}
+
+# Facts about holdings, which rest on the word lemmas.
+
+def no_lt0(+x: Nat, e: {Nat.is_lt(x, 0n) == True{} : Bool}) -> Empty:
+  match x:
+    case 0n:
+      no_ft(e)
+    case 1n+y:
+      no_ft(e)
+
+def facts_at(+n: Nat, +k: Nat, +m: U32, all: {S.facts.all(n, m) == True{} : Bool}, lt: {Nat.is_lt(k, n) == True{} : Bool}) -> {S.facts(step(k, m)) == True{} : Bool}:
+  match n k:
+    case 0n 0n:
+      Empty.absurd({S.facts(m) == True{} : Bool}, no_ft(lt))
+    case 0n 1n+j:
+      Empty.absurd({S.facts(step(1n+j, m)) == True{} : Bool}, no_ft(lt))
+    case 1n+p 0n:
+      Sigma.fst.bool(S.facts(m), S.facts.all(p, U32.inc(m)), and_true(S.facts(m), S.facts.all(p, U32.inc(m)), all))
+    case 1n+p 1n+j:
+      facts_at(p, j, U32.inc(m), Sigma.snd.bool(S.facts(m), S.facts.all(p, U32.inc(m)), and_true(S.facts(m), S.facts.all(p, U32.inc(m)), all)), lt)
+
+def Laws.lt_dbl(x, y, e):
+  match x y:
+    case 0n 0n:
+      Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, no_ft(e))
+    case 0n 1n+b:
+      {==}
+    case 1n+a 0n:
+      Empty.absurd({Nat.is_lt(Nat.double(1n+a), 0n) == True{} : Bool}, no_ft(e))
+    case 1n+a 1n+b:
+      Laws.lt_dbl(a, b, e)
+
+def Laws.lt_dbl1(x, y, e):
+  match x y:
+    case 0n 0n:
+      Empty.absurd({Nat.is_lt(1n, 0n) == True{} : Bool}, no_ft(e))
+    case 0n 1n+b:
+      {==}
+    case 1n+a 0n:
+      Empty.absurd({Nat.is_lt(1n+Nat.double(1n+a), 0n) == True{} : Bool}, no_ft(e))
+    case 1n+a 1n+b:
+      Laws.lt_dbl1(a, b, e)
+
+def Laws.lt_one(x, e):
+  match x:
+    case 0n:
+      {==}
+    case 1n+a:
+      match a:
+        case 0n:
+          Empty.absurd({Nat.is_lt(Nat.double(1n), 1n) == True{} : Bool}, no_ft(e))
+        case 1n+b:
+          Empty.absurd({Nat.is_lt(Nat.double(2n+b), 1n) == True{} : Bool}, no_ft(e))
+
+def Laws.pow2_pos(j):
+  match j:
+    case 0n:
+      {==}
+    case 1n+i:
+      Laws.lt_dbl(0n, S.pow2(i), Laws.pow2_pos(i))
+
+def Laws.bound(n, j, w, e):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          Laws.pow2_pos(j)
+    case 1n+p:
+      match j w:
+        case 0n WCon{False{}, +t}:
+          Laws.lt_one(Word.to_nat(p, t), Laws.bound(p, 0n, t, Equal.cong(Word(1n+p), Word(p), (x => S.w.tail(p, x)), Word.and(1n+p, WCon{False{}, t}, S.ones(1n+p, 0n)), WCon{False{}, t}, e)))
+        case 0n WCon{True{}, +t}:
+          Empty.absurd({Nat.is_lt(Word.to_nat(1n+p, WCon{True{}, t}), S.pow2(0n)) == True{} : Bool}, no_ft(Equal.cong(Word(1n+p), Bool, (x => S.w.head(p, x)), Word.and(1n+p, WCon{True{}, t}, S.ones(1n+p, 0n)), WCon{True{}, t}, e)))
+        case 1n+i WCon{False{}, +t}:
+          Laws.lt_dbl(Word.to_nat(p, t), S.pow2(i), Laws.bound(p, i, t, Equal.cong(Word(1n+p), Word(p), (x => S.w.tail(p, x)), Word.and(1n+p, WCon{False{}, t}, S.ones(1n+p, 1n+i)), WCon{False{}, t}, e)))
+        case 1n+i WCon{True{}, +t}:
+          Laws.lt_dbl1(Word.to_nat(p, t), S.pow2(i), Laws.bound(p, i, t, Equal.cong(Word(1n+p), Word(p), (x => S.w.tail(p, x)), Word.and(1n+p, WCon{True{}, t}, S.ones(1n+p, 1n+i)), WCon{True{}, t}, e)))
+
+def Laws.mask_ones():
+  {==}
+
+def Laws.holding_lt(u, h):
+  match u:
+    case U32{+w}:
+      Laws.bound(32n, 13n, w, Equal.cong(U32, Word(32n), (x => S.u.word(x)), (U32{w} .&. 8191 : U32), U32{w}, h))
+
+def Laws.facts_all():
+  {==}
+
+def Laws.facts_nat(k, lt):
+  %step_from(k) : {S.facts(_) == True{} : Bool}
+  facts_at(8192n, k, 0, Laws.facts_all(), lt)
+
+def Laws.facts_holding(u, h):
+  %Equal.sym(U32, u, U32.from_nat(U32.to_nat(u)), Equal.sym(U32, U32.from_nat(U32.to_nat(u)), u, Laws.u32_roundtrip(u))) : {S.facts(_) == True{} : Bool}
+  Laws.facts_nat(U32.to_nat(u), Laws.holding_lt(u, h))
+
+def Laws.card_code(s, r, ls, lr):
+  match s:
+    case 0n:
+      match r:
+            case 0n:
+              {==}
+            case 1n:
+              {==}
+            case 2n:
+              {==}
+            case 3n:
+              {==}
+            case 4n:
+              {==}
+            case 5n:
+              {==}
+            case 6n:
+              {==}
+            case 7n:
+              {==}
+            case 8n:
+              {==}
+            case 9n:
+              {==}
+            case 10n:
+              {==}
+            case 11n:
+              {==}
+            case 12n:
+              {==}
+            case 13n+x:
+              Empty.absurd({S.code.ok(0n, 13n+x) == True{} : Bool}, no_lt0(x, lr))
+    case 1n:
+      match r:
+            case 0n:
+              {==}
+            case 1n:
+              {==}
+            case 2n:
+              {==}
+            case 3n:
+              {==}
+            case 4n:
+              {==}
+            case 5n:
+              {==}
+            case 6n:
+              {==}
+            case 7n:
+              {==}
+            case 8n:
+              {==}
+            case 9n:
+              {==}
+            case 10n:
+              {==}
+            case 11n:
+              {==}
+            case 12n:
+              {==}
+            case 13n+x:
+              Empty.absurd({S.code.ok(1n, 13n+x) == True{} : Bool}, no_lt0(x, lr))
+    case 2n:
+      match r:
+            case 0n:
+              {==}
+            case 1n:
+              {==}
+            case 2n:
+              {==}
+            case 3n:
+              {==}
+            case 4n:
+              {==}
+            case 5n:
+              {==}
+            case 6n:
+              {==}
+            case 7n:
+              {==}
+            case 8n:
+              {==}
+            case 9n:
+              {==}
+            case 10n:
+              {==}
+            case 11n:
+              {==}
+            case 12n:
+              {==}
+            case 13n+x:
+              Empty.absurd({S.code.ok(2n, 13n+x) == True{} : Bool}, no_lt0(x, lr))
+    case 3n:
+      match r:
+            case 0n:
+              {==}
+            case 1n:
+              {==}
+            case 2n:
+              {==}
+            case 3n:
+              {==}
+            case 4n:
+              {==}
+            case 5n:
+              {==}
+            case 6n:
+              {==}
+            case 7n:
+              {==}
+            case 8n:
+              {==}
+            case 9n:
+              {==}
+            case 10n:
+              {==}
+            case 11n:
+              {==}
+            case 12n:
+              {==}
+            case 13n+x:
+              Empty.absurd({S.code.ok(3n, 13n+x) == True{} : Bool}, no_lt0(x, lr))
+    case 4n+y:
+      Empty.absurd({S.code.ok(4n+y, r) == True{} : Bool}, no_lt0(y, ls))
+
