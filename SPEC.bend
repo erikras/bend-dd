@@ -661,20 +661,43 @@ def u.word(u: U32) -> Word(32n):
     case U32{w}:
       w
 
-# What every holding m satisfies, about its lowest card b: popcount counts it, b is in
-# it, and if it isn't empty, b is one card below the 13th whose rank ctz finds, and
-# taking it leaves a holding with one card fewer.
+# The lowest card of a holding, and what is left without it.
+def low(+m: U32) -> U32:
+  (m .&. (0 - m) : U32)
+
+def rest(+m: U32) -> U32:
+  (m .^. low(m) : U32)
+
+def fact.pop(+m: U32) -> Bool:
+  Nat.is_eq(U32.popcount(m), bits(m))
+
+def fact.in(+m: U32) -> Bool:
+  U32.is_eq((low(m) .&. m : U32), low(m))
+
+def fact.lt(+m: U32) -> Bool:
+  Nat.is_lt(U32.ctz(low(m)), 13n)
+
+def fact.bit(+m: U32) -> Bool:
+  U32.is_eq((1 << U32.ctz(low(m)) : U32), low(m))
+
+def fact.cnt(+m: U32) -> Bool:
+  Nat.is_eq(U32.popcount(rest(m)), Nat.sub(U32.popcount(m), 1n))
+
+def fact.rest(+m: U32) -> Bool:
+  U32.is_eq((rest(m) .&. 8191 : U32), rest(m))
+
+def fact.card(+m: U32) -> Bool:
+  Bool.and(fact.lt(m), Bool.and(fact.bit(m), Bool.and(fact.cnt(m), fact.rest(m))))
+
+def fact.next(+m: U32) -> Bool:
+  Bool.or(Bool.and(U32.is_eq(m, 0), U32.is_eq(low(m), 0)), Bool.and(Bool.not(U32.is_eq(m, 0)), fact.card(m)))
+
+# What every holding m satisfies, about its lowest card: popcount counts it, the card
+# is in it, and if it isn't empty, the card is one below the 13th whose rank ctz finds,
+# and taking it leaves a holding with one card fewer.
 def facts(+m: U32) -> Bool:
-  +b = (m .&. (0 - m) : U32)
-  +z = U32.is_eq(m, 0)
-  +rest = (m .^. b : U32)
-  Bool.and(Nat.is_eq(U32.popcount(m), bits(m)),
-    Bool.and(U32.is_eq((b .&. m : U32), b),
-      Bool.or(Bool.and(z, U32.is_eq(b, 0)),
-        Bool.and(Bool.not(z),
-          Bool.and(Nat.is_lt(U32.ctz(b), 13n),
-            Bool.and(U32.is_eq((1 << U32.ctz(b) : U32), b),
-              Bool.and(Nat.is_eq(U32.popcount(rest), Nat.sub(U32.popcount(m), 1n)), U32.is_eq((rest .&. 8191 : U32), rest))))))))
+  Bool.and(fact.pop(m), Bool.and(fact.in(m), fact.next(m)))
+
 
 def facts.all(n: Nat, +m: U32) -> Bool:
   match n:
@@ -716,4 +739,62 @@ def Sub32.ones(a: U32, +j: Nat) -> Data:
   match a:
     case U32{w}:
       Sub(32n, w, ones(32n, j))
+
+
+# Cards in holdings and hands, for the laws about moves.
+
+# A card's code, as the moves make it: its suit, and its bit, 1 << rank.
+def cb.ok(+s: Nat, +r: Nat) -> Bool:
+  Bool.and(U32.is_eq(C.card.suit(C.card.make(U32.from_nat(s), U32.from_nat(r))), U32.from_nat(s)), U32.is_eq(C.card.bit(C.card.make(U32.from_nat(s), U32.from_nat(r))), (1 << r : U32)))
+
+
+def one.ok(+r: Nat) -> Bool:
+  Nat.is_eq(bits((1 << r : U32)), 1n)
+
+
+# A card of suit s whose bit is in m0.
+def InCard(+c: U32, +suit: U32, +m0: U32) -> Type:
+  Sub32(C.card.bit(c), m0) & {C.card.suit(c) == suit : U32}
+
+
+def All(xs: List<&2, U32>, +suit: U32, +m0: U32) -> Type:
+  match xs:
+    case Nil{}:
+      Unit
+    case Con{+c, t}:
+      InCard(c, suit, m0) & All(t, suit, m0)
+
+
+# The masks play takes a card out of the hand's two words with, as R.play has them.
+def play.x(+c: U32) -> U32:
+  R.sel(U32.is_zero((C.card.suit(c) .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c))
+
+
+def play.a(+c: U32) -> U32:
+  R.sel(U32.is_lt(C.card.suit(c), 2), play.x(c), 0)
+
+
+def play.b(+c: U32) -> U32:
+  R.sel(U32.is_lt(C.card.suit(c), 2), 0, play.x(c))
+
+
+# A card is in a hand: what play takes out of each word is in that word.
+def InHand(+c: U32, +h01: U32, +h23: U32) -> Type:
+  Sub32(play.a(c), h01) & Sub32(play.b(c), h23)
+
+
+def AllH(xs: List<&2, U32>, +h01: U32, +h23: U32) -> Type:
+  match xs:
+    case Nil{}:
+      Unit
+    case Con{+c, t}:
+      InHand(c, h01, h23) & AllH(t, h01, h23)
+
+
+def NE(xs: List<&2, U32>) -> Type:
+  match xs:
+    case Nil{}:
+      Empty
+    case Con{_, _}:
+      Unit
 

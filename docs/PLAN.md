@@ -600,8 +600,13 @@ of that size or a few times it:
 3. *Done:* shifts and masks, by subsets rather than by recomputing the holdings: a
    card in a holding is in the hand's word, and validity is kept.
 4. *Done:* taking a card that is in a hand leaves one card fewer, by `S.bits`.
-5. Every card that `R.moves` gives is in the hand to play, and there is one when the
-   hand has a card (an induction over `R.moves.peel`).
+5. *Done:* every card that `R.moves` gives is in the hand to play, and there is one when
+   the hand has a card (an induction over `R.moves.peel`). Under "Moves" in `LAWS.bend`:
+   `moves_hand` says every card of `R.moves.of(lead, h01, h23)` from valid words is in
+   the hand, as the two masks `R.play` takes out of its words (`S.InHand`), and
+   `moves_ne01` and `moves_ne23` say the list isn't empty when either word has a card.
+   Beneath them, `peel_sound` and `peel_hand` follow the peel card by card, and
+   `card_bit` and `one_bit` check the 52 card codes and 13 rank bits.
 6. The trick word: seat, cards played, lead and winner after `R.trick.next`, for every
    value of each field. They are packed with shifts and masks, so this is like 3.
 7. Hands stay even: with the seat to play and the cards played, each hand has the

@@ -658,3 +658,117 @@ law xor_sub32:
   for +xw: S.Sub32(x, w)
   S.Sub32(U32.xor(w, x), m)
 
+
+# ---------------------------------------------------------------------------
+# Moves
+#
+# Every legal move from a valid hand is a card in it, where R.play takes it from, and
+# a hand with a card has a legal move, whatever was led.
+
+law and_self:
+  for +n: Nat
+  for +w: Word(n)
+  S.Sub(n, w, w)
+
+
+law card_bit:
+  for +s: Nat
+  for +r: Nat
+  for ls: {Nat.is_lt(s, 4n) == True{} : Bool}
+  for lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  {S.cb.ok(s, r) == True{} : Bool}
+
+
+law one_bit:
+  for +r: Nat
+  for lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  {S.one.ok(r) == True{} : Bool}
+
+
+# Every card the peel gives, beyond those of acc, is of suit s and in the holding.
+law peel_sound:
+  for n: Nat
+  for z: Bool
+  for +s: Nat
+  for +m: U32
+  for acc: List<&2, U32>
+  for +m0: U32
+  for +ls: {Nat.is_lt(s, 4n) == True{} : Bool}
+  for +zf: {z == U32.is_eq(m, 0) : Bool}
+  for +hm: S.Sub32(m, 8191)
+  for +sm: S.Sub32(m, m0)
+  for ok: S.All(acc, U32.from_nat(s), m0)
+  S.All(R.moves.peel(n, z, U32.from_nat(s), m, acc), U32.from_nat(s), m0)
+
+
+# The same, for the hand: every card the peel gives is in the hand, as play takes it.
+law peel_hand:
+  for n: Nat
+  for z: Bool
+  for +s: Nat
+  for +m: U32
+  for acc: List<&2, U32>
+  for +h01: U32
+  for +h23: U32
+  for +ls: {Nat.is_lt(s, 4n) == True{} : Bool}
+  for +zf: {z == U32.is_eq(m, 0) : Bool}
+  for +hm: S.Sub32(m, 8191)
+  for +sm: S.Sub32(m, R.suit.mask(s, h01, h23))
+  for ok: S.AllH(acc, h01, h23)
+  S.AllH(R.moves.peel(n, z, U32.from_nat(s), m, acc), h01, h23)
+
+
+# Every card of a valid hand that moves.all gives is in the hand.
+law all_hand:
+  for +h01: U32
+  for +h23: U32
+  for +v01: S.Sub32(h01, S.valid.mask())
+  for +v23: S.Sub32(h23, S.valid.mask())
+  S.AllH(R.moves.all(h01, h23), h01, h23)
+
+
+# Every legal move from a valid hand is a card in it, whatever was led.
+law moves_hand:
+  for +lead: U32
+  for +h01: U32
+  for +h23: U32
+  for +v01: S.Sub32(h01, S.valid.mask())
+  for +v23: S.Sub32(h23, S.valid.mask())
+  S.AllH(R.moves.of(lead, h01, h23), h01, h23)
+
+
+law peel_ne_acc:
+  for n: Nat
+  for z: Bool
+  for +s: U32
+  for +m: U32
+  for acc: List<&2, U32>
+  for ne: S.NE(acc)
+  S.NE(R.moves.peel(n, z, s, m, acc))
+
+
+# A suit with a card gives a move.
+law suit_ne:
+  for +s: U32
+  for +m: U32
+  for acc: List<&2, U32>
+  for +e: {U32.is_zero(m) == False{} : Bool}
+  S.NE(R.moves.suit(s, m, acc))
+
+
+# A hand with a card has a move, whatever was led.
+law moves_ne01:
+  for +lead: U32
+  for +h01: U32
+  for +h23: U32
+  for +e: {U32.is_zero(h01) == False{} : Bool}
+  S.NE(R.moves.of(lead, h01, h23))
+
+
+law moves_ne23:
+  for +lead: U32
+  for +h01: U32
+  for +h23: U32
+  for +e: {U32.is_zero(h23) == False{} : Bool}
+  S.NE(R.moves.of(lead, h01, h23))
+
