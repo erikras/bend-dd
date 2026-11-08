@@ -4204,3 +4204,960 @@ def below.go(+bq: Bool, +c: U32, +j: Nat, +r: Nat, +h01: U32, +h23: U32, +eb: {U
 
 def Laws.below_top(c, j, r, h01, h23, ok, i1, i2, top, lj):
   below.go(U32.is_eq(C.card.suit(c), U32.from_nat(j)), c, j, r, h01, h23, {==}, ok, i1, i2, top, lj)
+
+
+# ---------------------------------------------------------------------------
+# The top card at no trumps wins a trick
+
+def endw.go(+win: Bool, +rank: Bool, +seat: U32, +played: U32, +lead: U32, +owner: U32, +best: U32, +c: U32, +s: Nat, +ep: {played == 3 : U32}, +ew: {win == False{} : Bool}, +eo: {owner == U32.from_nat(s) : U32}) -> {R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c) == R.trick.start(U32.from_nat(s)) : U32}:
+  %Equal.sym(U32, played, 3, ep) : {R.trick.next.go(U32.is_eq(_, 0), U32.is_eq(_, 3), win, rank, seat, _, lead, owner, best, c) == R.trick.start(U32.from_nat(s)) : U32}
+  %Equal.sym(Bool, win, False{}, ew) : {R.trick.start(R.sel(_, seat, owner)) == R.trick.start(U32.from_nat(s)) : U32}
+  %Equal.sym(U32, owner, U32.from_nat(s), eo) : {R.trick.start(_) == R.trick.start(U32.from_nat(s)) : U32}
+  {==}
+
+# The fourth card of the trick, whatever it is: the trick goes to the leader's side,
+# and the rest is worth the tricks won so far, one more for this trick.
+
+def kid3(+j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +s: Nat,
+    +sev: {U32.is_eq((R.trick.start(U32.from_nat(s)) .&. 1 : U32), 0) == True{} : Bool}, +p: Nat, +L: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32,
+    +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L), +ek: {U32.to_nat(R.trick.played(tr)) == 3n : Nat}, +eo: {R.trick.owner(tr) == U32.from_nat(s) : U32}, +eb: {R.trick.best(tr) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32},
+    +tp: S.Sub32(R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), U32{S.ones(32n, r)}), +c: U32, +ih: S.InHand(c, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23))) -> S.Kid(1n+U32.to_nat(won), p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c):
+  (+vs, (+ls, (+lk, (+ev, (+ed, +ewl))))) = inv
+  (+i1, (+i2, (+one, +cok))) = ih
+  +ep3 = eq_of_nat(R.trick.played(tr), 3n, ek)
+  +e1 = succ_pred(L, 3n+p, Equal.trans(Nat, 4n+p, Nat.add(U32.to_nat(R.trick.played(tr)), 1n+p), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+p)), 3n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 3n, ek)), ed))
+  +ew = Equal.trans(Bool, R.beats(4, R.trick.best(tr), c), R.beats(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), c), False{}, Equal.cong(U32, Bool, (z => R.beats(4, z, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), eb), Laws.beats_top(j, r, c, lj, lr, cok, Laws.below_top(c, j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), cok, i1, i2, tp, lj)))
+  +e2 = endw.go(R.beats(4, R.trick.best(tr), c), rank.of(4, tr, c), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), c, s, ep3, ew, eo)
+  +ewn = tr.n(S.wN(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c)), U32.to_nat(R.won.next(R.trick.next(tr, 4, c), won)), 1n+U32.to_nat(won),
+    cg(R.pos.won(R.play.go(U32.to_nat(R.trick.seat(tr)), S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), R.won.next(R.trick.next(tr, 4, c), won), go_won(U32.to_nat(R.trick.seat(tr)), S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))),
+    tr.n(U32.to_nat(R.won.next(R.trick.next(tr, 4, c), won)), Nat.add(S.b2n(U32.is_eq((R.trick.next(tr, 4, c) .&. 1 : U32), 0)), U32.to_nat(won)), 1n+U32.to_nat(won),
+      Laws.won_end(R.trick.next(tr, 4, c), won, Laws.played_end(tr, 4, c, ep3), Laws.w_lt(U32.to_nat(won), L, S.pred(L), e1, ewl)),
+      Equal.cong(Bool, Nat, (z => Nat.add(S.b2n(z), U32.to_nat(won))), U32.is_eq((R.trick.next(tr, 4, c) .&. 1 : U32), 0), True{},
+        Equal.trans(Bool, U32.is_eq((R.trick.next(tr, 4, c) .&. 1 : U32), 0), U32.is_eq((R.trick.start(U32.from_nat(s)) .&. 1 : U32), 0), True{}, Equal.cong(U32, Bool, (z => U32.is_eq((z .&. 1 : U32), 0)), R.trick.next(tr, 4, c), R.trick.start(U32.from_nat(s)), e2), sev))))
+  +ci = Laws.play_inv(4, c, p, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+  (+n => le.at(1n+U32.to_nat(won), S.wN(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c)), U32.to_nat(S.rv(B.solve(p, 4, R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), n))), sym.n(S.wN(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c)), 1n+U32.to_nat(won), ewn),
+    a1({Nat.is_le(S.wN(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c)), U32.to_nat(S.rv(B.solve(p, 4, R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), n)))) == True{} : Bool}, {Nat.is_le(U32.to_nat(S.rv(B.solve(p, 4, R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), n))), Nat.add(S.wN(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c)), S.lnext(U32.to_nat(R.trick.played(tr)), L))) == True{} : Bool},
+      Laws.solve_in(p, 4, R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), n, S.lnext(U32.to_nat(R.trick.played(tr)), L), ci))))
+
+
+# No other hand holds a card of suit j as high as rank r.
+
+def Hold(pos: R.Pos, +p: Nat, +L: Nat, +j: Nat, +r: Nat, +w0: Nat, +s: Nat, +k: Nat, +x: Nat) -> Data:
+  match pos:
+    case R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, +tr, +won}:
+      S.And(S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L),
+        S.And({U32.to_nat(R.trick.seat(tr)) == x : Nat},
+          S.And({U32.to_nat(R.trick.played(tr)) == k : Nat},
+            S.And({R.trick.owner(tr) == U32.from_nat(s) : U32},
+              S.And({R.trick.best(tr) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32},
+                S.And({U32.to_nat(won) == w0 : Nat}, S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23)))))))
+
+def tops_at(+s: Nat, +x: Nat, +j: Nat, +r: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +lx: {Nat.is_lt(x, 4n) == True{} : Bool}, +nx: {Nat.is_eq(x, s) == False{} : Bool}, +tp: S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23)) -> S.Sub32(R.suit.mask(j, R.pick(x, n01, e01, s01, w01), R.pick(x, n23, e23, s23, w23)), U32{S.ones(32n, r)}):
+  match s x:
+    case 0n 0n:
+      Empty.absurd(S.Sub32(R.suit.mask(j, R.pick(0n, n01, e01, s01, w01), R.pick(0n, n23, e23, s23, w23)), U32{S.ones(32n, r)}), no_tf(nx))
+    case 0n 1n:
+      (+t0, (+t1, +t2)) = tp
+      t0
+    case 0n 2n:
+      (+t0, (+t1, +t2)) = tp
+      t1
+    case 0n 3n:
+      (+t0, (+t1, +t2)) = tp
+      t2
+    case 0n 4n+y:
+      Empty.absurd(S.Sub32(R.suit.mask(j, R.pick(4n+y, n01, e01, s01, w01), R.pick(4n+y, n23, e23, s23, w23)), U32{S.ones(32n, r)}), no_lt0(y, lx))
+    case 1n 0n:
+      (+t0, (+t1, +t2)) = tp
+      t0
+    case 1n 1n:
+      Empty.absurd(S.Sub32(R.suit.mask(j, R.pick(1n, n01, e01, s01, w01), R.pick(1n, n23, e23, s23, w23)), U32{S.ones(32n, r)}), no_tf(nx))
+    case 1n 2n:
+      (+t0, (+t1, +t2)) = tp
+      t1
+    case 1n 3n:
+      (+t0, (+t1, +t2)) = tp
+      t2
+    case 1n 4n+y:
+      Empty.absurd(S.Sub32(R.suit.mask(j, R.pick(4n+y, n01, e01, s01, w01), R.pick(4n+y, n23, e23, s23, w23)), U32{S.ones(32n, r)}), no_lt0(y, lx))
+    case 2n 0n:
+      (+t0, (+t1, +t2)) = tp
+      t0
+    case 2n 1n:
+      (+t0, (+t1, +t2)) = tp
+      t1
+    case 2n 2n:
+      Empty.absurd(S.Sub32(R.suit.mask(j, R.pick(2n, n01, e01, s01, w01), R.pick(2n, n23, e23, s23, w23)), U32{S.ones(32n, r)}), no_tf(nx))
+    case 2n 3n:
+      (+t0, (+t1, +t2)) = tp
+      t2
+    case 2n 4n+y:
+      Empty.absurd(S.Sub32(R.suit.mask(j, R.pick(4n+y, n01, e01, s01, w01), R.pick(4n+y, n23, e23, s23, w23)), U32{S.ones(32n, r)}), no_lt0(y, lx))
+    case 3n 0n:
+      (+t0, (+t1, +t2)) = tp
+      t0
+    case 3n 1n:
+      (+t0, (+t1, +t2)) = tp
+      t1
+    case 3n 2n:
+      (+t0, (+t1, +t2)) = tp
+      t2
+    case 3n 3n:
+      Empty.absurd(S.Sub32(R.suit.mask(j, R.pick(3n, n01, e01, s01, w01), R.pick(3n, n23, e23, s23, w23)), U32{S.ones(32n, r)}), no_tf(nx))
+    case 3n 4n+y:
+      Empty.absurd(S.Sub32(R.suit.mask(j, R.pick(4n+y, n01, e01, s01, w01), R.pick(4n+y, n23, e23, s23, w23)), U32{S.ones(32n, r)}), no_lt0(y, lx))
+    case 4n+y _:
+      Empty.absurd(S.Sub32(R.suit.mask(j, R.pick(x, n01, e01, s01, w01), R.pick(x, n23, e23, s23, w23)), U32{S.ones(32n, r)}), no_lt0(y, ls))
+
+def all3(+j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +s: Nat, +sev: {U32.is_eq((R.trick.start(U32.from_nat(s)) .&. 1 : U32), 0) == True{} : Bool}, +p: Nat, +L: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32,
+    +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L), +ek: {U32.to_nat(R.trick.played(tr)) == 3n : Nat}, +eo: {R.trick.owner(tr) == U32.from_nat(s) : U32}, +eb: {R.trick.best(tr) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32},
+    +tp: S.Sub32(R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), U32{S.ones(32n, r)}), ms: List<&2, U32>, ah: S.AllH(ms, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23))) -> S.AllK(1n+U32.to_nat(won), p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, ms):
+  match ms:
+    case Nil{}:
+      Unit{}
+    case Con{+c, tl}:
+      (ic, rest) = ah
+      (kid3(j, r, lj, lr, s, sev, p, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, ek, eo, eb, tp, c, ic), all3(j, r, lj, lr, s, sev, p, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, ek, eo, eb, tp, tl, rest))
+
+def tops.here(+n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +s: Nat, +x: Nat, +j: Nat, +r: Nat, +es: {U32.to_nat(R.trick.seat(tr)) == x : Nat}, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +lx: {Nat.is_lt(x, 4n) == True{} : Bool}, +nx: {Nat.is_eq(x, s) == False{} : Bool}, +tps: S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23)) -> S.Sub32(R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), U32{S.ones(32n, r)}):
+  sub_at(R.suit.mask(j, R.pick(x, n01, e01, s01, w01), R.pick(x, n23, e23, s23, w23)), R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), U32{S.ones(32n, r)},
+    Equal.sym(U32, R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), R.suit.mask(j, R.pick(x, n01, e01, s01, w01), R.pick(x, n23, e23, s23, w23)),
+      Equal.cong(Nat, U32, (z => R.suit.mask(j, R.pick(z, n01, e01, s01, w01), R.pick(z, n23, e23, s23, w23))), U32.to_nat(R.trick.seat(tr)), x, es)),
+    tops_at(s, x, j, r, n01, n23, e01, e23, s01, s23, w01, w23, ls, lx, nx, tps))
+
+# The last seat to play to the trick, East-West: whatever it plays, North-South
+# take the trick, so the value is at least one more than the tricks won.
+
+def node3(+pos: R.Pos, +p: Nat, +L: Nat, +w0: Nat, +x: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +s: Nat, +sev: {U32.is_eq((R.trick.start(U32.from_nat(s)) .&. 1 : U32), 0) == True{} : Bool},
+    +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +lx: {Nat.is_lt(x, 4n) == True{} : Bool}, +nx: {Nat.is_eq(x, s) == False{} : Bool},
+    +hold: Hold(pos, p, L, j, r, w0, s, 3n, x), +best: U32, +r0: B.Res, +hb: S.GE(1n+w0, best), +hr: S.GE(1n+w0, S.rv(r0))) -> S.GE(1n+w0, S.rv(B.search(1n+p, R.moves(pos), 4, pos, False{}, best, r0))):
+  match pos:
+    case R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, +tr, +won}:
+      (+inv, (+es, (+ek, (+eo, (+eb, (+ew0, +tps)))))) = hold
+      %ew0 : S.GE(1n+_, S.rv(B.search(1n+p, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, False{}, best, r0)))
+      Laws.min_all(p, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, best, r0, 1n+U32.to_nat(won),
+        all3(j, r, lj, lr, s, sev, p, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, ek, eo, eb, tops.here(n01, n23, e01, e23, s01, s23, w01, w23, tr, s, x, j, r, es, ls, lx, nx, tps), R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), Laws.kid_hand(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L, inv)),
+        le.at(1n+U32.to_nat(won), 1n+w0, U32.to_nat(best), Equal.cong(Nat, Nat, (z => 1n+z), U32.to_nat(won), w0, ew0), hb),
+        le.at(1n+U32.to_nat(won), 1n+w0, U32.to_nat(S.rv(r0)), Equal.cong(Nat, Nat, (z => 1n+z), U32.to_nat(won), w0, ew0), hr))
+
+
+# A position with plies left has a move.
+
+def kid_ne(+pos: R.Pos, +q: Nat, +L: Nat, +ci: S.Inv(pos, 1n+q, L)) -> S.NE(R.moves(pos)):
+  match pos:
+    case R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, +tr, +won}:
+      ((+v_n01, (+v_n23, (+v_e01, (+v_e23, (+v_s01, (+v_s23, (+v_w01, +v_w23))))))), (+ls, (+lk, (+ev, (+ed, +ewl))))) = ci
+      Laws.ne_cnt(R.trick.lead(tr), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), S.pred(L),
+          tr.n(S.cnt(R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), L, 1n+S.pred(L),
+            tr.n(S.cnt(R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), S.pickn(U32.to_nat(R.trick.seat(tr)), S.cnt(n01, n23), S.cnt(e01, e23), S.cnt(s01, s23), S.cnt(w01, w23)), L,
+              pick_cnt(U32.to_nat(R.trick.seat(tr)), n01, n23, e01, e23, s01, s23, w01, w23),
+              Laws.even_self(U32.to_nat(R.trick.seat(tr)), U32.to_nat(R.trick.played(tr)), L, S.cnt(n01, n23), S.cnt(e01, e23), S.cnt(s01, s23), S.cnt(w01, w23), ev, ls, lk)),
+            sym.n(1n+S.pred(L), L, succ_pred(L, Nat.add(U32.to_nat(R.trick.played(tr)), q), tr.n(1n+Nat.add(U32.to_nat(R.trick.played(tr)), q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+q), S.r4(L), sym.n(Nat.add(U32.to_nat(R.trick.played(tr)), 1n+q), 1n+Nat.add(U32.to_nat(R.trick.played(tr)), q), Laws.add_succ(U32.to_nat(R.trick.played(tr)), q)), ed)))))
+
+# A hand that lost cards has no more of any suit than before.
+
+def mask_mono(+j: Nat, +h01: U32, +h23: U32, +a: U32, +b: U32, +i1: S.Sub32(a, h01), +i2: S.Sub32(b, h23)) -> S.Sub32(R.suit.mask(j, U32.xor(h01, a), U32.xor(h23, b)), R.suit.mask(j, h01, h23)):
+  match j:
+    case 0n:
+      Laws.shrn_mono(16n, U32.xor(h01, a), h01, Laws.xor_sub32(h01, a, h01, sub_refl32(h01), i1))
+    case 1n:
+      Laws.and_mono32(U32.xor(h01, a), h01, 65535, Laws.xor_sub32(h01, a, h01, sub_refl32(h01), i1))
+    case 2n:
+      Laws.shrn_mono(16n, U32.xor(h23, b), h23, Laws.xor_sub32(h23, b, h23, sub_refl32(h23), i2))
+    case 3n:
+      Laws.and_mono32(U32.xor(h23, b), h23, 65535, Laws.xor_sub32(h23, b, h23, sub_refl32(h23), i2))
+    case 4n+y:
+      {==}
+
+def lt_le1(+a: Nat, +b: Nat, +e: {Nat.is_lt(a, b) == True{} : Bool}) -> {Nat.is_le(1n+a, b) == True{} : Bool}:
+  match a b:
+    case _ 0n:
+      Empty.absurd({Nat.is_le(1n+a, 0n) == True{} : Bool}, no_lt0(a, e))
+    case 0n 1n+q:
+      Laws.le_zero(q)
+    case 1n+p 1n+q:
+      lt_le1(p, q, e)
+
+# The plies left in a trick of k cards played, k below 3, are not one.
+
+def no_one(+k: Nat, +L: Nat, +lk: {Nat.is_lt(k, 3n) == True{} : Bool}, +e: {Nat.add(k, 1n) == S.r4(L) : Nat}) -> Empty:
+  match k L:
+    case 0n 0n:
+      no_zs(0n, Equal.sym(Nat, 1n, 0n, e))
+    case 0n 1n+y:
+      no_zs(2n+S.r4(y), succ.inj(0n, 3n+S.r4(y), e))
+    case 1n 0n:
+      no_zs(1n, Equal.sym(Nat, 2n, 0n, e))
+    case 1n 1n+y:
+      no_zs(1n+S.r4(y), succ.inj(0n, 2n+S.r4(y), succ.inj(1n, 3n+S.r4(y), e)))
+    case 2n 0n:
+      no_zs(2n, Equal.sym(Nat, 3n, 0n, e))
+    case 2n 1n+y:
+      no_zs(S.r4(y), succ.inj(0n, 1n+S.r4(y), succ.inj(1n, 2n+S.r4(y), succ.inj(2n, 3n+S.r4(y), e))))
+    case 3n+z _:
+      Empty.absurd(Empty, no_lt0(z, lk))
+
+def tops_upd0(+s: Nat, +j: Nat, +r: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +c: U32, +i1: S.Sub32(S.play.a(c), n01), +i2: S.Sub32(S.play.b(c), n23), +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +nx: {Nat.is_eq(0n, s) == False{} : Bool}, +tp: S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23)) -> S.Tops(s, j, r, U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c)), e01, e23, s01, s23, w01, w23):
+  match s:
+    case 0n:
+      Empty.absurd(S.Tops(0n, j, r, U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c)), e01, e23, s01, s23, w01, w23), no_tf(nx))
+    case 1n:
+      (+t0, (+t1, +t2)) = tp
+      (Laws.sub_trans32(R.suit.mask(j, U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c))), R.suit.mask(j, n01, n23), U32{S.ones(32n, r)}, mask_mono(j, n01, n23, S.play.a(c), S.play.b(c), i1, i2), t0), (t1, t2))
+    case 2n:
+      (+t0, (+t1, +t2)) = tp
+      (Laws.sub_trans32(R.suit.mask(j, U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c))), R.suit.mask(j, n01, n23), U32{S.ones(32n, r)}, mask_mono(j, n01, n23, S.play.a(c), S.play.b(c), i1, i2), t0), (t1, t2))
+    case 3n:
+      (+t0, (+t1, +t2)) = tp
+      (Laws.sub_trans32(R.suit.mask(j, U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c))), R.suit.mask(j, n01, n23), U32{S.ones(32n, r)}, mask_mono(j, n01, n23, S.play.a(c), S.play.b(c), i1, i2), t0), (t1, t2))
+    case 4n+y:
+      Empty.absurd(S.Tops(4n+y, j, r, U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c)), e01, e23, s01, s23, w01, w23), no_lt0(y, ls))
+
+def tops_upd1(+s: Nat, +j: Nat, +r: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +c: U32, +i1: S.Sub32(S.play.a(c), e01), +i2: S.Sub32(S.play.b(c), e23), +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +nx: {Nat.is_eq(1n, s) == False{} : Bool}, +tp: S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23)) -> S.Tops(s, j, r, n01, n23, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c)), s01, s23, w01, w23):
+  match s:
+    case 0n:
+      (+t0, (+t1, +t2)) = tp
+      (Laws.sub_trans32(R.suit.mask(j, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c))), R.suit.mask(j, e01, e23), U32{S.ones(32n, r)}, mask_mono(j, e01, e23, S.play.a(c), S.play.b(c), i1, i2), t0), (t1, t2))
+    case 1n:
+      Empty.absurd(S.Tops(1n, j, r, n01, n23, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c)), s01, s23, w01, w23), no_tf(nx))
+    case 2n:
+      (+t0, (+t1, +t2)) = tp
+      (t0, (Laws.sub_trans32(R.suit.mask(j, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c))), R.suit.mask(j, e01, e23), U32{S.ones(32n, r)}, mask_mono(j, e01, e23, S.play.a(c), S.play.b(c), i1, i2), t1), t2))
+    case 3n:
+      (+t0, (+t1, +t2)) = tp
+      (t0, (Laws.sub_trans32(R.suit.mask(j, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c))), R.suit.mask(j, e01, e23), U32{S.ones(32n, r)}, mask_mono(j, e01, e23, S.play.a(c), S.play.b(c), i1, i2), t1), t2))
+    case 4n+y:
+      Empty.absurd(S.Tops(4n+y, j, r, n01, n23, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c)), s01, s23, w01, w23), no_lt0(y, ls))
+
+def tops_upd2(+s: Nat, +j: Nat, +r: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +c: U32, +i1: S.Sub32(S.play.a(c), s01), +i2: S.Sub32(S.play.b(c), s23), +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +nx: {Nat.is_eq(2n, s) == False{} : Bool}, +tp: S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23)) -> S.Tops(s, j, r, n01, n23, e01, e23, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c)), w01, w23):
+  match s:
+    case 0n:
+      (+t0, (+t1, +t2)) = tp
+      (t0, (Laws.sub_trans32(R.suit.mask(j, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c))), R.suit.mask(j, s01, s23), U32{S.ones(32n, r)}, mask_mono(j, s01, s23, S.play.a(c), S.play.b(c), i1, i2), t1), t2))
+    case 1n:
+      (+t0, (+t1, +t2)) = tp
+      (t0, (Laws.sub_trans32(R.suit.mask(j, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c))), R.suit.mask(j, s01, s23), U32{S.ones(32n, r)}, mask_mono(j, s01, s23, S.play.a(c), S.play.b(c), i1, i2), t1), t2))
+    case 2n:
+      Empty.absurd(S.Tops(2n, j, r, n01, n23, e01, e23, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c)), w01, w23), no_tf(nx))
+    case 3n:
+      (+t0, (+t1, +t2)) = tp
+      (t0, (t1, Laws.sub_trans32(R.suit.mask(j, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c))), R.suit.mask(j, s01, s23), U32{S.ones(32n, r)}, mask_mono(j, s01, s23, S.play.a(c), S.play.b(c), i1, i2), t2)))
+    case 4n+y:
+      Empty.absurd(S.Tops(4n+y, j, r, n01, n23, e01, e23, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c)), w01, w23), no_lt0(y, ls))
+
+def tops_upd3(+s: Nat, +j: Nat, +r: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +c: U32, +i1: S.Sub32(S.play.a(c), w01), +i2: S.Sub32(S.play.b(c), w23), +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +nx: {Nat.is_eq(3n, s) == False{} : Bool}, +tp: S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23)) -> S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c))):
+  match s:
+    case 0n:
+      (+t0, (+t1, +t2)) = tp
+      (t0, (t1, Laws.sub_trans32(R.suit.mask(j, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c))), R.suit.mask(j, w01, w23), U32{S.ones(32n, r)}, mask_mono(j, w01, w23, S.play.a(c), S.play.b(c), i1, i2), t2)))
+    case 1n:
+      (+t0, (+t1, +t2)) = tp
+      (t0, (t1, Laws.sub_trans32(R.suit.mask(j, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c))), R.suit.mask(j, w01, w23), U32{S.ones(32n, r)}, mask_mono(j, w01, w23, S.play.a(c), S.play.b(c), i1, i2), t2)))
+    case 2n:
+      (+t0, (+t1, +t2)) = tp
+      (t0, (t1, Laws.sub_trans32(R.suit.mask(j, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c))), R.suit.mask(j, w01, w23), U32{S.ones(32n, r)}, mask_mono(j, w01, w23, S.play.a(c), S.play.b(c), i1, i2), t2)))
+    case 3n:
+      Empty.absurd(S.Tops(3n, j, r, n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c))), no_tf(nx))
+    case 4n+y:
+      Empty.absurd(S.Tops(4n+y, j, r, n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c))), no_lt0(y, ls))
+
+def inv.mv(+z: Nat, +X: Nat, +kk: Nat, +K: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32, +c: U32, +q: Nat, +L: Nat, +e: {z == X : Nat}, +ek: {kk == K : Nat}, +h: S.Inv(R.play.go(z, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), 1n+q, S.lnext(kk, L))) -> S.Inv(R.play.go(X, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), 1n+q, S.lnext(K, L)):
+  %e : S.Inv(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), 1n+q, S.lnext(K, L))
+  %ek : S.Inv(R.play.go(z, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), 1n+q, S.lnext(_, L))
+  h
+
+def kid2(+x: Nat, +p: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +s: Nat,
+    +sev: {U32.is_eq((R.trick.start(U32.from_nat(s)) .&. 1 : U32), 0) == True{} : Bool}, +ls: {Nat.is_lt(s, 4n) == True{} : Bool},
+    +lx: {Nat.is_lt(x, 4n) == True{} : Bool}, +nxs: {Nat.is_eq(x, s) == False{} : Bool},
+    +x2: Nat, +lx2: {Nat.is_lt(x2, 4n) == True{} : Bool}, +nx2: {Nat.is_eq(x2, s) == False{} : Bool},
+    +ex2: {U32.to_nat(U32.and((U32.from_nat(x) + 1 : U32), 3)) == x2 : Nat}, +ens: {U32.is_zero(U32.and(U32.and((U32.from_nat(x) + 1 : U32), 3), 1)) == False{} : Bool},
+    +L: Nat, +w0: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32, +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L), +es: {U32.to_nat(R.trick.seat(tr)) == x : Nat}, +ek: {U32.to_nat(R.trick.played(tr)) == 2n : Nat},
+    +eo: {R.trick.owner(tr) == U32.from_nat(s) : U32}, +eb: {R.trick.best(tr) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, +ew0: {U32.to_nat(won) == w0 : Nat}, +tps: S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23),
+    +c: U32, +ih: S.InHand(c, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23))) -> S.Kid(1n+w0, p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c):
+  match x p:
+    case 0n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(S.Kid(1n+w0, 0n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), no_one(2n, L, {==}, Equal.trans(Nat, Nat.add(2n, 1n), Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)))
+    case 0n 1n+q:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      (+i1, (+i2, (+one, +cok))) = ih
+      +ep = eq_of_nat(R.trick.played(tr), 2n, ek)
+      +tp = tops.here(n01, n23, e01, e23, s01, s23, w01, w23, tr, s, 0n, j, r, es, ls, {==}, nxs, tps)
+      +ew = Equal.trans(Bool, R.beats(4, R.trick.best(tr), c), R.beats(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), c), False{}, Equal.cong(U32, Bool, (z => R.beats(4, z, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), eb), Laws.beats_top(j, r, c, lj, lr, cok, Laws.below_top(c, j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), cok, i1, i2, tp, lj)))
+      +mk = Laws.mid_keep(2n, {==}, {==}, R.beats(4, R.trick.best(tr), c), rank.of(4, tr, c), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), c, ep, ew, idem(U32.shrn(tr, 4n), 7, {==}), idem(U32.shrn(tr, 7n), 3, {==}), idem(U32.shrn(tr, 9n), 63, {==}))
+      +ci = Laws.play_inv(4, c, 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +esd = eq_of_nat(R.trick.seat(tr), 0n, es)
+      +pm = Laws.played_mid(2n, {==}, tr, 4, c, ep)
+      +ens2 = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(0n) + 1 : U32), 3), 1)), False{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(0n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, c), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1), Laws.side_seat(R.trick.next(tr, 4, c))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(0n) + 1 : U32), 3),
+            Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(0n) + 1 : U32), 3), Laws.seat_mid(2n, {==}, tr, 4, c, ep),
+              Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(0n), esd)))),
+        ens)
+      %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 0n, es) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), 4, R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), n})))
+      %Equal.sym(Bool, R.pos.ns(R.Pos{U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c)), e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), False{}, ens2) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.Pos{U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c)), e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), 4, R.Pos{U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c)), e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => node3(R.Pos{U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c)), e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, q, L, w0, x2, j, r, lj, lr, s, sev, ls, lx2, nx2, (inv.mv(U32.to_nat(R.trick.seat(tr)), 0n, U32.to_nat(R.trick.played(tr)), 2n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, c, q, L, es, ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, c))), U32.to_nat(U32.and((U32.from_nat(0n) + 1 : U32), 3)), x2,
+          cg(R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(0n) + 1 : U32), 3), Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(0n) + 1 : U32), 3), Laws.seat_mid(2n, {==}, tr, 4, c, ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(0n), esd))), ex2),
+        (cg(R.trick.played(R.trick.next(tr, 4, c)), U32.from_nat(1n+2n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, c)), R.trick.owner(tr), U32.from_nat(s), a1({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk), eo),
+        (Equal.trans(U32, R.trick.best(R.trick.next(tr, 4, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), a1({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk)), eb),
+        (tr.n(U32.to_nat(R.won.next(R.trick.next(tr, 4, c), won)), U32.to_nat(won), w0, cg(R.won.next(R.trick.next(tr, 4, c), won), won, Laws.won_mid(2n, {==}, R.trick.next(tr, 4, c), won, pm)), ew0),
+        tops_upd0(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23, c, sub_in(S.play.a(c), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), n01, Equal.cong(Nat, U32, (z => R.pick(z, n01, e01, s01, w01)), U32.to_nat(R.trick.seat(tr)), 0n, es), i1), sub_in(S.play.b(c), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), n23, Equal.cong(Nat, U32, (z => R.pick(z, n23, e23, s23, w23)), U32.to_nat(R.trick.seat(tr)), 0n, es), i2), ls, nxs, tps))))))), 13, B.Res{13, n}, lt_le1(w0, 13n, Equal.trans(Bool, Nat.is_lt(w0, 13n), Nat.is_lt(U32.to_nat(won), 13n), True{}, Equal.cong(Nat, Bool, (z => Nat.is_lt(z, 13n)), w0, U32.to_nat(won), Equal.sym(Nat, U32.to_nat(won), w0, ew0)), Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 3n+q, Equal.trans(Nat, 1n+(3n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)), ewl))), lt_le1(w0, 13n, Equal.trans(Bool, Nat.is_lt(w0, 13n), Nat.is_lt(U32.to_nat(won), 13n), True{}, Equal.cong(Nat, Bool, (z => Nat.is_lt(z, 13n)), w0, U32.to_nat(won), Equal.sym(Nat, U32.to_nat(won), w0, ew0)), Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 3n+q, Equal.trans(Nat, 1n+(3n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)), ewl)))))
+    case 1n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(S.Kid(1n+w0, 0n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), no_one(2n, L, {==}, Equal.trans(Nat, Nat.add(2n, 1n), Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)))
+    case 1n 1n+q:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      (+i1, (+i2, (+one, +cok))) = ih
+      +ep = eq_of_nat(R.trick.played(tr), 2n, ek)
+      +tp = tops.here(n01, n23, e01, e23, s01, s23, w01, w23, tr, s, 1n, j, r, es, ls, {==}, nxs, tps)
+      +ew = Equal.trans(Bool, R.beats(4, R.trick.best(tr), c), R.beats(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), c), False{}, Equal.cong(U32, Bool, (z => R.beats(4, z, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), eb), Laws.beats_top(j, r, c, lj, lr, cok, Laws.below_top(c, j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), cok, i1, i2, tp, lj)))
+      +mk = Laws.mid_keep(2n, {==}, {==}, R.beats(4, R.trick.best(tr), c), rank.of(4, tr, c), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), c, ep, ew, idem(U32.shrn(tr, 4n), 7, {==}), idem(U32.shrn(tr, 7n), 3, {==}), idem(U32.shrn(tr, 9n), 63, {==}))
+      +ci = Laws.play_inv(4, c, 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +esd = eq_of_nat(R.trick.seat(tr), 1n, es)
+      +pm = Laws.played_mid(2n, {==}, tr, 4, c, ep)
+      +ens2 = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(1n) + 1 : U32), 3), 1)), False{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(1n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, c), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1), Laws.side_seat(R.trick.next(tr, 4, c))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(1n) + 1 : U32), 3),
+            Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(1n) + 1 : U32), 3), Laws.seat_mid(2n, {==}, tr, 4, c, ep),
+              Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(1n), esd)))),
+        ens)
+      %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 1n, es) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), 4, R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), n})))
+      %Equal.sym(Bool, R.pos.ns(R.Pos{n01, n23, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c)), s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), False{}, ens2) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.Pos{n01, n23, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c)), s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), 4, R.Pos{n01, n23, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c)), s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => node3(R.Pos{n01, n23, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c)), s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, q, L, w0, x2, j, r, lj, lr, s, sev, ls, lx2, nx2, (inv.mv(U32.to_nat(R.trick.seat(tr)), 1n, U32.to_nat(R.trick.played(tr)), 2n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, c, q, L, es, ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, c))), U32.to_nat(U32.and((U32.from_nat(1n) + 1 : U32), 3)), x2,
+          cg(R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(1n) + 1 : U32), 3), Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(1n) + 1 : U32), 3), Laws.seat_mid(2n, {==}, tr, 4, c, ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(1n), esd))), ex2),
+        (cg(R.trick.played(R.trick.next(tr, 4, c)), U32.from_nat(1n+2n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, c)), R.trick.owner(tr), U32.from_nat(s), a1({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk), eo),
+        (Equal.trans(U32, R.trick.best(R.trick.next(tr, 4, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), a1({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk)), eb),
+        (tr.n(U32.to_nat(R.won.next(R.trick.next(tr, 4, c), won)), U32.to_nat(won), w0, cg(R.won.next(R.trick.next(tr, 4, c), won), won, Laws.won_mid(2n, {==}, R.trick.next(tr, 4, c), won, pm)), ew0),
+        tops_upd1(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23, c, sub_in(S.play.a(c), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), e01, Equal.cong(Nat, U32, (z => R.pick(z, n01, e01, s01, w01)), U32.to_nat(R.trick.seat(tr)), 1n, es), i1), sub_in(S.play.b(c), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), e23, Equal.cong(Nat, U32, (z => R.pick(z, n23, e23, s23, w23)), U32.to_nat(R.trick.seat(tr)), 1n, es), i2), ls, nxs, tps))))))), 13, B.Res{13, n}, lt_le1(w0, 13n, Equal.trans(Bool, Nat.is_lt(w0, 13n), Nat.is_lt(U32.to_nat(won), 13n), True{}, Equal.cong(Nat, Bool, (z => Nat.is_lt(z, 13n)), w0, U32.to_nat(won), Equal.sym(Nat, U32.to_nat(won), w0, ew0)), Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 3n+q, Equal.trans(Nat, 1n+(3n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)), ewl))), lt_le1(w0, 13n, Equal.trans(Bool, Nat.is_lt(w0, 13n), Nat.is_lt(U32.to_nat(won), 13n), True{}, Equal.cong(Nat, Bool, (z => Nat.is_lt(z, 13n)), w0, U32.to_nat(won), Equal.sym(Nat, U32.to_nat(won), w0, ew0)), Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 3n+q, Equal.trans(Nat, 1n+(3n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)), ewl)))))
+    case 2n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(S.Kid(1n+w0, 0n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), no_one(2n, L, {==}, Equal.trans(Nat, Nat.add(2n, 1n), Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)))
+    case 2n 1n+q:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      (+i1, (+i2, (+one, +cok))) = ih
+      +ep = eq_of_nat(R.trick.played(tr), 2n, ek)
+      +tp = tops.here(n01, n23, e01, e23, s01, s23, w01, w23, tr, s, 2n, j, r, es, ls, {==}, nxs, tps)
+      +ew = Equal.trans(Bool, R.beats(4, R.trick.best(tr), c), R.beats(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), c), False{}, Equal.cong(U32, Bool, (z => R.beats(4, z, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), eb), Laws.beats_top(j, r, c, lj, lr, cok, Laws.below_top(c, j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), cok, i1, i2, tp, lj)))
+      +mk = Laws.mid_keep(2n, {==}, {==}, R.beats(4, R.trick.best(tr), c), rank.of(4, tr, c), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), c, ep, ew, idem(U32.shrn(tr, 4n), 7, {==}), idem(U32.shrn(tr, 7n), 3, {==}), idem(U32.shrn(tr, 9n), 63, {==}))
+      +ci = Laws.play_inv(4, c, 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +esd = eq_of_nat(R.trick.seat(tr), 2n, es)
+      +pm = Laws.played_mid(2n, {==}, tr, 4, c, ep)
+      +ens2 = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(2n) + 1 : U32), 3), 1)), False{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(2n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, c), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1), Laws.side_seat(R.trick.next(tr, 4, c))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(2n) + 1 : U32), 3),
+            Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(2n) + 1 : U32), 3), Laws.seat_mid(2n, {==}, tr, 4, c, ep),
+              Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(2n), esd)))),
+        ens)
+      %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 2n, es) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), 4, R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), n})))
+      %Equal.sym(Bool, R.pos.ns(R.Pos{n01, n23, e01, e23, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c)), w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), False{}, ens2) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.Pos{n01, n23, e01, e23, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c)), w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), 4, R.Pos{n01, n23, e01, e23, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c)), w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => node3(R.Pos{n01, n23, e01, e23, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c)), w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, q, L, w0, x2, j, r, lj, lr, s, sev, ls, lx2, nx2, (inv.mv(U32.to_nat(R.trick.seat(tr)), 2n, U32.to_nat(R.trick.played(tr)), 2n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, c, q, L, es, ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, c))), U32.to_nat(U32.and((U32.from_nat(2n) + 1 : U32), 3)), x2,
+          cg(R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(2n) + 1 : U32), 3), Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(2n) + 1 : U32), 3), Laws.seat_mid(2n, {==}, tr, 4, c, ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(2n), esd))), ex2),
+        (cg(R.trick.played(R.trick.next(tr, 4, c)), U32.from_nat(1n+2n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, c)), R.trick.owner(tr), U32.from_nat(s), a1({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk), eo),
+        (Equal.trans(U32, R.trick.best(R.trick.next(tr, 4, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), a1({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk)), eb),
+        (tr.n(U32.to_nat(R.won.next(R.trick.next(tr, 4, c), won)), U32.to_nat(won), w0, cg(R.won.next(R.trick.next(tr, 4, c), won), won, Laws.won_mid(2n, {==}, R.trick.next(tr, 4, c), won, pm)), ew0),
+        tops_upd2(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23, c, sub_in(S.play.a(c), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), s01, Equal.cong(Nat, U32, (z => R.pick(z, n01, e01, s01, w01)), U32.to_nat(R.trick.seat(tr)), 2n, es), i1), sub_in(S.play.b(c), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), s23, Equal.cong(Nat, U32, (z => R.pick(z, n23, e23, s23, w23)), U32.to_nat(R.trick.seat(tr)), 2n, es), i2), ls, nxs, tps))))))), 13, B.Res{13, n}, lt_le1(w0, 13n, Equal.trans(Bool, Nat.is_lt(w0, 13n), Nat.is_lt(U32.to_nat(won), 13n), True{}, Equal.cong(Nat, Bool, (z => Nat.is_lt(z, 13n)), w0, U32.to_nat(won), Equal.sym(Nat, U32.to_nat(won), w0, ew0)), Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 3n+q, Equal.trans(Nat, 1n+(3n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)), ewl))), lt_le1(w0, 13n, Equal.trans(Bool, Nat.is_lt(w0, 13n), Nat.is_lt(U32.to_nat(won), 13n), True{}, Equal.cong(Nat, Bool, (z => Nat.is_lt(z, 13n)), w0, U32.to_nat(won), Equal.sym(Nat, U32.to_nat(won), w0, ew0)), Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 3n+q, Equal.trans(Nat, 1n+(3n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)), ewl)))))
+    case 3n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(S.Kid(1n+w0, 0n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), no_one(2n, L, {==}, Equal.trans(Nat, Nat.add(2n, 1n), Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)))
+    case 3n 1n+q:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      (+i1, (+i2, (+one, +cok))) = ih
+      +ep = eq_of_nat(R.trick.played(tr), 2n, ek)
+      +tp = tops.here(n01, n23, e01, e23, s01, s23, w01, w23, tr, s, 3n, j, r, es, ls, {==}, nxs, tps)
+      +ew = Equal.trans(Bool, R.beats(4, R.trick.best(tr), c), R.beats(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), c), False{}, Equal.cong(U32, Bool, (z => R.beats(4, z, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), eb), Laws.beats_top(j, r, c, lj, lr, cok, Laws.below_top(c, j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), cok, i1, i2, tp, lj)))
+      +mk = Laws.mid_keep(2n, {==}, {==}, R.beats(4, R.trick.best(tr), c), rank.of(4, tr, c), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), c, ep, ew, idem(U32.shrn(tr, 4n), 7, {==}), idem(U32.shrn(tr, 7n), 3, {==}), idem(U32.shrn(tr, 9n), 63, {==}))
+      +ci = Laws.play_inv(4, c, 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +esd = eq_of_nat(R.trick.seat(tr), 3n, es)
+      +pm = Laws.played_mid(2n, {==}, tr, 4, c, ep)
+      +ens2 = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(3n) + 1 : U32), 3), 1)), False{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(3n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, c), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1), Laws.side_seat(R.trick.next(tr, 4, c))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(3n) + 1 : U32), 3),
+            Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(3n) + 1 : U32), 3), Laws.seat_mid(2n, {==}, tr, 4, c, ep),
+              Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(3n), esd)))),
+        ens)
+      %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 3n, es) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), 4, R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), n})))
+      %Equal.sym(Bool, R.pos.ns(R.Pos{n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c)), R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), False{}, ens2) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c)), R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), 4, R.Pos{n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c)), R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => node3(R.Pos{n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c)), R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, q, L, w0, x2, j, r, lj, lr, s, sev, ls, lx2, nx2, (inv.mv(U32.to_nat(R.trick.seat(tr)), 3n, U32.to_nat(R.trick.played(tr)), 2n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, c, q, L, es, ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, c))), U32.to_nat(U32.and((U32.from_nat(3n) + 1 : U32), 3)), x2,
+          cg(R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(3n) + 1 : U32), 3), Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(3n) + 1 : U32), 3), Laws.seat_mid(2n, {==}, tr, 4, c, ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(3n), esd))), ex2),
+        (cg(R.trick.played(R.trick.next(tr, 4, c)), U32.from_nat(1n+2n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, c)), R.trick.owner(tr), U32.from_nat(s), a1({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk), eo),
+        (Equal.trans(U32, R.trick.best(R.trick.next(tr, 4, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), a1({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk)), eb),
+        (tr.n(U32.to_nat(R.won.next(R.trick.next(tr, 4, c), won)), U32.to_nat(won), w0, cg(R.won.next(R.trick.next(tr, 4, c), won), won, Laws.won_mid(2n, {==}, R.trick.next(tr, 4, c), won, pm)), ew0),
+        tops_upd3(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23, c, sub_in(S.play.a(c), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), w01, Equal.cong(Nat, U32, (z => R.pick(z, n01, e01, s01, w01)), U32.to_nat(R.trick.seat(tr)), 3n, es), i1), sub_in(S.play.b(c), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), w23, Equal.cong(Nat, U32, (z => R.pick(z, n23, e23, s23, w23)), U32.to_nat(R.trick.seat(tr)), 3n, es), i2), ls, nxs, tps))))))), 13, B.Res{13, n}, lt_le1(w0, 13n, Equal.trans(Bool, Nat.is_lt(w0, 13n), Nat.is_lt(U32.to_nat(won), 13n), True{}, Equal.cong(Nat, Bool, (z => Nat.is_lt(z, 13n)), w0, U32.to_nat(won), Equal.sym(Nat, U32.to_nat(won), w0, ew0)), Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 3n+q, Equal.trans(Nat, 1n+(3n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)), ewl))), lt_le1(w0, 13n, Equal.trans(Bool, Nat.is_lt(w0, 13n), Nat.is_lt(U32.to_nat(won), 13n), True{}, Equal.cong(Nat, Bool, (z => Nat.is_lt(z, 13n)), w0, U32.to_nat(won), Equal.sym(Nat, U32.to_nat(won), w0, ew0)), Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 3n+q, Equal.trans(Nat, 1n+(3n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 2n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 2n, ek)), ed)), ewl)))))
+    case 4n+y _:
+      Empty.absurd(S.Kid(1n+w0, p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), no_lt0(y, lx))
+
+def ex_all(+lb: Nat, +p: Nat, +t: U32, +pos: R.Pos, ms: List<&2, U32>, all: S.AllK(lb, p, t, pos, ms), ne: S.NE(ms)) -> S.ExK(lb, p, t, pos, ms):
+  match ms:
+    case Nil{}:
+      Empty.absurd(S.ExK(lb, p, t, pos, Nil{}), ne)
+    case Con{+c, tl}:
+      (k, rest) = all
+      Inl{k}
+
+def all2(+x: Nat, +p: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +s: Nat, +sev: {U32.is_eq((R.trick.start(U32.from_nat(s)) .&. 1 : U32), 0) == True{} : Bool}, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +lx: {Nat.is_lt(x, 4n) == True{} : Bool}, +nxs: {Nat.is_eq(x, s) == False{} : Bool}, +x3: Nat, +lx3: {Nat.is_lt(x3, 4n) == True{} : Bool}, +nx3: {Nat.is_eq(x3, s) == False{} : Bool}, +ex3: {U32.to_nat(U32.and((U32.from_nat(x) + 1 : U32), 3)) == x3 : Nat}, +ens3: {U32.is_zero(U32.and(U32.and((U32.from_nat(x) + 1 : U32), 3), 1)) == False{} : Bool},
+    +L: Nat, +w0: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32, +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L), +es: {U32.to_nat(R.trick.seat(tr)) == x : Nat}, +ek: {U32.to_nat(R.trick.played(tr)) == 2n : Nat},
+    +eo: {R.trick.owner(tr) == U32.from_nat(s) : U32}, +eb: {R.trick.best(tr) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, +ew0: {U32.to_nat(won) == w0 : Nat}, +tps: S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23),
+    ms: List<&2, U32>, ah: S.AllH(ms, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23))) -> S.AllK(1n+w0, p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, ms):
+  match ms:
+    case Nil{}:
+      Unit{}
+    case Con{+c, tl}:
+      (ic, rest) = ah
+      (kid2(x, p, j, r, lj, lr, s, sev, ls, lx, nxs, x3, lx3, nx3, ex3, ens3, L, w0, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, eo, eb, ew0, tps, c, ic),
+        all2(x, p, j, r, lj, lr, s, sev, ls, lx, nxs, x3, lx3, nx3, ex3, ens3, L, w0, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, eo, eb, ew0, tps, tl, rest))
+
+# The third seat, the leader's partner: any card it plays keeps the trick for the
+# leader's side, so North-South's max is at least one more than the tricks won.
+
+def node2(+pos: R.Pos, +p: Nat, +L: Nat, +w0: Nat, +x: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +s: Nat, +sev: {U32.is_eq((R.trick.start(U32.from_nat(s)) .&. 1 : U32), 0) == True{} : Bool}, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +lx: {Nat.is_lt(x, 4n) == True{} : Bool}, +nx: {Nat.is_eq(x, s) == False{} : Bool}, +x3: Nat, +lx3: {Nat.is_lt(x3, 4n) == True{} : Bool}, +nx3: {Nat.is_eq(x3, s) == False{} : Bool}, +ex3: {U32.to_nat(U32.and((U32.from_nat(x) + 1 : U32), 3)) == x3 : Nat}, +ens3: {U32.is_zero(U32.and(U32.and((U32.from_nat(x) + 1 : U32), 3), 1)) == False{} : Bool},
+    +hold: Hold(pos, p, L, j, r, w0, s, 2n, x), +best: U32, +r0: B.Res) -> S.GE(1n+w0, S.rv(B.search(1n+p, R.moves(pos), 4, pos, True{}, best, r0))):
+  match pos:
+    case R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, +tr, +won}:
+      (+inv, (+es, (+ek, (+eo, (+eb, (+ew0, +tps)))))) = hold
+      Laws.max_ex(p, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, best, r0, 1n+w0,
+        ex_all(1n+w0, p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}),
+          all2(x, p, j, r, lj, lr, s, sev, ls, lx, nx, x3, lx3, nx3, ex3, ens3, L, w0, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, eo, eb, ew0, tps, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), Laws.kid_hand(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L, inv)),
+          kid_ne(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, p, L, inv)))
+
+def kid1(+x: Nat, +p: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +s: Nat,
+    +sev: {U32.is_eq((R.trick.start(U32.from_nat(s)) .&. 1 : U32), 0) == True{} : Bool}, +ls: {Nat.is_lt(s, 4n) == True{} : Bool},
+    +lx: {Nat.is_lt(x, 4n) == True{} : Bool}, +nxs: {Nat.is_eq(x, s) == False{} : Bool},
+    +x2: Nat, +lx2: {Nat.is_lt(x2, 4n) == True{} : Bool}, +nx2: {Nat.is_eq(x2, s) == False{} : Bool},
+    +ex2: {U32.to_nat(U32.and((U32.from_nat(x) + 1 : U32), 3)) == x2 : Nat}, +ens: {U32.is_zero(U32.and(U32.and((U32.from_nat(x) + 1 : U32), 3), 1)) == True{} : Bool}, +x3: Nat, +lx3: {Nat.is_lt(x3, 4n) == True{} : Bool}, +nx3: {Nat.is_eq(x3, s) == False{} : Bool}, +ex3: {U32.to_nat(U32.and((U32.from_nat(x2) + 1 : U32), 3)) == x3 : Nat}, +ens3: {U32.is_zero(U32.and(U32.and((U32.from_nat(x2) + 1 : U32), 3), 1)) == False{} : Bool},
+    +L: Nat, +w0: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32, +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L), +es: {U32.to_nat(R.trick.seat(tr)) == x : Nat}, +ek: {U32.to_nat(R.trick.played(tr)) == 1n : Nat},
+    +eo: {R.trick.owner(tr) == U32.from_nat(s) : U32}, +eb: {R.trick.best(tr) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, +ew0: {U32.to_nat(won) == w0 : Nat}, +tps: S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23),
+    +c: U32, +ih: S.InHand(c, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23))) -> S.Kid(1n+w0, p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c):
+  match x p:
+    case 0n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(S.Kid(1n+w0, 0n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), no_one(1n, L, {==}, Equal.trans(Nat, Nat.add(1n, 1n), Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 1n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 1n, ek)), ed)))
+    case 0n 1n+q:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      (+i1, (+i2, (+one, +cok))) = ih
+      +ep = eq_of_nat(R.trick.played(tr), 1n, ek)
+      +tp = tops.here(n01, n23, e01, e23, s01, s23, w01, w23, tr, s, 0n, j, r, es, ls, {==}, nxs, tps)
+      +ew = Equal.trans(Bool, R.beats(4, R.trick.best(tr), c), R.beats(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), c), False{}, Equal.cong(U32, Bool, (z => R.beats(4, z, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), eb), Laws.beats_top(j, r, c, lj, lr, cok, Laws.below_top(c, j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), cok, i1, i2, tp, lj)))
+      +mk = Laws.mid_keep(1n, {==}, {==}, R.beats(4, R.trick.best(tr), c), rank.of(4, tr, c), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), c, ep, ew, idem(U32.shrn(tr, 4n), 7, {==}), idem(U32.shrn(tr, 7n), 3, {==}), idem(U32.shrn(tr, 9n), 63, {==}))
+      +ci = Laws.play_inv(4, c, 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +esd = eq_of_nat(R.trick.seat(tr), 0n, es)
+      +pm = Laws.played_mid(1n, {==}, tr, 4, c, ep)
+      +ens2 = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(0n) + 1 : U32), 3), 1)), True{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(0n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, c), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1), Laws.side_seat(R.trick.next(tr, 4, c))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(0n) + 1 : U32), 3),
+            Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(0n) + 1 : U32), 3), Laws.seat_mid(1n, {==}, tr, 4, c, ep),
+              Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(0n), esd)))),
+        ens)
+      %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 0n, es) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), 4, R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), n})))
+      %Equal.sym(Bool, R.pos.ns(R.Pos{U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c)), e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), True{}, ens2) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.Pos{U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c)), e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), 4, R.Pos{U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c)), e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => node2(R.Pos{U32.xor(n01, S.play.a(c)), U32.xor(n23, S.play.b(c)), e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, q, L, w0, x2, j, r, lj, lr, s, sev, ls, lx2, nx2, x3, lx3, nx3, ex3, ens3, (inv.mv(U32.to_nat(R.trick.seat(tr)), 0n, U32.to_nat(R.trick.played(tr)), 1n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, c, q, L, es, ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, c))), U32.to_nat(U32.and((U32.from_nat(0n) + 1 : U32), 3)), x2,
+          cg(R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(0n) + 1 : U32), 3), Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(0n) + 1 : U32), 3), Laws.seat_mid(1n, {==}, tr, 4, c, ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(0n), esd))), ex2),
+        (cg(R.trick.played(R.trick.next(tr, 4, c)), U32.from_nat(1n+1n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, c)), R.trick.owner(tr), U32.from_nat(s), a1({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk), eo),
+        (Equal.trans(U32, R.trick.best(R.trick.next(tr, 4, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), a1({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk)), eb),
+        (tr.n(U32.to_nat(R.won.next(R.trick.next(tr, 4, c), won)), U32.to_nat(won), w0, cg(R.won.next(R.trick.next(tr, 4, c), won), won, Laws.won_mid(1n, {==}, R.trick.next(tr, 4, c), won, pm)), ew0),
+        tops_upd0(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23, c, sub_in(S.play.a(c), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), n01, Equal.cong(Nat, U32, (z => R.pick(z, n01, e01, s01, w01)), U32.to_nat(R.trick.seat(tr)), 0n, es), i1), sub_in(S.play.b(c), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), n23, Equal.cong(Nat, U32, (z => R.pick(z, n23, e23, s23, w23)), U32.to_nat(R.trick.seat(tr)), 0n, es), i2), ls, nxs, tps))))))), 0, B.Res{0, n}))
+    case 1n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(S.Kid(1n+w0, 0n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), no_one(1n, L, {==}, Equal.trans(Nat, Nat.add(1n, 1n), Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 1n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 1n, ek)), ed)))
+    case 1n 1n+q:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      (+i1, (+i2, (+one, +cok))) = ih
+      +ep = eq_of_nat(R.trick.played(tr), 1n, ek)
+      +tp = tops.here(n01, n23, e01, e23, s01, s23, w01, w23, tr, s, 1n, j, r, es, ls, {==}, nxs, tps)
+      +ew = Equal.trans(Bool, R.beats(4, R.trick.best(tr), c), R.beats(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), c), False{}, Equal.cong(U32, Bool, (z => R.beats(4, z, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), eb), Laws.beats_top(j, r, c, lj, lr, cok, Laws.below_top(c, j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), cok, i1, i2, tp, lj)))
+      +mk = Laws.mid_keep(1n, {==}, {==}, R.beats(4, R.trick.best(tr), c), rank.of(4, tr, c), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), c, ep, ew, idem(U32.shrn(tr, 4n), 7, {==}), idem(U32.shrn(tr, 7n), 3, {==}), idem(U32.shrn(tr, 9n), 63, {==}))
+      +ci = Laws.play_inv(4, c, 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +esd = eq_of_nat(R.trick.seat(tr), 1n, es)
+      +pm = Laws.played_mid(1n, {==}, tr, 4, c, ep)
+      +ens2 = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(1n) + 1 : U32), 3), 1)), True{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(1n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, c), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1), Laws.side_seat(R.trick.next(tr, 4, c))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(1n) + 1 : U32), 3),
+            Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(1n) + 1 : U32), 3), Laws.seat_mid(1n, {==}, tr, 4, c, ep),
+              Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(1n), esd)))),
+        ens)
+      %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 1n, es) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), 4, R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), n})))
+      %Equal.sym(Bool, R.pos.ns(R.Pos{n01, n23, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c)), s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), True{}, ens2) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.Pos{n01, n23, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c)), s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), 4, R.Pos{n01, n23, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c)), s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => node2(R.Pos{n01, n23, U32.xor(e01, S.play.a(c)), U32.xor(e23, S.play.b(c)), s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, q, L, w0, x2, j, r, lj, lr, s, sev, ls, lx2, nx2, x3, lx3, nx3, ex3, ens3, (inv.mv(U32.to_nat(R.trick.seat(tr)), 1n, U32.to_nat(R.trick.played(tr)), 1n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, c, q, L, es, ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, c))), U32.to_nat(U32.and((U32.from_nat(1n) + 1 : U32), 3)), x2,
+          cg(R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(1n) + 1 : U32), 3), Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(1n) + 1 : U32), 3), Laws.seat_mid(1n, {==}, tr, 4, c, ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(1n), esd))), ex2),
+        (cg(R.trick.played(R.trick.next(tr, 4, c)), U32.from_nat(1n+1n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, c)), R.trick.owner(tr), U32.from_nat(s), a1({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk), eo),
+        (Equal.trans(U32, R.trick.best(R.trick.next(tr, 4, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), a1({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk)), eb),
+        (tr.n(U32.to_nat(R.won.next(R.trick.next(tr, 4, c), won)), U32.to_nat(won), w0, cg(R.won.next(R.trick.next(tr, 4, c), won), won, Laws.won_mid(1n, {==}, R.trick.next(tr, 4, c), won, pm)), ew0),
+        tops_upd1(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23, c, sub_in(S.play.a(c), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), e01, Equal.cong(Nat, U32, (z => R.pick(z, n01, e01, s01, w01)), U32.to_nat(R.trick.seat(tr)), 1n, es), i1), sub_in(S.play.b(c), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), e23, Equal.cong(Nat, U32, (z => R.pick(z, n23, e23, s23, w23)), U32.to_nat(R.trick.seat(tr)), 1n, es), i2), ls, nxs, tps))))))), 0, B.Res{0, n}))
+    case 2n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(S.Kid(1n+w0, 0n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), no_one(1n, L, {==}, Equal.trans(Nat, Nat.add(1n, 1n), Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 1n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 1n, ek)), ed)))
+    case 2n 1n+q:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      (+i1, (+i2, (+one, +cok))) = ih
+      +ep = eq_of_nat(R.trick.played(tr), 1n, ek)
+      +tp = tops.here(n01, n23, e01, e23, s01, s23, w01, w23, tr, s, 2n, j, r, es, ls, {==}, nxs, tps)
+      +ew = Equal.trans(Bool, R.beats(4, R.trick.best(tr), c), R.beats(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), c), False{}, Equal.cong(U32, Bool, (z => R.beats(4, z, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), eb), Laws.beats_top(j, r, c, lj, lr, cok, Laws.below_top(c, j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), cok, i1, i2, tp, lj)))
+      +mk = Laws.mid_keep(1n, {==}, {==}, R.beats(4, R.trick.best(tr), c), rank.of(4, tr, c), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), c, ep, ew, idem(U32.shrn(tr, 4n), 7, {==}), idem(U32.shrn(tr, 7n), 3, {==}), idem(U32.shrn(tr, 9n), 63, {==}))
+      +ci = Laws.play_inv(4, c, 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +esd = eq_of_nat(R.trick.seat(tr), 2n, es)
+      +pm = Laws.played_mid(1n, {==}, tr, 4, c, ep)
+      +ens2 = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(2n) + 1 : U32), 3), 1)), True{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(2n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, c), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1), Laws.side_seat(R.trick.next(tr, 4, c))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(2n) + 1 : U32), 3),
+            Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(2n) + 1 : U32), 3), Laws.seat_mid(1n, {==}, tr, 4, c, ep),
+              Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(2n), esd)))),
+        ens)
+      %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 2n, es) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), 4, R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), n})))
+      %Equal.sym(Bool, R.pos.ns(R.Pos{n01, n23, e01, e23, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c)), w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), True{}, ens2) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.Pos{n01, n23, e01, e23, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c)), w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), 4, R.Pos{n01, n23, e01, e23, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c)), w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => node2(R.Pos{n01, n23, e01, e23, U32.xor(s01, S.play.a(c)), U32.xor(s23, S.play.b(c)), w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, q, L, w0, x2, j, r, lj, lr, s, sev, ls, lx2, nx2, x3, lx3, nx3, ex3, ens3, (inv.mv(U32.to_nat(R.trick.seat(tr)), 2n, U32.to_nat(R.trick.played(tr)), 1n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, c, q, L, es, ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, c))), U32.to_nat(U32.and((U32.from_nat(2n) + 1 : U32), 3)), x2,
+          cg(R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(2n) + 1 : U32), 3), Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(2n) + 1 : U32), 3), Laws.seat_mid(1n, {==}, tr, 4, c, ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(2n), esd))), ex2),
+        (cg(R.trick.played(R.trick.next(tr, 4, c)), U32.from_nat(1n+1n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, c)), R.trick.owner(tr), U32.from_nat(s), a1({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk), eo),
+        (Equal.trans(U32, R.trick.best(R.trick.next(tr, 4, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), a1({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk)), eb),
+        (tr.n(U32.to_nat(R.won.next(R.trick.next(tr, 4, c), won)), U32.to_nat(won), w0, cg(R.won.next(R.trick.next(tr, 4, c), won), won, Laws.won_mid(1n, {==}, R.trick.next(tr, 4, c), won, pm)), ew0),
+        tops_upd2(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23, c, sub_in(S.play.a(c), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), s01, Equal.cong(Nat, U32, (z => R.pick(z, n01, e01, s01, w01)), U32.to_nat(R.trick.seat(tr)), 2n, es), i1), sub_in(S.play.b(c), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), s23, Equal.cong(Nat, U32, (z => R.pick(z, n23, e23, s23, w23)), U32.to_nat(R.trick.seat(tr)), 2n, es), i2), ls, nxs, tps))))))), 0, B.Res{0, n}))
+    case 3n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(S.Kid(1n+w0, 0n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), no_one(1n, L, {==}, Equal.trans(Nat, Nat.add(1n, 1n), Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 1n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 1n, ek)), ed)))
+    case 3n 1n+q:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      (+i1, (+i2, (+one, +cok))) = ih
+      +ep = eq_of_nat(R.trick.played(tr), 1n, ek)
+      +tp = tops.here(n01, n23, e01, e23, s01, s23, w01, w23, tr, s, 3n, j, r, es, ls, {==}, nxs, tps)
+      +ew = Equal.trans(Bool, R.beats(4, R.trick.best(tr), c), R.beats(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), c), False{}, Equal.cong(U32, Bool, (z => R.beats(4, z, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), eb), Laws.beats_top(j, r, c, lj, lr, cok, Laws.below_top(c, j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), cok, i1, i2, tp, lj)))
+      +mk = Laws.mid_keep(1n, {==}, {==}, R.beats(4, R.trick.best(tr), c), rank.of(4, tr, c), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), c, ep, ew, idem(U32.shrn(tr, 4n), 7, {==}), idem(U32.shrn(tr, 7n), 3, {==}), idem(U32.shrn(tr, 9n), 63, {==}))
+      +ci = Laws.play_inv(4, c, 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +esd = eq_of_nat(R.trick.seat(tr), 3n, es)
+      +pm = Laws.played_mid(1n, {==}, tr, 4, c, ep)
+      +ens2 = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(3n) + 1 : U32), 3), 1)), True{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, c) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(3n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, c), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, c)), 1), Laws.side_seat(R.trick.next(tr, 4, c))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(3n) + 1 : U32), 3),
+            Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(3n) + 1 : U32), 3), Laws.seat_mid(1n, {==}, tr, 4, c, ep),
+              Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(3n), esd)))),
+        ens)
+      %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 3n, es) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), 4, R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)), R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(c), S.play.b(c), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)))), n})))
+      %Equal.sym(Bool, R.pos.ns(R.Pos{n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c)), R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), True{}, ens2) : @n: Nat -> S.GE(1n+w0, S.rv(B.search(1n+q, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c)), R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}), 4, R.Pos{n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c)), R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => node2(R.Pos{n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(c)), U32.xor(w23, S.play.b(c)), R.trick.next(tr, 4, c), R.won.next(R.trick.next(tr, 4, c), won)}, q, L, w0, x2, j, r, lj, lr, s, sev, ls, lx2, nx2, x3, lx3, nx3, ex3, ens3, (inv.mv(U32.to_nat(R.trick.seat(tr)), 3n, U32.to_nat(R.trick.played(tr)), 1n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, c, q, L, es, ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, c))), U32.to_nat(U32.and((U32.from_nat(3n) + 1 : U32), 3)), x2,
+          cg(R.trick.seat(R.trick.next(tr, 4, c)), U32.and((U32.from_nat(3n) + 1 : U32), 3), Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, c)), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(3n) + 1 : U32), 3), Laws.seat_mid(1n, {==}, tr, 4, c, ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(3n), esd))), ex2),
+        (cg(R.trick.played(R.trick.next(tr, 4, c)), U32.from_nat(1n+1n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, c)), R.trick.owner(tr), U32.from_nat(s), a1({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk), eo),
+        (Equal.trans(U32, R.trick.best(R.trick.next(tr, 4, c)), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), a1({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, c)) == R.trick.owner(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, c)) == R.trick.best(tr) : U32}, {R.trick.lead(R.trick.next(tr, 4, c)) == R.trick.lead(tr) : U32}), mk)), eb),
+        (tr.n(U32.to_nat(R.won.next(R.trick.next(tr, 4, c), won)), U32.to_nat(won), w0, cg(R.won.next(R.trick.next(tr, 4, c), won), won, Laws.won_mid(1n, {==}, R.trick.next(tr, 4, c), won, pm)), ew0),
+        tops_upd3(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23, c, sub_in(S.play.a(c), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), w01, Equal.cong(Nat, U32, (z => R.pick(z, n01, e01, s01, w01)), U32.to_nat(R.trick.seat(tr)), 3n, es), i1), sub_in(S.play.b(c), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), w23, Equal.cong(Nat, U32, (z => R.pick(z, n23, e23, s23, w23)), U32.to_nat(R.trick.seat(tr)), 3n, es), i2), ls, nxs, tps))))))), 0, B.Res{0, n}))
+    case 4n+y _:
+      Empty.absurd(S.Kid(1n+w0, p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), no_lt0(y, lx))
+
+def all1(+x: Nat, +p: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +s: Nat, +sev: {U32.is_eq((R.trick.start(U32.from_nat(s)) .&. 1 : U32), 0) == True{} : Bool}, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +lx: {Nat.is_lt(x, 4n) == True{} : Bool}, +nxs: {Nat.is_eq(x, s) == False{} : Bool}, +x2: Nat, +lx2: {Nat.is_lt(x2, 4n) == True{} : Bool}, +nx2: {Nat.is_eq(x2, s) == False{} : Bool}, +ex2: {U32.to_nat(U32.and((U32.from_nat(x) + 1 : U32), 3)) == x2 : Nat}, +ens: {U32.is_zero(U32.and(U32.and((U32.from_nat(x) + 1 : U32), 3), 1)) == True{} : Bool}, +x3: Nat, +lx3: {Nat.is_lt(x3, 4n) == True{} : Bool}, +nx3: {Nat.is_eq(x3, s) == False{} : Bool}, +ex3: {U32.to_nat(U32.and((U32.from_nat(x2) + 1 : U32), 3)) == x3 : Nat}, +ens3: {U32.is_zero(U32.and(U32.and((U32.from_nat(x2) + 1 : U32), 3), 1)) == False{} : Bool},
+    +L: Nat, +w0: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32, +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L), +es: {U32.to_nat(R.trick.seat(tr)) == x : Nat}, +ek: {U32.to_nat(R.trick.played(tr)) == 1n : Nat},
+    +eo: {R.trick.owner(tr) == U32.from_nat(s) : U32}, +eb: {R.trick.best(tr) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, +ew0: {U32.to_nat(won) == w0 : Nat}, +tps: S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23),
+    ms: List<&2, U32>, ah: S.AllH(ms, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23))) -> S.AllK(1n+w0, p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, ms):
+  match ms:
+    case Nil{}:
+      Unit{}
+    case Con{+c, tl}:
+      (ic, rest) = ah
+      (kid1(x, p, j, r, lj, lr, s, sev, ls, lx, nxs, x2, lx2, nx2, ex2, ens, x3, lx3, nx3, ex3, ens3, L, w0, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, eo, eb, ew0, tps, c, ic),
+        all1(x, p, j, r, lj, lr, s, sev, ls, lx, nxs, x2, lx2, nx2, ex2, ens, x3, lx3, nx3, ex3, ens3, L, w0, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, eo, eb, ew0, tps, tl, rest))
+
+# The second seat, after the lead: whatever East-West play, the value stays at or
+# above one more than the tricks won.
+
+def node1(+pos: R.Pos, +p: Nat, +L: Nat, +w0: Nat, +x: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +s: Nat, +sev: {U32.is_eq((R.trick.start(U32.from_nat(s)) .&. 1 : U32), 0) == True{} : Bool}, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +lx: {Nat.is_lt(x, 4n) == True{} : Bool}, +nxs: {Nat.is_eq(x, s) == False{} : Bool}, +x2: Nat, +lx2: {Nat.is_lt(x2, 4n) == True{} : Bool}, +nx2: {Nat.is_eq(x2, s) == False{} : Bool}, +ex2: {U32.to_nat(U32.and((U32.from_nat(x) + 1 : U32), 3)) == x2 : Nat}, +ens: {U32.is_zero(U32.and(U32.and((U32.from_nat(x) + 1 : U32), 3), 1)) == True{} : Bool}, +x3: Nat, +lx3: {Nat.is_lt(x3, 4n) == True{} : Bool}, +nx3: {Nat.is_eq(x3, s) == False{} : Bool}, +ex3: {U32.to_nat(U32.and((U32.from_nat(x2) + 1 : U32), 3)) == x3 : Nat}, +ens3: {U32.is_zero(U32.and(U32.and((U32.from_nat(x2) + 1 : U32), 3), 1)) == False{} : Bool},
+    +hold: Hold(pos, p, L, j, r, w0, s, 1n, x), +best: U32, +r0: B.Res, +hb: S.GE(1n+w0, best), +hr: S.GE(1n+w0, S.rv(r0))) -> S.GE(1n+w0, S.rv(B.search(1n+p, R.moves(pos), 4, pos, False{}, best, r0))):
+  match pos:
+    case R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, +tr, +won}:
+      (+inv, (+es, (+ek, (+eo, (+eb, (+ew0, +tps)))))) = hold
+      Laws.min_all(p, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, best, r0, 1n+w0,
+        all1(x, p, j, r, lj, lr, s, sev, ls, lx, nxs, x2, lx2, nx2, ex2, ens, x3, lx3, nx3, ex3, ens3, L, w0, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, eo, eb, ew0, tps, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), Laws.kid_hand(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L, inv)), hb, hr)
+
+def ih.a(+c: U32, +h01: U32, +h23: U32, +ih: S.InHand(c, h01, h23)) -> S.Sub32(S.play.a(c), h01):
+  (+a, (+b, (+o, +k))) = ih
+  a
+
+def ih.b(+c: U32, +h01: U32, +h23: U32, +ih: S.InHand(c, h01, h23)) -> S.Sub32(S.play.b(c), h23):
+  (+a, (+b, (+o, +k))) = ih
+  b
+
+def ih.o(+c: U32, +h01: U32, +h23: U32, +ih: S.InHand(c, h01, h23)) -> {S.bits(S.play.x(c)) == 1n : Nat}:
+  (+a, (+b, (+o, +k))) = ih
+  o
+
+def su7(+j: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}) -> S.Sub32(U32.from_nat(j), 7):
+  match j:
+    case 0n:
+      {==}
+    case 1n:
+      {==}
+    case 2n:
+      {==}
+    case 3n:
+      {==}
+    case 4n+y:
+      Empty.absurd(S.Sub32(U32.from_nat(4n+y), 7), no_lt0(y, lj))
+
+def ct63(+j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}) -> S.Sub32(C.card.make(U32.from_nat(j), U32.from_nat(r)), 63):
+  match j r:
+    case 0n 0n:
+      {==}
+    case 0n 1n:
+      {==}
+    case 0n 2n:
+      {==}
+    case 0n 3n:
+      {==}
+    case 0n 4n:
+      {==}
+    case 0n 5n:
+      {==}
+    case 0n 6n:
+      {==}
+    case 0n 7n:
+      {==}
+    case 0n 8n:
+      {==}
+    case 0n 9n:
+      {==}
+    case 0n 10n:
+      {==}
+    case 0n 11n:
+      {==}
+    case 0n 12n:
+      {==}
+    case 0n 13n+y:
+      Empty.absurd(S.Sub32(C.card.make(U32.from_nat(0n), U32.from_nat(13n+y)), 63), no_lt0(y, lr))
+    case 1n 0n:
+      {==}
+    case 1n 1n:
+      {==}
+    case 1n 2n:
+      {==}
+    case 1n 3n:
+      {==}
+    case 1n 4n:
+      {==}
+    case 1n 5n:
+      {==}
+    case 1n 6n:
+      {==}
+    case 1n 7n:
+      {==}
+    case 1n 8n:
+      {==}
+    case 1n 9n:
+      {==}
+    case 1n 10n:
+      {==}
+    case 1n 11n:
+      {==}
+    case 1n 12n:
+      {==}
+    case 1n 13n+y:
+      Empty.absurd(S.Sub32(C.card.make(U32.from_nat(1n), U32.from_nat(13n+y)), 63), no_lt0(y, lr))
+    case 2n 0n:
+      {==}
+    case 2n 1n:
+      {==}
+    case 2n 2n:
+      {==}
+    case 2n 3n:
+      {==}
+    case 2n 4n:
+      {==}
+    case 2n 5n:
+      {==}
+    case 2n 6n:
+      {==}
+    case 2n 7n:
+      {==}
+    case 2n 8n:
+      {==}
+    case 2n 9n:
+      {==}
+    case 2n 10n:
+      {==}
+    case 2n 11n:
+      {==}
+    case 2n 12n:
+      {==}
+    case 2n 13n+y:
+      Empty.absurd(S.Sub32(C.card.make(U32.from_nat(2n), U32.from_nat(13n+y)), 63), no_lt0(y, lr))
+    case 3n 0n:
+      {==}
+    case 3n 1n:
+      {==}
+    case 3n 2n:
+      {==}
+    case 3n 3n:
+      {==}
+    case 3n 4n:
+      {==}
+    case 3n 5n:
+      {==}
+    case 3n 6n:
+      {==}
+    case 3n 7n:
+      {==}
+    case 3n 8n:
+      {==}
+    case 3n 9n:
+      {==}
+    case 3n 10n:
+      {==}
+    case 3n 11n:
+      {==}
+    case 3n 12n:
+      {==}
+    case 3n 13n+y:
+      Empty.absurd(S.Sub32(C.card.make(U32.from_nat(3n), U32.from_nat(13n+y)), 63), no_lt0(y, lr))
+    case 4n+y _:
+      Empty.absurd(S.Sub32(C.card.make(U32.from_nat(4n+y), U32.from_nat(r)), 63), no_lt0(y, lj))
+
+def mem.at(+j: Nat, +r: Nat, +lead: U32, +h01: U32, +h23: U32, +el: {lead == 4 : U32}, m: S.Mem(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.moves.of(4, h01, h23))) -> S.Mem(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.moves.of(lead, h01, h23)):
+  %Equal.sym(U32, lead, 4, el) : S.Mem(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.moves.of(_, h01, h23))
+  m
+
+def kid0_0(+q: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +sev: {U32.is_eq((R.trick.start(U32.from_nat(0n)) .&. 1 : U32), 0) == True{} : Bool}, +ens0: {U32.is_zero(U32.and(U32.from_nat(0n), 1)) == True{} : Bool},
+    +x1: Nat, +lx1: {Nat.is_lt(x1, 4n) == True{} : Bool}, +nx1: {Nat.is_eq(x1, 0n) == False{} : Bool}, +ex1: {U32.to_nat(U32.and((U32.from_nat(0n) + 1 : U32), 3)) == x1 : Nat}, +ens1: {U32.is_zero(U32.and(U32.and((U32.from_nat(0n) + 1 : U32), 3), 1)) == False{} : Bool},
+    +x2: Nat, +lx2: {Nat.is_lt(x2, 4n) == True{} : Bool}, +nx2: {Nat.is_eq(x2, 0n) == False{} : Bool}, +ex2: {U32.to_nat(U32.and((U32.from_nat(x1) + 1 : U32), 3)) == x2 : Nat}, +ens2: {U32.is_zero(U32.and(U32.and((U32.from_nat(x1) + 1 : U32), 3), 1)) == True{} : Bool},
+    +x3: Nat, +lx3: {Nat.is_lt(x3, 4n) == True{} : Bool}, +nx3: {Nat.is_eq(x3, 0n) == False{} : Bool}, +ex3: {U32.to_nat(U32.and((U32.from_nat(x2) + 1 : U32), 3)) == x3 : Nat}, +ens3: {U32.is_zero(U32.and(U32.and((U32.from_nat(x2) + 1 : U32), 3), 1)) == False{} : Bool}, +ls: {Nat.is_lt(0n, 4n) == True{} : Bool}, +L: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32,
+    +ci: S.Inv(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))), 1n+q, S.lnext(U32.to_nat(R.trick.played(tr)), L)), +esd: {R.trick.seat(tr) == U32.from_nat(0n) : U32},
+    +ek: {U32.to_nat(R.trick.played(tr)) == 0n : Nat}, +pm: {R.trick.played(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == U32.from_nat(1n) : U32},
+    +fw: S.And({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32})), +sm: {R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == U32.and((U32.from_nat(0n) + 1 : U32), 3) : U32},
+    +ens1b: {U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)) == False{} : Bool}, +tps: S.Tops(0n, j, r, n01, n23, e01, e23, s01, s23, w01, w23), +hb: S.GE(1n+U32.to_nat(won), 13), +n: Nat) ->
+    S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 4, R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r)))), B.seed(R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))))), B.Res{B.seed(R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))))), n}))):
+  %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 0n, cg(R.trick.seat(tr), U32.from_nat(0n), esd)) : S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won))), 4, R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)), R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)))), n})))
+  %Equal.sym(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), False{}, ens1b) : S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.Pos{U32.xor(n01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(n23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}), 4, R.Pos{U32.xor(n01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(n23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+  node1(R.Pos{U32.xor(n01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(n23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}, q, L, U32.to_nat(won), x1, j, r, lj, lr, 0n, sev, ls, lx1, nx1, x2, lx2, nx2, ex2, ens2, x3, lx3, nx3, ex3, ens3, (inv.mv(U32.to_nat(R.trick.seat(tr)), 0n, U32.to_nat(R.trick.played(tr)), 0n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, C.card.make(U32.from_nat(j), U32.from_nat(r)), q, L, cg(R.trick.seat(tr), U32.from_nat(0n), esd), ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))))), U32.to_nat(U32.and((U32.from_nat(0n) + 1 : U32), 3)), x1, cg(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((U32.from_nat(0n) + 1 : U32), 3), sm), ex1),
+        (cg(R.trick.played(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.from_nat(1n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), R.trick.seat(tr), U32.from_nat(0n), a1({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}), fw), esd),
+        (a1({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}), fw)),
+        (cg(R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won), won, Laws.won_mid(0n, {==}, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won, pm)),
+        tps)))))), 13, B.Res{13, n}, hb, hb)
+
+def kid0_1(+q: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +sev: {U32.is_eq((R.trick.start(U32.from_nat(1n)) .&. 1 : U32), 0) == True{} : Bool}, +ens0: {U32.is_zero(U32.and(U32.from_nat(1n), 1)) == True{} : Bool},
+    +x1: Nat, +lx1: {Nat.is_lt(x1, 4n) == True{} : Bool}, +nx1: {Nat.is_eq(x1, 1n) == False{} : Bool}, +ex1: {U32.to_nat(U32.and((U32.from_nat(1n) + 1 : U32), 3)) == x1 : Nat}, +ens1: {U32.is_zero(U32.and(U32.and((U32.from_nat(1n) + 1 : U32), 3), 1)) == False{} : Bool},
+    +x2: Nat, +lx2: {Nat.is_lt(x2, 4n) == True{} : Bool}, +nx2: {Nat.is_eq(x2, 1n) == False{} : Bool}, +ex2: {U32.to_nat(U32.and((U32.from_nat(x1) + 1 : U32), 3)) == x2 : Nat}, +ens2: {U32.is_zero(U32.and(U32.and((U32.from_nat(x1) + 1 : U32), 3), 1)) == True{} : Bool},
+    +x3: Nat, +lx3: {Nat.is_lt(x3, 4n) == True{} : Bool}, +nx3: {Nat.is_eq(x3, 1n) == False{} : Bool}, +ex3: {U32.to_nat(U32.and((U32.from_nat(x2) + 1 : U32), 3)) == x3 : Nat}, +ens3: {U32.is_zero(U32.and(U32.and((U32.from_nat(x2) + 1 : U32), 3), 1)) == False{} : Bool}, +ls: {Nat.is_lt(1n, 4n) == True{} : Bool}, +L: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32,
+    +ci: S.Inv(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))), 1n+q, S.lnext(U32.to_nat(R.trick.played(tr)), L)), +esd: {R.trick.seat(tr) == U32.from_nat(1n) : U32},
+    +ek: {U32.to_nat(R.trick.played(tr)) == 0n : Nat}, +pm: {R.trick.played(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == U32.from_nat(1n) : U32},
+    +fw: S.And({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32})), +sm: {R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == U32.and((U32.from_nat(1n) + 1 : U32), 3) : U32},
+    +ens1b: {U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)) == False{} : Bool}, +tps: S.Tops(1n, j, r, n01, n23, e01, e23, s01, s23, w01, w23), +hb: S.GE(1n+U32.to_nat(won), 13), +n: Nat) ->
+    S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 4, R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r)))), B.seed(R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))))), B.Res{B.seed(R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))))), n}))):
+  %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 1n, cg(R.trick.seat(tr), U32.from_nat(1n), esd)) : S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won))), 4, R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)), R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)))), n})))
+  %Equal.sym(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), False{}, ens1b) : S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.Pos{n01, n23, U32.xor(e01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(e23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}), 4, R.Pos{n01, n23, U32.xor(e01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(e23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+  node1(R.Pos{n01, n23, U32.xor(e01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(e23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}, q, L, U32.to_nat(won), x1, j, r, lj, lr, 1n, sev, ls, lx1, nx1, x2, lx2, nx2, ex2, ens2, x3, lx3, nx3, ex3, ens3, (inv.mv(U32.to_nat(R.trick.seat(tr)), 1n, U32.to_nat(R.trick.played(tr)), 0n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, C.card.make(U32.from_nat(j), U32.from_nat(r)), q, L, cg(R.trick.seat(tr), U32.from_nat(1n), esd), ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))))), U32.to_nat(U32.and((U32.from_nat(1n) + 1 : U32), 3)), x1, cg(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((U32.from_nat(1n) + 1 : U32), 3), sm), ex1),
+        (cg(R.trick.played(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.from_nat(1n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), R.trick.seat(tr), U32.from_nat(1n), a1({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}), fw), esd),
+        (a1({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}), fw)),
+        (cg(R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won), won, Laws.won_mid(0n, {==}, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won, pm)),
+        tps)))))), 13, B.Res{13, n}, hb, hb)
+
+def kid0_2(+q: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +sev: {U32.is_eq((R.trick.start(U32.from_nat(2n)) .&. 1 : U32), 0) == True{} : Bool}, +ens0: {U32.is_zero(U32.and(U32.from_nat(2n), 1)) == True{} : Bool},
+    +x1: Nat, +lx1: {Nat.is_lt(x1, 4n) == True{} : Bool}, +nx1: {Nat.is_eq(x1, 2n) == False{} : Bool}, +ex1: {U32.to_nat(U32.and((U32.from_nat(2n) + 1 : U32), 3)) == x1 : Nat}, +ens1: {U32.is_zero(U32.and(U32.and((U32.from_nat(2n) + 1 : U32), 3), 1)) == False{} : Bool},
+    +x2: Nat, +lx2: {Nat.is_lt(x2, 4n) == True{} : Bool}, +nx2: {Nat.is_eq(x2, 2n) == False{} : Bool}, +ex2: {U32.to_nat(U32.and((U32.from_nat(x1) + 1 : U32), 3)) == x2 : Nat}, +ens2: {U32.is_zero(U32.and(U32.and((U32.from_nat(x1) + 1 : U32), 3), 1)) == True{} : Bool},
+    +x3: Nat, +lx3: {Nat.is_lt(x3, 4n) == True{} : Bool}, +nx3: {Nat.is_eq(x3, 2n) == False{} : Bool}, +ex3: {U32.to_nat(U32.and((U32.from_nat(x2) + 1 : U32), 3)) == x3 : Nat}, +ens3: {U32.is_zero(U32.and(U32.and((U32.from_nat(x2) + 1 : U32), 3), 1)) == False{} : Bool}, +ls: {Nat.is_lt(2n, 4n) == True{} : Bool}, +L: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32,
+    +ci: S.Inv(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))), 1n+q, S.lnext(U32.to_nat(R.trick.played(tr)), L)), +esd: {R.trick.seat(tr) == U32.from_nat(2n) : U32},
+    +ek: {U32.to_nat(R.trick.played(tr)) == 0n : Nat}, +pm: {R.trick.played(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == U32.from_nat(1n) : U32},
+    +fw: S.And({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32})), +sm: {R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == U32.and((U32.from_nat(2n) + 1 : U32), 3) : U32},
+    +ens1b: {U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)) == False{} : Bool}, +tps: S.Tops(2n, j, r, n01, n23, e01, e23, s01, s23, w01, w23), +hb: S.GE(1n+U32.to_nat(won), 13), +n: Nat) ->
+    S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 4, R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r)))), B.seed(R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))))), B.Res{B.seed(R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))))), n}))):
+  %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 2n, cg(R.trick.seat(tr), U32.from_nat(2n), esd)) : S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won))), 4, R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)), R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)))), n})))
+  %Equal.sym(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), False{}, ens1b) : S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.Pos{n01, n23, e01, e23, U32.xor(s01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(s23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}), 4, R.Pos{n01, n23, e01, e23, U32.xor(s01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(s23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+  node1(R.Pos{n01, n23, e01, e23, U32.xor(s01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(s23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}, q, L, U32.to_nat(won), x1, j, r, lj, lr, 2n, sev, ls, lx1, nx1, x2, lx2, nx2, ex2, ens2, x3, lx3, nx3, ex3, ens3, (inv.mv(U32.to_nat(R.trick.seat(tr)), 2n, U32.to_nat(R.trick.played(tr)), 0n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, C.card.make(U32.from_nat(j), U32.from_nat(r)), q, L, cg(R.trick.seat(tr), U32.from_nat(2n), esd), ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))))), U32.to_nat(U32.and((U32.from_nat(2n) + 1 : U32), 3)), x1, cg(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((U32.from_nat(2n) + 1 : U32), 3), sm), ex1),
+        (cg(R.trick.played(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.from_nat(1n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), R.trick.seat(tr), U32.from_nat(2n), a1({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}), fw), esd),
+        (a1({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}), fw)),
+        (cg(R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won), won, Laws.won_mid(0n, {==}, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won, pm)),
+        tps)))))), 13, B.Res{13, n}, hb, hb)
+
+def kid0_3(+q: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +sev: {U32.is_eq((R.trick.start(U32.from_nat(3n)) .&. 1 : U32), 0) == True{} : Bool}, +ens0: {U32.is_zero(U32.and(U32.from_nat(3n), 1)) == True{} : Bool},
+    +x1: Nat, +lx1: {Nat.is_lt(x1, 4n) == True{} : Bool}, +nx1: {Nat.is_eq(x1, 3n) == False{} : Bool}, +ex1: {U32.to_nat(U32.and((U32.from_nat(3n) + 1 : U32), 3)) == x1 : Nat}, +ens1: {U32.is_zero(U32.and(U32.and((U32.from_nat(3n) + 1 : U32), 3), 1)) == False{} : Bool},
+    +x2: Nat, +lx2: {Nat.is_lt(x2, 4n) == True{} : Bool}, +nx2: {Nat.is_eq(x2, 3n) == False{} : Bool}, +ex2: {U32.to_nat(U32.and((U32.from_nat(x1) + 1 : U32), 3)) == x2 : Nat}, +ens2: {U32.is_zero(U32.and(U32.and((U32.from_nat(x1) + 1 : U32), 3), 1)) == True{} : Bool},
+    +x3: Nat, +lx3: {Nat.is_lt(x3, 4n) == True{} : Bool}, +nx3: {Nat.is_eq(x3, 3n) == False{} : Bool}, +ex3: {U32.to_nat(U32.and((U32.from_nat(x2) + 1 : U32), 3)) == x3 : Nat}, +ens3: {U32.is_zero(U32.and(U32.and((U32.from_nat(x2) + 1 : U32), 3), 1)) == False{} : Bool}, +ls: {Nat.is_lt(3n, 4n) == True{} : Bool}, +L: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32,
+    +ci: S.Inv(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))), 1n+q, S.lnext(U32.to_nat(R.trick.played(tr)), L)), +esd: {R.trick.seat(tr) == U32.from_nat(3n) : U32},
+    +ek: {U32.to_nat(R.trick.played(tr)) == 0n : Nat}, +pm: {R.trick.played(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == U32.from_nat(1n) : U32},
+    +fw: S.And({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32})), +sm: {R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == U32.and((U32.from_nat(3n) + 1 : U32), 3) : U32},
+    +ens1b: {U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)) == False{} : Bool}, +tps: S.Tops(3n, j, r, n01, n23, e01, e23, s01, s23, w01, w23), +hb: S.GE(1n+U32.to_nat(won), 13), +n: Nat) ->
+    S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 4, R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r)))), B.seed(R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))))), B.Res{B.seed(R.pos.ns(R.play(4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, C.card.make(U32.from_nat(j), U32.from_nat(r))))), n}))):
+  %Equal.sym(Nat, U32.to_nat(R.trick.seat(tr)), 3n, cg(R.trick.seat(tr), U32.from_nat(3n), esd)) : S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won))), 4, R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)), R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won))), B.seed(R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)))), B.Res{B.seed(R.pos.ns(R.play.go(_, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r))), S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r))), n01, n23, e01, e23, s01, s23, w01, w23, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)))), n})))
+  %Equal.sym(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), False{}, ens1b) : S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+q, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(w23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}), 4, R.Pos{n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(w23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}, _, B.seed(_), B.Res{B.seed(_), n})))
+  node1(R.Pos{n01, n23, e01, e23, s01, s23, U32.xor(w01, S.play.a(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.xor(w23, S.play.b(C.card.make(U32.from_nat(j), U32.from_nat(r)))), R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won)}, q, L, U32.to_nat(won), x1, j, r, lj, lr, 3n, sev, ls, lx1, nx1, x2, lx2, nx2, ex2, ens2, x3, lx3, nx3, ex3, ens3, (inv.mv(U32.to_nat(R.trick.seat(tr)), 3n, U32.to_nat(R.trick.played(tr)), 0n, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, C.card.make(U32.from_nat(j), U32.from_nat(r)), q, L, cg(R.trick.seat(tr), U32.from_nat(3n), esd), ek, ci),
+        (Equal.trans(Nat, U32.to_nat(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))))), U32.to_nat(U32.and((U32.from_nat(3n) + 1 : U32), 3)), x1, cg(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((U32.from_nat(3n) + 1 : U32), 3), sm), ex1),
+        (cg(R.trick.played(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.from_nat(1n), pm),
+        (Equal.trans(U32, R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), R.trick.seat(tr), U32.from_nat(3n), a1({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}), fw), esd),
+        (a1({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}, a2({R.trick.owner(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == R.trick.seat(tr) : U32}, S.And({R.trick.best(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.make(U32.from_nat(j), U32.from_nat(r)) : U32}, {R.trick.lead(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))) : U32}), fw)),
+        (cg(R.won.next(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won), won, Laws.won_mid(0n, {==}, R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), won, pm)),
+        tps)))))), 13, B.Res{13, n}, hb, hb)
+
+# The root: North-South on lead at no trumps, with the top card of suit j in the
+# hand to play, take one more trick than they have.
+
+def root(+s: Nat, +p: Nat, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +sev: {U32.is_eq((R.trick.start(U32.from_nat(s)) .&. 1 : U32), 0) == True{} : Bool}, +ens0: {U32.is_zero(U32.and(U32.from_nat(s), 1)) == True{} : Bool},
+    +x1: Nat, +lx1: {Nat.is_lt(x1, 4n) == True{} : Bool}, +nx1: {Nat.is_eq(x1, s) == False{} : Bool}, +ex1: {U32.to_nat(U32.and((U32.from_nat(s) + 1 : U32), 3)) == x1 : Nat}, +ens1: {U32.is_zero(U32.and(U32.and((U32.from_nat(s) + 1 : U32), 3), 1)) == False{} : Bool},
+    +x2: Nat, +lx2: {Nat.is_lt(x2, 4n) == True{} : Bool}, +nx2: {Nat.is_eq(x2, s) == False{} : Bool}, +ex2: {U32.to_nat(U32.and((U32.from_nat(x1) + 1 : U32), 3)) == x2 : Nat}, +ens2: {U32.is_zero(U32.and(U32.and((U32.from_nat(x1) + 1 : U32), 3), 1)) == True{} : Bool},
+    +x3: Nat, +lx3: {Nat.is_lt(x3, 4n) == True{} : Bool}, +nx3: {Nat.is_eq(x3, s) == False{} : Bool}, +ex3: {U32.to_nat(U32.and((U32.from_nat(x2) + 1 : U32), 3)) == x3 : Nat}, +ens3: {U32.is_zero(U32.and(U32.and((U32.from_nat(x2) + 1 : U32), 3), 1)) == False{} : Bool},
+    +L: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32, +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L), +es: {U32.to_nat(R.trick.seat(tr)) == s : Nat}, +ek: {U32.to_nat(R.trick.played(tr)) == 0n : Nat}, +el: {R.trick.lead(tr) == 4 : U32},
+    +hold: S.Sub32((1 << r : U32), R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23))), +tps: S.Tops(s, j, r, n01, n23, e01, e23, s01, s23, w01, w23)) -> @n: Nat -> S.GE(1n+U32.to_nat(won), S.rv(B.solve(1n+p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, n))):
+  match s p:
+    case 0n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(@n: Nat -> S.GE(1n+U32.to_nat(won), S.rv(B.solve(1n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, n))), no_one(0n, L, {==}, Equal.trans(Nat, 1n, Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 0n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 0n, ek)), ed)))
+    case 0n 1n+q:
+      ((+v_n01, (+v_n23, (+v_e01, (+v_e23, (+v_s01, (+v_s23, (+v_w01, +v_w23))))))), (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      +esd = eq_of_nat(R.trick.seat(tr), 0n, es)
+      +ep = eq_of_nat(R.trick.played(tr), 0n, ek)
+      +isu = card.suit.of(j, r, lj, lr)
+      +ibt = card.bit.of(j, r, lj, lr)
+      +ih = to.hand(j, C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), lj, sub_at((1 << r : U32), C.card.bit(C.card.make(U32.from_nat(j), U32.from_nat(r))), R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), Equal.sym(U32, C.card.bit(C.card.make(U32.from_nat(j), U32.from_nat(r))), (1 << r : U32), ibt), hold), isu, Laws.x_one(C.card.make(U32.from_nat(j), U32.from_nat(r)), j, r, lj, lr, isu, ibt), Laws.card_shape(j, r, lj, lr))
+      +i1 = ih.a(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +i2 = ih.b(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +one = ih.o(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +fw = Laws.first_win(R.beats(4, R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r))), rank.of(4, tr, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), ep, idem(tr, 3, {==}), sub_at(U32.from_nat(j), C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))), 7, Equal.sym(U32, C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))), U32.from_nat(j), isu), su7(j, lj)), ct63(j, r, lj, lr))
+      +ci = Laws.play_inv(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +pm = Laws.played_mid(0n, {==}, tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)), ep)
+      +ens0b = Equal.trans(Bool, U32.is_zero((tr .&. 1 : U32)), U32.is_zero(U32.and(U32.from_nat(0n), 1)), True{},
+        Equal.trans(Bool, U32.is_zero((tr .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(tr), 1)), U32.is_zero(U32.and(U32.from_nat(0n), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(tr, 1), U32.and(R.trick.seat(tr), 1), Laws.side_seat(tr)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(tr), U32.from_nat(0n), esd)), ens0)
+      +sm = Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(0n) + 1 : U32), 3), Laws.seat_mid(0n, {==}, tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)), ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(0n), esd))
+      +ens1b = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(0n) + 1 : U32), 3), 1)), False{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(0n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 1), Laws.side_seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((U32.from_nat(0n) + 1 : U32), 3), sm)), ens1)
+      %Equal.sym(Bool, U32.is_zero((tr .&. 1 : U32)), True{}, ens0b) : @n: Nat -> S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+(1n+q), R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => Laws.max_ex(1n+q, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 0, B.Res{0, n}, 1n+U32.to_nat(won),
+        Laws.ex_mem(1n+U32.to_nat(won), 1n+q, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), C.card.make(U32.from_nat(j), U32.from_nat(r)),
+          mem.at(j, r, R.trick.lead(tr), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), el, Laws.mem_lead(j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), pick_valid(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01, v_n01, v_e01, v_s01, v_w01), pick_valid(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23, v_n23, v_e23, v_s23, v_w23), lj, lr, hold)),
+          (+m => kid0_0(q, j, r, lj, lr, sev, ens0, x1, lx1, nx1, ex1, ens1, x2, lx2, nx2, ex2, ens2, x3, lx3, nx3, ex3, ens3, ls, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, ci, esd, ek, pm, fw, sm, ens1b, tps, lt_le1(U32.to_nat(won), 13n, Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 1n+q, Equal.trans(Nat, 1n+(1n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 0n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 0n, ek)), ed)), ewl)), m)))))
+    case 1n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(@n: Nat -> S.GE(1n+U32.to_nat(won), S.rv(B.solve(1n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, n))), no_one(0n, L, {==}, Equal.trans(Nat, 1n, Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 0n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 0n, ek)), ed)))
+    case 1n 1n+q:
+      ((+v_n01, (+v_n23, (+v_e01, (+v_e23, (+v_s01, (+v_s23, (+v_w01, +v_w23))))))), (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      +esd = eq_of_nat(R.trick.seat(tr), 1n, es)
+      +ep = eq_of_nat(R.trick.played(tr), 0n, ek)
+      +isu = card.suit.of(j, r, lj, lr)
+      +ibt = card.bit.of(j, r, lj, lr)
+      +ih = to.hand(j, C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), lj, sub_at((1 << r : U32), C.card.bit(C.card.make(U32.from_nat(j), U32.from_nat(r))), R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), Equal.sym(U32, C.card.bit(C.card.make(U32.from_nat(j), U32.from_nat(r))), (1 << r : U32), ibt), hold), isu, Laws.x_one(C.card.make(U32.from_nat(j), U32.from_nat(r)), j, r, lj, lr, isu, ibt), Laws.card_shape(j, r, lj, lr))
+      +i1 = ih.a(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +i2 = ih.b(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +one = ih.o(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +fw = Laws.first_win(R.beats(4, R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r))), rank.of(4, tr, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), ep, idem(tr, 3, {==}), sub_at(U32.from_nat(j), C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))), 7, Equal.sym(U32, C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))), U32.from_nat(j), isu), su7(j, lj)), ct63(j, r, lj, lr))
+      +ci = Laws.play_inv(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +pm = Laws.played_mid(0n, {==}, tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)), ep)
+      +ens0b = Equal.trans(Bool, U32.is_zero((tr .&. 1 : U32)), U32.is_zero(U32.and(U32.from_nat(1n), 1)), True{},
+        Equal.trans(Bool, U32.is_zero((tr .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(tr), 1)), U32.is_zero(U32.and(U32.from_nat(1n), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(tr, 1), U32.and(R.trick.seat(tr), 1), Laws.side_seat(tr)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(tr), U32.from_nat(1n), esd)), ens0)
+      +sm = Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(1n) + 1 : U32), 3), Laws.seat_mid(0n, {==}, tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)), ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(1n), esd))
+      +ens1b = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(1n) + 1 : U32), 3), 1)), False{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(1n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 1), Laws.side_seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((U32.from_nat(1n) + 1 : U32), 3), sm)), ens1)
+      %Equal.sym(Bool, U32.is_zero((tr .&. 1 : U32)), True{}, ens0b) : @n: Nat -> S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+(1n+q), R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => Laws.max_ex(1n+q, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 0, B.Res{0, n}, 1n+U32.to_nat(won),
+        Laws.ex_mem(1n+U32.to_nat(won), 1n+q, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), C.card.make(U32.from_nat(j), U32.from_nat(r)),
+          mem.at(j, r, R.trick.lead(tr), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), el, Laws.mem_lead(j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), pick_valid(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01, v_n01, v_e01, v_s01, v_w01), pick_valid(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23, v_n23, v_e23, v_s23, v_w23), lj, lr, hold)),
+          (+m => kid0_1(q, j, r, lj, lr, sev, ens0, x1, lx1, nx1, ex1, ens1, x2, lx2, nx2, ex2, ens2, x3, lx3, nx3, ex3, ens3, ls, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, ci, esd, ek, pm, fw, sm, ens1b, tps, lt_le1(U32.to_nat(won), 13n, Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 1n+q, Equal.trans(Nat, 1n+(1n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 0n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 0n, ek)), ed)), ewl)), m)))))
+    case 2n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(@n: Nat -> S.GE(1n+U32.to_nat(won), S.rv(B.solve(1n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, n))), no_one(0n, L, {==}, Equal.trans(Nat, 1n, Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 0n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 0n, ek)), ed)))
+    case 2n 1n+q:
+      ((+v_n01, (+v_n23, (+v_e01, (+v_e23, (+v_s01, (+v_s23, (+v_w01, +v_w23))))))), (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      +esd = eq_of_nat(R.trick.seat(tr), 2n, es)
+      +ep = eq_of_nat(R.trick.played(tr), 0n, ek)
+      +isu = card.suit.of(j, r, lj, lr)
+      +ibt = card.bit.of(j, r, lj, lr)
+      +ih = to.hand(j, C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), lj, sub_at((1 << r : U32), C.card.bit(C.card.make(U32.from_nat(j), U32.from_nat(r))), R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), Equal.sym(U32, C.card.bit(C.card.make(U32.from_nat(j), U32.from_nat(r))), (1 << r : U32), ibt), hold), isu, Laws.x_one(C.card.make(U32.from_nat(j), U32.from_nat(r)), j, r, lj, lr, isu, ibt), Laws.card_shape(j, r, lj, lr))
+      +i1 = ih.a(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +i2 = ih.b(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +one = ih.o(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +fw = Laws.first_win(R.beats(4, R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r))), rank.of(4, tr, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), ep, idem(tr, 3, {==}), sub_at(U32.from_nat(j), C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))), 7, Equal.sym(U32, C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))), U32.from_nat(j), isu), su7(j, lj)), ct63(j, r, lj, lr))
+      +ci = Laws.play_inv(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +pm = Laws.played_mid(0n, {==}, tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)), ep)
+      +ens0b = Equal.trans(Bool, U32.is_zero((tr .&. 1 : U32)), U32.is_zero(U32.and(U32.from_nat(2n), 1)), True{},
+        Equal.trans(Bool, U32.is_zero((tr .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(tr), 1)), U32.is_zero(U32.and(U32.from_nat(2n), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(tr, 1), U32.and(R.trick.seat(tr), 1), Laws.side_seat(tr)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(tr), U32.from_nat(2n), esd)), ens0)
+      +sm = Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(2n) + 1 : U32), 3), Laws.seat_mid(0n, {==}, tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)), ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(2n), esd))
+      +ens1b = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(2n) + 1 : U32), 3), 1)), False{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(2n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 1), Laws.side_seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((U32.from_nat(2n) + 1 : U32), 3), sm)), ens1)
+      %Equal.sym(Bool, U32.is_zero((tr .&. 1 : U32)), True{}, ens0b) : @n: Nat -> S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+(1n+q), R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => Laws.max_ex(1n+q, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 0, B.Res{0, n}, 1n+U32.to_nat(won),
+        Laws.ex_mem(1n+U32.to_nat(won), 1n+q, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), C.card.make(U32.from_nat(j), U32.from_nat(r)),
+          mem.at(j, r, R.trick.lead(tr), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), el, Laws.mem_lead(j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), pick_valid(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01, v_n01, v_e01, v_s01, v_w01), pick_valid(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23, v_n23, v_e23, v_s23, v_w23), lj, lr, hold)),
+          (+m => kid0_2(q, j, r, lj, lr, sev, ens0, x1, lx1, nx1, ex1, ens1, x2, lx2, nx2, ex2, ens2, x3, lx3, nx3, ex3, ens3, ls, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, ci, esd, ek, pm, fw, sm, ens1b, tps, lt_le1(U32.to_nat(won), 13n, Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 1n+q, Equal.trans(Nat, 1n+(1n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 0n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 0n, ek)), ed)), ewl)), m)))))
+    case 3n 0n:
+      (+vs, (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      Empty.absurd(@n: Nat -> S.GE(1n+U32.to_nat(won), S.rv(B.solve(1n, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, n))), no_one(0n, L, {==}, Equal.trans(Nat, 1n, Nat.add(U32.to_nat(R.trick.played(tr)), 1n), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n)), 0n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 0n, ek)), ed)))
+    case 3n 1n+q:
+      ((+v_n01, (+v_n23, (+v_e01, (+v_e23, (+v_s01, (+v_s23, (+v_w01, +v_w23))))))), (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      +esd = eq_of_nat(R.trick.seat(tr), 3n, es)
+      +ep = eq_of_nat(R.trick.played(tr), 0n, ek)
+      +isu = card.suit.of(j, r, lj, lr)
+      +ibt = card.bit.of(j, r, lj, lr)
+      +ih = to.hand(j, C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), lj, sub_at((1 << r : U32), C.card.bit(C.card.make(U32.from_nat(j), U32.from_nat(r))), R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), Equal.sym(U32, C.card.bit(C.card.make(U32.from_nat(j), U32.from_nat(r))), (1 << r : U32), ibt), hold), isu, Laws.x_one(C.card.make(U32.from_nat(j), U32.from_nat(r)), j, r, lj, lr, isu, ibt), Laws.card_shape(j, r, lj, lr))
+      +i1 = ih.a(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +i2 = ih.b(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +one = ih.o(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), ih)
+      +fw = Laws.first_win(R.beats(4, R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r))), rank.of(4, tr, C.card.make(U32.from_nat(j), U32.from_nat(r))), R.trick.seat(tr), R.trick.played(tr), R.trick.lead(tr), R.trick.owner(tr), R.trick.best(tr), C.card.make(U32.from_nat(j), U32.from_nat(r)), ep, idem(tr, 3, {==}), sub_at(U32.from_nat(j), C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))), 7, Equal.sym(U32, C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))), U32.from_nat(j), isu), su7(j, lj)), ct63(j, r, lj, lr))
+      +ci = Laws.play_inv(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), 1n+q, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
+      +pm = Laws.played_mid(0n, {==}, tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)), ep)
+      +ens0b = Equal.trans(Bool, U32.is_zero((tr .&. 1 : U32)), U32.is_zero(U32.and(U32.from_nat(3n), 1)), True{},
+        Equal.trans(Bool, U32.is_zero((tr .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(tr), 1)), U32.is_zero(U32.and(U32.from_nat(3n), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(tr, 1), U32.and(R.trick.seat(tr), 1), Laws.side_seat(tr)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(tr), U32.from_nat(3n), esd)), ens0)
+      +sm = Equal.trans(U32, R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((R.trick.seat(tr) + 1 : U32), 3), U32.and((U32.from_nat(3n) + 1 : U32), 3), Laws.seat_mid(0n, {==}, tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)), ep), Equal.cong(U32, U32, (z => U32.and((z + 1 : U32), 3)), R.trick.seat(tr), U32.from_nat(3n), esd))
+      +ens1b = Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), U32.is_zero(U32.and(U32.and((U32.from_nat(3n) + 1 : U32), 3), 1)), False{},
+        Equal.trans(Bool, U32.is_zero((R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))) .&. 1 : U32)), U32.is_zero(U32.and(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 1)), U32.is_zero(U32.and(U32.and((U32.from_nat(3n) + 1 : U32), 3), 1)),
+          Equal.cong(U32, Bool, (z => U32.is_zero(z)), U32.and(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))), 1), U32.and(R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), 1), Laws.side_seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r))))),
+          Equal.cong(U32, Bool, (z => U32.is_zero(U32.and(z, 1))), R.trick.seat(R.trick.next(tr, 4, C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.and((U32.from_nat(3n) + 1 : U32), 3), sm)), ens1)
+      %Equal.sym(Bool, U32.is_zero((tr .&. 1 : U32)), True{}, ens0b) : @n: Nat -> S.GE(1n+U32.to_nat(won), S.rv(B.search(1n+(1n+q), R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, _, B.seed(_), B.Res{B.seed(_), n})))
+      (+n => Laws.max_ex(1n+q, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 0, B.Res{0, n}, 1n+U32.to_nat(won),
+        Laws.ex_mem(1n+U32.to_nat(won), 1n+q, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, R.moves(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}), C.card.make(U32.from_nat(j), U32.from_nat(r)),
+          mem.at(j, r, R.trick.lead(tr), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), el, Laws.mem_lead(j, r, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23), pick_valid(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01, v_n01, v_e01, v_s01, v_w01), pick_valid(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23, v_n23, v_e23, v_s23, v_w23), lj, lr, hold)),
+          (+m => kid0_3(q, j, r, lj, lr, sev, ens0, x1, lx1, nx1, ex1, ens1, x2, lx2, nx2, ex2, ens2, x3, lx3, nx3, ex3, ens3, ls, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, ci, esd, ek, pm, fw, sm, ens1b, tps, lt_le1(U32.to_nat(won), 13n, Laws.w_lt(U32.to_nat(won), L, S.pred(L), succ_pred(L, 1n+q, Equal.trans(Nat, 1n+(1n+q), Nat.add(U32.to_nat(R.trick.played(tr)), 1n+(1n+q)), S.r4(L), Equal.cong(Nat, Nat, (z => Nat.add(z, 1n+(1n+q))), 0n, U32.to_nat(R.trick.played(tr)), Equal.sym(Nat, U32.to_nat(R.trick.played(tr)), 0n, ek)), ed)), ewl)), m)))))
+    case 4n+y _:
+      Empty.absurd(@n: Nat -> S.GE(1n+U32.to_nat(won), S.rv(B.solve(1n+p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, n))), no_lt0(y, ls))
+
+# LAW: at no trumps, with North on lead at the start of a trick, if North holds the
+# card of suit j and rank r and no other hand holds a card of suit j as high, then
+# North-South make at least one more trick than they have won: the brute force
+# value is above the tricks won, for every position that keeps the invariant.
+
+def Laws.top_nt_north(p, j, r, lj, lr, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, el, hold, tps, n):
+  k = root(0n, p, j, r, lj, lr, {==}, {==}, {==}, 1n, {==}, {==}, {==}, {==}, 2n, {==}, {==}, {==}, {==}, 3n, {==}, {==}, {==}, {==}, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, el,
+    sub_in((1 << r : U32), R.suit.mask(j, n01, n23), R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), Equal.sym(U32, R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), R.suit.mask(j, n01, n23), Equal.cong(Nat, U32, (z => R.suit.mask(j, R.pick(z, n01, e01, s01, w01), R.pick(z, n23, e23, s23, w23))), U32.to_nat(R.trick.seat(tr)), 0n, es)), hold), tps)
+  k(n)
+
+
+# LAW: at no trumps, with South on lead at the start of a trick, if South holds the
+# card of suit j and rank r and no other hand holds a card of suit j as high, then
+# North-South make at least one more trick than they have won: the brute force
+# value is above the tricks won, for every position that keeps the invariant.
+
+def Laws.top_nt_south(p, j, r, lj, lr, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, el, hold, tps, n):
+  k = root(2n, p, j, r, lj, lr, {==}, {==}, {==}, 3n, {==}, {==}, {==}, {==}, 0n, {==}, {==}, {==}, {==}, 1n, {==}, {==}, {==}, {==}, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, el,
+    sub_in((1 << r : U32), R.suit.mask(j, s01, s23), R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), Equal.sym(U32, R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), R.suit.mask(j, s01, s23), Equal.cong(Nat, U32, (z => R.suit.mask(j, R.pick(z, n01, e01, s01, w01), R.pick(z, n23, e23, s23, w23))), U32.to_nat(R.trick.seat(tr)), 2n, es)), hold), tps)
+  k(n)

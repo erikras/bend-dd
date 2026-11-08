@@ -1699,3 +1699,58 @@ law below_top:
   for +top: S.Sub32(R.suit.mask(j, h01, h23), U32{S.ones(32n, r)})
   for +lj: {Nat.is_lt(j, 4n) == True{} : Bool}
   Either<&2, &2, {U32.is_eq(C.card.suit(c), U32.from_nat(j)) == False{} : Bool}, S.And({C.card.suit(c) == U32.from_nat(j) : U32}, {Nat.is_lt(U32.to_nat(C.card.rank(c)), r) == True{} : Bool})>
+
+
+# ---------------------------------------------------------------------------
+# The first sure trick rule for every position: the top card at no trumps
+law top_nt_north:
+  for +p: Nat
+  for +j: Nat
+  for +r: Nat
+  for +lj: {Nat.is_lt(j, 4n) == True{} : Bool}
+  for +lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  for +L: Nat
+  for +n01: U32
+  for +n23: U32
+  for +e01: U32
+  for +e23: U32
+  for +s01: U32
+  for +s23: U32
+  for +w01: U32
+  for +w23: U32
+  for +tr: U32
+  for +won: U32
+  for +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L)
+  for +es: {U32.to_nat(R.trick.seat(tr)) == 0n : Nat}
+  for +ek: {U32.to_nat(R.trick.played(tr)) == 0n : Nat}
+  for +el: {R.trick.lead(tr) == 4 : U32}
+  for +hold: S.Sub32((1 << r : U32), R.suit.mask(j, n01, n23))
+  for +tps: S.Tops(0n, j, r, n01, n23, e01, e23, s01, s23, w01, w23)
+  for +n: Nat
+  S.GE(1n+U32.to_nat(won), S.rv(B.solve(1n+p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, n)))
+
+law top_nt_south:
+  for +p: Nat
+  for +j: Nat
+  for +r: Nat
+  for +lj: {Nat.is_lt(j, 4n) == True{} : Bool}
+  for +lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  for +L: Nat
+  for +n01: U32
+  for +n23: U32
+  for +e01: U32
+  for +e23: U32
+  for +s01: U32
+  for +s23: U32
+  for +w01: U32
+  for +w23: U32
+  for +tr: U32
+  for +won: U32
+  for +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, 1n+p, L)
+  for +es: {U32.to_nat(R.trick.seat(tr)) == 2n : Nat}
+  for +ek: {U32.to_nat(R.trick.played(tr)) == 0n : Nat}
+  for +el: {R.trick.lead(tr) == 4 : U32}
+  for +hold: S.Sub32((1 << r : U32), R.suit.mask(j, s01, s23))
+  for +tps: S.Tops(2n, j, r, n01, n23, e01, e23, s01, s23, w01, w23)
+  for +n: Nat
+  S.GE(1n+U32.to_nat(won), S.rv(B.solve(1n+p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, n)))

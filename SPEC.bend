@@ -1067,3 +1067,21 @@ def code.at(+s: Nat, +r: Nat) -> Bool:
   Nat.is_eq(U32.to_nat(C.card.make(U32.from_nat(s), U32.from_nat(r))), Nat.add(r, Nat.mul(16n, s)))
 
 # Each of the 52 cards is one.
+
+
+# No hand but the leader's holds a card of suit j as high as rank r.
+
+def Tops(s: Nat, +j: Nat, +r: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32) -> Data:
+  match s:
+    case 0n:
+      And(Sub32(R.suit.mask(j, e01, e23), U32{ones(32n, r)}), And(Sub32(R.suit.mask(j, s01, s23), U32{ones(32n, r)}), Sub32(R.suit.mask(j, w01, w23), U32{ones(32n, r)})))
+    case 1n:
+      And(Sub32(R.suit.mask(j, n01, n23), U32{ones(32n, r)}), And(Sub32(R.suit.mask(j, s01, s23), U32{ones(32n, r)}), Sub32(R.suit.mask(j, w01, w23), U32{ones(32n, r)})))
+    case 2n:
+      And(Sub32(R.suit.mask(j, n01, n23), U32{ones(32n, r)}), And(Sub32(R.suit.mask(j, e01, e23), U32{ones(32n, r)}), Sub32(R.suit.mask(j, w01, w23), U32{ones(32n, r)})))
+    case _:
+      And(Sub32(R.suit.mask(j, n01, n23), U32{ones(32n, r)}), And(Sub32(R.suit.mask(j, e01, e23), U32{ones(32n, r)}), Sub32(R.suit.mask(j, s01, s23), U32{ones(32n, r)})))
+
+# Within a trick that seat s led with its top card of suit j: x is to play, k cards
+# are down, s wins so far with that card, the tricks won are w0, and no other hand
+# can beat it.

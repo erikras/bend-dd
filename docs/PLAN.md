@@ -554,7 +554,7 @@ every 3-card position and on most 4-card ones was still wrong.
 | Rule | Every position up to | Samples beyond | For every position |
 |---|---|---|---|
 | Target cuts | 3 cards; law for every won, left and target, given that the value lies in range | lists | The range is proved for the brute force value (`solve_in`); tying it to the fast search needs `search_is_brute` beyond samples |
-| Quick tricks: top runs, safe from ruffs | 3 cards | 4 and 5 cards, lists | No |
+| Quick tricks: top runs, safe from ruffs | 3 cards | 4 and 5 cards, lists | One top card at no trumps, North-South on lead (`top_nt_north`, `top_nt_south`); runs of more and the code's own count not yet |
 | Quick tricks: long suits and second cards (`qs.alt`) | 3 cards | 4 and 5 cards, lists | No |
 | Quick tricks: the trump suit | 3 cards | 4 and 5 cards, lists | No |
 | Quick tricks: voids and partner's ruff | 3 cards | 4 and 5 cards, lists | No |
@@ -673,8 +673,23 @@ play of a suit takes a trick, so North-South on lead make at least won + 1. Its 
    suit's holding gives `back.j`, and `unit_lt` gives the rank bound. For these, every
    move now also carries `S.card.shape`: a suit below 4, a rank below 13, and the
    code of that suit and rank (`card_shape`, in `S.InHand`).
-5. The rule: three plies of any legal card, by `min_all` and `max_ex`, then the trick
-   goes to the leader and `search_in` puts what follows at won + 1 or more.
+5. *Done:* the rule. `top_nt_north` and `top_nt_south` are under "The first sure trick
+   rule for every position". At no trumps, with North (or South) on lead at the start
+   of a trick and holding the card of suit j and rank r, and with no other hand holding
+   a card of suit j as high (`S.Tops`), `B.solve` gives North-South at least one trick
+   more than they have won. This holds for every position that keeps the invariant.
+   The proof follows the trick. The leader's top card is among its moves, so `max_ex`
+   takes it (`root`). Each later seat plays any card at all: East-West by `min_all`
+   (`node1`, `node3`), and the partner by `max_ex` on any move (`node2`). Through
+   these, `Hold` keeps the leader as the winner with the card led, and keeps the other
+   hands below it (`tops_upd`, `mask_mono`). After the fourth card the trick goes to
+   the leader's side (`kid3`, `endw.go`), and `solve_in` puts the rest at won + 1 or
+   more. A script wrote the per-seat cases (`kid1`, `kid2`, `kid0_*`).
+
+This is the simplest case the quick tricks rest on: one top card, one trick, North-South
+on lead. Quick tricks also count runs of top cards, both hands of a side, entries,
+second cards and trump control. Each of those is a game argument over several tricks
+on top of these pieces.
 
 **The kernel check.** `bend PROOF.bend --verdict` rechecks proofs with a kernel proved
 in Lean, using Lean 4.34.0. On the whole file it stops at the first law that walks a
