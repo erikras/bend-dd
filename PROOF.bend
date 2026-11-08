@@ -3497,3 +3497,198 @@ def Laws.ex_mem(lb, p, t, pos, ms, c, mem, k):
           Inl{kid.at(lb, p, t, pos, h, c, e, k)}
         case Inr{m2}:
           Inr{Laws.ex_mem(lb, p, t, pos, tl, c, m2, k)}
+
+
+# ---------------------------------------------------------------------------
+# The winning card in the trick word
+
+def syu(-a: U32, -b: U32, x: {a == b : U32}) -> {b == a : U32}:
+  Equal.sym(U32, a, b, x)
+
+def cgu(-a: U32, -b: U32, -F: U32 -> U32, x: {a == b : U32}) -> {F(a) == F(b) : U32}:
+  Equal.cong(U32, U32, F, a, b, x)
+
+def Laws.shrn_or(k, a, b):
+  match k:
+    case 0n:
+      {==}
+    case 1n+j:
+      tr(U32.shr(U32.shrn(U32.or(a, b), j)), U32.shr(U32.or(U32.shrn(a, j), U32.shrn(b, j))), U32.or(U32.shr(U32.shrn(a, j)), U32.shr(U32.shrn(b, j))),
+        cgu(U32.shrn(U32.or(a, b), j), U32.or(U32.shrn(a, j), U32.shrn(b, j)), (x => U32.shr(x)), Laws.shrn_or(j, a, b)),
+        shr_or(U32.shrn(a, j), U32.shrn(b, j)))
+
+# What a field of an or holds is the or of what it holds in each part.
+
+def Laws.field_or(k, m, a, b):
+  tr(U32.and(U32.shrn(U32.or(a, b), k), m), U32.and(U32.or(U32.shrn(a, k), U32.shrn(b, k)), m), U32.or(U32.and(U32.shrn(a, k), m), U32.and(U32.shrn(b, k), m)),
+    cgu(U32.shrn(U32.or(a, b), k), U32.or(U32.shrn(a, k), U32.shrn(b, k)), (x => U32.and(x, m)), Laws.shrn_or(k, a, b)),
+    u32.or_and(U32.shrn(a, k), U32.shrn(b, k), m))
+
+# A part inside mask K reads, at any field, only what K leaves there.
+
+def Laws.field_mask(x, kk, k, m, h):
+  tr(U32.and(U32.shrn(x, k), m), U32.and(U32.shrn(U32.and(x, kk), k), m), U32.and(U32.shrn(x, k), U32.and(U32.shrn(kk, k), m)),
+    cgu(x, U32.and(x, kk), (z => U32.and(U32.shrn(z, k), m)), syu(U32.and(x, kk), x, h)),
+    tr(U32.and(U32.shrn(U32.and(x, kk), k), m), U32.and(U32.and(U32.shrn(x, k), U32.shrn(kk, k)), m), U32.and(U32.shrn(x, k), U32.and(U32.shrn(kk, k), m)),
+      cgu(U32.shrn(U32.and(x, kk), k), U32.and(U32.shrn(x, k), U32.shrn(kk, k)), (z => U32.and(z, m)), Laws.shrn_and(k, x, kk)),
+      Laws.and_assoc32(U32.shrn(x, k), U32.shrn(kk, k), m)))
+
+def Laws.shr_shl_w(p, b, t):
+  match p:
+    case 0n:
+      match b t:
+        case True{} WNil{}:
+          {==}
+        case False{} WNil{}:
+          {==}
+    case 1n+q:
+      match b t:
+        case True{} WCon{+b2, +t2}:
+          wc(1n+q, True{}, Word.shr.pad(q, Word.shl.put(q, b2, t2)), Word.and(1n+q, WCon{b2, t2}, S.ones(1n+q, q)), Laws.shr_shl_w(q, b2, t2))
+        case False{} WCon{+b2, +t2}:
+          wc(1n+q, False{}, Word.shr.pad(q, Word.shl.put(q, b2, t2)), Word.and(1n+q, WCon{b2, t2}, S.ones(1n+q, q)), Laws.shr_shl_w(q, b2, t2))
+
+def Laws.shr_shl(x):
+  match x:
+    case U32{WCon{+b, +t}}:
+      u.wrap(Word.shr.pad(31n, Word.shl.put(31n, b, t)), Word.and(32n, WCon{b, t}, S.ones(32n, 31n)), Laws.shr_shl_w(31n, b, t))
+
+def Laws.and_all_w(n, w):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          {==}
+    case 1n+p:
+      match w:
+        case WCon{+b, +t}:
+          match b:
+            case True{}:
+              wc(p, True{}, Word.and(p, t, S.ones(p, p)), t, Laws.and_all_w(p, t))
+            case False{}:
+              wc(p, False{}, Word.and(p, t, S.ones(p, p)), t, Laws.and_all_w(p, t))
+
+# The bits that survive k shifts up and k back down.
+
+def Laws.shrn_shln(k, x):
+  match k:
+    case 0n:
+      match x:
+        case U32{+w}:
+          syu(U32{Word.and(32n, w, S.ones(32n, 32n))}, U32{w}, u.wrap(Word.and(32n, w, S.ones(32n, 32n)), w, Laws.and_all_w(32n, w)))
+    case 1n+j:
+      tr(U32.shr(U32.shrn(U32.shl(U32.shln(x, j)), j)), U32.shrn(U32.shr(U32.shl(U32.shln(x, j))), j), U32.and(x, S.keep(1n+j)),
+        syu(U32.shrn(U32.shr(U32.shl(U32.shln(x, j))), j), U32.shr(U32.shrn(U32.shl(U32.shln(x, j)), j)), Laws.shrn_comm(U32.shl(U32.shln(x, j)), j)),
+        tr(U32.shrn(U32.shr(U32.shl(U32.shln(x, j))), j), U32.shrn(U32.and(U32.shln(x, j), 2147483647), j), U32.and(x, S.keep(1n+j)),
+          cgu(U32.shr(U32.shl(U32.shln(x, j))), U32.and(U32.shln(x, j), 2147483647), (z => U32.shrn(z, j)), Laws.shr_shl(U32.shln(x, j))),
+          tr(U32.shrn(U32.and(U32.shln(x, j), 2147483647), j), U32.and(U32.shrn(U32.shln(x, j), j), U32.shrn(2147483647, j)), U32.and(x, S.keep(1n+j)),
+            Laws.shrn_and(j, U32.shln(x, j), 2147483647),
+            tr(U32.and(U32.shrn(U32.shln(x, j), j), U32.shrn(2147483647, j)), U32.and(U32.and(x, S.keep(j)), U32.shrn(2147483647, j)), U32.and(x, S.keep(1n+j)),
+              cgu(U32.shrn(U32.shln(x, j), j), U32.and(x, S.keep(j)), (z => U32.and(z, U32.shrn(2147483647, j))), Laws.shrn_shln(j, x)),
+              Laws.and_assoc32(x, S.keep(j), U32.shrn(2147483647, j))))))
+
+def or0l.w(+n: Nat, +w: Word(n)) -> {Word.or(n, Word.zero(n), w) == w : Word(n)}:
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          {==}
+    case 1n+p:
+      match w:
+        case WCon{+b, +t}:
+          match b:
+            case True{}:
+              wc(p, True{}, Word.or(p, Word.zero(p), t), t, or0l.w(p, t))
+            case False{}:
+              wc(p, False{}, Word.or(p, Word.zero(p), t), t, or0l.w(p, t))
+
+def or0l(+a: U32) -> {U32.or(0, a) == a : U32}:
+  match a:
+    case U32{+x}:
+      u.wrap(Word.or(32n, Word.zero(32n), x), x, or0l.w(32n, x))
+
+def Laws.owner_make(s, p, l, o, b, hs, hp, hl, ho, hb):
+  tr(U32.and(U32.shrn(U32.or(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), U32.shln(b, 9n)), 7n), 3), U32.or(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 7n), 3), U32.and(U32.shrn(U32.shln(b, 9n), 7n), 3)), o, Laws.field_or(7n, 3, U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), U32.shln(b, 9n)), tr(U32.or(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 7n), 3), U32.and(U32.shrn(U32.shln(b, 9n), 7n), 3)), U32.or(o, 0), o, Equal.trans(U32, U32.or(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 7n), 3), U32.and(U32.shrn(U32.shln(b, 9n), 7n), 3)), U32.or(o, U32.and(U32.shrn(U32.shln(b, 9n), 7n), 3)), U32.or(o, 0), cgu(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 7n), 3), o, (z => U32.or(z, U32.and(U32.shrn(U32.shln(b, 9n), 7n), 3))), tr(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 7n), 3), U32.or(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 7n), 3), U32.and(U32.shrn(U32.shln(o, 7n), 7n), 3)), o, Laws.field_or(7n, 3, U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), tr(U32.or(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 7n), 3), U32.and(U32.shrn(U32.shln(o, 7n), 7n), 3)), U32.or(0, o), o, Equal.trans(U32, U32.or(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 7n), 3), U32.and(U32.shrn(U32.shln(o, 7n), 7n), 3)), U32.or(0, U32.and(U32.shrn(U32.shln(o, 7n), 7n), 3)), U32.or(0, o), cgu(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 7n), 3), 0, (z => U32.or(z, U32.and(U32.shrn(U32.shln(o, 7n), 7n), 3))), tr(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 7n), 3), U32.or(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 7n), 3), U32.and(U32.shrn(U32.shln(l, 4n), 7n), 3)), 0, Laws.field_or(7n, 3, U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), tr(U32.or(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 7n), 3), U32.and(U32.shrn(U32.shln(l, 4n), 7n), 3)), U32.or(0, 0), 0, Equal.trans(U32, U32.or(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 7n), 3), U32.and(U32.shrn(U32.shln(l, 4n), 7n), 3)), U32.or(0, U32.and(U32.shrn(U32.shln(l, 4n), 7n), 3)), U32.or(0, 0), cgu(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 7n), 3), 0, (z => U32.or(z, U32.and(U32.shrn(U32.shln(l, 4n), 7n), 3))), tr(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 7n), 3), U32.or(U32.and(U32.shrn(s, 7n), 3), U32.and(U32.shrn(U32.shln(p, 2n), 7n), 3)), 0, Laws.field_or(7n, 3, s, U32.shln(p, 2n)), tr(U32.or(U32.and(U32.shrn(s, 7n), 3), U32.and(U32.shrn(U32.shln(p, 2n), 7n), 3)), U32.or(0, 0), 0, Equal.trans(U32, U32.or(U32.and(U32.shrn(s, 7n), 3), U32.and(U32.shrn(U32.shln(p, 2n), 7n), 3)), U32.or(0, U32.and(U32.shrn(U32.shln(p, 2n), 7n), 3)), U32.or(0, 0), cgu(U32.and(U32.shrn(s, 7n), 3), 0, (z => U32.or(z, U32.and(U32.shrn(U32.shln(p, 2n), 7n), 3))), tr(U32.and(U32.shrn(s, 7n), 3), U32.and(U32.shrn(s, 7n), U32.and(U32.shrn(3, 7n), 3)), 0, Laws.field_mask(s, 3, 7n, 3, hs), u32.and_zero(U32.shrn(s, 7n)))), cgu(U32.and(U32.shrn(U32.shln(p, 2n), 7n), 3), 0, (z => U32.or(0, z)), tr(U32.and(U32.shrn(U32.shln(p, 2n), 7n), 3), U32.and(U32.shrn(U32.shln(p, 2n), 7n), U32.and(U32.shrn(12, 7n), 3)), 0, Laws.field_mask(U32.shln(p, 2n), 12, 7n, 3, Laws.shln_sub(2n, p, 12, hp)), u32.and_zero(U32.shrn(U32.shln(p, 2n), 7n))))), {==}))), cgu(U32.and(U32.shrn(U32.shln(l, 4n), 7n), 3), 0, (z => U32.or(0, z)), tr(U32.and(U32.shrn(U32.shln(l, 4n), 7n), 3), U32.and(U32.shrn(U32.shln(l, 4n), 7n), U32.and(U32.shrn(112, 7n), 3)), 0, Laws.field_mask(U32.shln(l, 4n), 112, 7n, 3, Laws.shln_sub(4n, l, 112, hl)), u32.and_zero(U32.shrn(U32.shln(l, 4n), 7n))))), {==}))), cgu(U32.and(U32.shrn(U32.shln(o, 7n), 7n), 3), o, (z => U32.or(0, z)), tr(U32.and(U32.shrn(U32.shln(o, 7n), 7n), 3), U32.and(U32.and(o, S.keep(7n)), 3), o, cgu(U32.shrn(U32.shln(o, 7n), 7n), U32.and(o, S.keep(7n)), (z => U32.and(z, 3)), Laws.shrn_shln(7n, o)), tr(U32.and(U32.and(o, S.keep(7n)), 3), U32.and(o, U32.and(S.keep(7n), 3)), o, Laws.and_assoc32(o, S.keep(7n), 3), ho)))), or0l(o)))), cgu(U32.and(U32.shrn(U32.shln(b, 9n), 7n), 3), 0, (z => U32.or(o, z)), tr(U32.and(U32.shrn(U32.shln(b, 9n), 7n), 3), U32.and(U32.shrn(U32.shln(b, 9n), 7n), U32.and(U32.shrn(32256, 7n), 3)), 0, Laws.field_mask(U32.shln(b, 9n), 32256, 7n, 3, Laws.shln_sub(9n, b, 32256, hb)), u32.and_zero(U32.shrn(U32.shln(b, 9n), 7n))))), u32.or_zero(o)))
+
+# The same with the rank bit on top.
+
+def Laws.owner_make_r(s, p, l, o, b, r, hs, hp, hl, ho, hb, hr):
+  tr(U32.and(U32.shrn(U32.or(R.trick.make(s, p, l, o, b), U32.shln(r, 15n)), 7n), 3), U32.or(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 7n), 3), U32.and(U32.shrn(U32.shln(r, 15n), 7n), 3)), o, Laws.field_or(7n, 3, R.trick.make(s, p, l, o, b), U32.shln(r, 15n)),
+    tr(U32.or(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 7n), 3), U32.and(U32.shrn(U32.shln(r, 15n), 7n), 3)), U32.or(o, 0), o,
+      Equal.trans(U32, U32.or(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 7n), 3), U32.and(U32.shrn(U32.shln(r, 15n), 7n), 3)), U32.or(o, U32.and(U32.shrn(U32.shln(r, 15n), 7n), 3)), U32.or(o, 0),
+        cgu(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 7n), 3), o, (z => U32.or(z, U32.and(U32.shrn(U32.shln(r, 15n), 7n), 3))), Laws.owner_make(s, p, l, o, b, hs, hp, hl, ho, hb)),
+        cgu(U32.and(U32.shrn(U32.shln(r, 15n), 7n), 3), 0, (z => U32.or(o, z)), tr(U32.and(U32.shrn(U32.shln(r, 15n), 7n), 3), U32.and(U32.shrn(U32.shln(r, 15n), 7n), U32.and(U32.shrn(32768, 7n), 3)), 0, Laws.field_mask(U32.shln(r, 15n), 32768, 7n, 3, Laws.shln_sub(15n, r, 32768, hr)), u32.and_zero(U32.shrn(U32.shln(r, 15n), 7n))))),
+      u32.or_zero(o)))
+
+def Laws.best_make(s, p, l, o, b, hs, hp, hl, ho, hb):
+  tr(U32.and(U32.shrn(U32.or(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), U32.shln(b, 9n)), 9n), 63), U32.or(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 9n), 63), U32.and(U32.shrn(U32.shln(b, 9n), 9n), 63)), b, Laws.field_or(9n, 63, U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), U32.shln(b, 9n)), tr(U32.or(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 9n), 63), U32.and(U32.shrn(U32.shln(b, 9n), 9n), 63)), U32.or(0, b), b, Equal.trans(U32, U32.or(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 9n), 63), U32.and(U32.shrn(U32.shln(b, 9n), 9n), 63)), U32.or(0, U32.and(U32.shrn(U32.shln(b, 9n), 9n), 63)), U32.or(0, b), cgu(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 9n), 63), 0, (z => U32.or(z, U32.and(U32.shrn(U32.shln(b, 9n), 9n), 63))), tr(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 9n), 63), U32.or(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 9n), 63), U32.and(U32.shrn(U32.shln(o, 7n), 9n), 63)), 0, Laws.field_or(9n, 63, U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), tr(U32.or(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 9n), 63), U32.and(U32.shrn(U32.shln(o, 7n), 9n), 63)), U32.or(0, 0), 0, Equal.trans(U32, U32.or(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 9n), 63), U32.and(U32.shrn(U32.shln(o, 7n), 9n), 63)), U32.or(0, U32.and(U32.shrn(U32.shln(o, 7n), 9n), 63)), U32.or(0, 0), cgu(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 9n), 63), 0, (z => U32.or(z, U32.and(U32.shrn(U32.shln(o, 7n), 9n), 63))), tr(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 9n), 63), U32.or(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 9n), 63), U32.and(U32.shrn(U32.shln(l, 4n), 9n), 63)), 0, Laws.field_or(9n, 63, U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), tr(U32.or(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 9n), 63), U32.and(U32.shrn(U32.shln(l, 4n), 9n), 63)), U32.or(0, 0), 0, Equal.trans(U32, U32.or(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 9n), 63), U32.and(U32.shrn(U32.shln(l, 4n), 9n), 63)), U32.or(0, U32.and(U32.shrn(U32.shln(l, 4n), 9n), 63)), U32.or(0, 0), cgu(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 9n), 63), 0, (z => U32.or(z, U32.and(U32.shrn(U32.shln(l, 4n), 9n), 63))), tr(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 9n), 63), U32.or(U32.and(U32.shrn(s, 9n), 63), U32.and(U32.shrn(U32.shln(p, 2n), 9n), 63)), 0, Laws.field_or(9n, 63, s, U32.shln(p, 2n)), tr(U32.or(U32.and(U32.shrn(s, 9n), 63), U32.and(U32.shrn(U32.shln(p, 2n), 9n), 63)), U32.or(0, 0), 0, Equal.trans(U32, U32.or(U32.and(U32.shrn(s, 9n), 63), U32.and(U32.shrn(U32.shln(p, 2n), 9n), 63)), U32.or(0, U32.and(U32.shrn(U32.shln(p, 2n), 9n), 63)), U32.or(0, 0), cgu(U32.and(U32.shrn(s, 9n), 63), 0, (z => U32.or(z, U32.and(U32.shrn(U32.shln(p, 2n), 9n), 63))), tr(U32.and(U32.shrn(s, 9n), 63), U32.and(U32.shrn(s, 9n), U32.and(U32.shrn(3, 9n), 63)), 0, Laws.field_mask(s, 3, 9n, 63, hs), u32.and_zero(U32.shrn(s, 9n)))), cgu(U32.and(U32.shrn(U32.shln(p, 2n), 9n), 63), 0, (z => U32.or(0, z)), tr(U32.and(U32.shrn(U32.shln(p, 2n), 9n), 63), U32.and(U32.shrn(U32.shln(p, 2n), 9n), U32.and(U32.shrn(12, 9n), 63)), 0, Laws.field_mask(U32.shln(p, 2n), 12, 9n, 63, Laws.shln_sub(2n, p, 12, hp)), u32.and_zero(U32.shrn(U32.shln(p, 2n), 9n))))), {==}))), cgu(U32.and(U32.shrn(U32.shln(l, 4n), 9n), 63), 0, (z => U32.or(0, z)), tr(U32.and(U32.shrn(U32.shln(l, 4n), 9n), 63), U32.and(U32.shrn(U32.shln(l, 4n), 9n), U32.and(U32.shrn(112, 9n), 63)), 0, Laws.field_mask(U32.shln(l, 4n), 112, 9n, 63, Laws.shln_sub(4n, l, 112, hl)), u32.and_zero(U32.shrn(U32.shln(l, 4n), 9n))))), {==}))), cgu(U32.and(U32.shrn(U32.shln(o, 7n), 9n), 63), 0, (z => U32.or(0, z)), tr(U32.and(U32.shrn(U32.shln(o, 7n), 9n), 63), U32.and(U32.shrn(U32.shln(o, 7n), 9n), U32.and(U32.shrn(384, 9n), 63)), 0, Laws.field_mask(U32.shln(o, 7n), 384, 9n, 63, Laws.shln_sub(7n, o, 384, ho)), u32.and_zero(U32.shrn(U32.shln(o, 7n), 9n))))), {==}))), cgu(U32.and(U32.shrn(U32.shln(b, 9n), 9n), 63), b, (z => U32.or(0, z)), tr(U32.and(U32.shrn(U32.shln(b, 9n), 9n), 63), U32.and(U32.and(b, S.keep(9n)), 63), b, cgu(U32.shrn(U32.shln(b, 9n), 9n), U32.and(b, S.keep(9n)), (z => U32.and(z, 63)), Laws.shrn_shln(9n, b)), tr(U32.and(U32.and(b, S.keep(9n)), 63), U32.and(b, U32.and(S.keep(9n), 63)), b, Laws.and_assoc32(b, S.keep(9n), 63), hb)))), or0l(b)))
+
+# The same with the rank bit on top.
+
+def Laws.best_make_r(s, p, l, o, b, r, hs, hp, hl, ho, hb, hr):
+  tr(U32.and(U32.shrn(U32.or(R.trick.make(s, p, l, o, b), U32.shln(r, 15n)), 9n), 63), U32.or(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 9n), 63), U32.and(U32.shrn(U32.shln(r, 15n), 9n), 63)), b, Laws.field_or(9n, 63, R.trick.make(s, p, l, o, b), U32.shln(r, 15n)),
+    tr(U32.or(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 9n), 63), U32.and(U32.shrn(U32.shln(r, 15n), 9n), 63)), U32.or(b, 0), b,
+      Equal.trans(U32, U32.or(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 9n), 63), U32.and(U32.shrn(U32.shln(r, 15n), 9n), 63)), U32.or(b, U32.and(U32.shrn(U32.shln(r, 15n), 9n), 63)), U32.or(b, 0),
+        cgu(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 9n), 63), b, (z => U32.or(z, U32.and(U32.shrn(U32.shln(r, 15n), 9n), 63))), Laws.best_make(s, p, l, o, b, hs, hp, hl, ho, hb)),
+        cgu(U32.and(U32.shrn(U32.shln(r, 15n), 9n), 63), 0, (z => U32.or(b, z)), tr(U32.and(U32.shrn(U32.shln(r, 15n), 9n), 63), U32.and(U32.shrn(U32.shln(r, 15n), 9n), U32.and(U32.shrn(32768, 9n), 63)), 0, Laws.field_mask(U32.shln(r, 15n), 32768, 9n, 63, Laws.shln_sub(15n, r, 32768, hr)), u32.and_zero(U32.shrn(U32.shln(r, 15n), 9n))))),
+      u32.or_zero(b)))
+
+def Laws.lead_make(s, p, l, o, b, hs, hp, hl, ho, hb):
+  tr(U32.and(U32.shrn(U32.or(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), U32.shln(b, 9n)), 4n), 7), U32.or(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 4n), 7), U32.and(U32.shrn(U32.shln(b, 9n), 4n), 7)), l, Laws.field_or(4n, 7, U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), U32.shln(b, 9n)), tr(U32.or(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 4n), 7), U32.and(U32.shrn(U32.shln(b, 9n), 4n), 7)), U32.or(l, 0), l, Equal.trans(U32, U32.or(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 4n), 7), U32.and(U32.shrn(U32.shln(b, 9n), 4n), 7)), U32.or(l, U32.and(U32.shrn(U32.shln(b, 9n), 4n), 7)), U32.or(l, 0), cgu(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 4n), 7), l, (z => U32.or(z, U32.and(U32.shrn(U32.shln(b, 9n), 4n), 7))), tr(U32.and(U32.shrn(U32.or(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), 4n), 7), U32.or(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 4n), 7), U32.and(U32.shrn(U32.shln(o, 7n), 4n), 7)), l, Laws.field_or(4n, 7, U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), U32.shln(o, 7n)), tr(U32.or(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 4n), 7), U32.and(U32.shrn(U32.shln(o, 7n), 4n), 7)), U32.or(l, 0), l, Equal.trans(U32, U32.or(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 4n), 7), U32.and(U32.shrn(U32.shln(o, 7n), 4n), 7)), U32.or(l, U32.and(U32.shrn(U32.shln(o, 7n), 4n), 7)), U32.or(l, 0), cgu(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 4n), 7), l, (z => U32.or(z, U32.and(U32.shrn(U32.shln(o, 7n), 4n), 7))), tr(U32.and(U32.shrn(U32.or(U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), 4n), 7), U32.or(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 4n), 7), U32.and(U32.shrn(U32.shln(l, 4n), 4n), 7)), l, Laws.field_or(4n, 7, U32.or(s, U32.shln(p, 2n)), U32.shln(l, 4n)), tr(U32.or(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 4n), 7), U32.and(U32.shrn(U32.shln(l, 4n), 4n), 7)), U32.or(0, l), l, Equal.trans(U32, U32.or(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 4n), 7), U32.and(U32.shrn(U32.shln(l, 4n), 4n), 7)), U32.or(0, U32.and(U32.shrn(U32.shln(l, 4n), 4n), 7)), U32.or(0, l), cgu(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 4n), 7), 0, (z => U32.or(z, U32.and(U32.shrn(U32.shln(l, 4n), 4n), 7))), tr(U32.and(U32.shrn(U32.or(s, U32.shln(p, 2n)), 4n), 7), U32.or(U32.and(U32.shrn(s, 4n), 7), U32.and(U32.shrn(U32.shln(p, 2n), 4n), 7)), 0, Laws.field_or(4n, 7, s, U32.shln(p, 2n)), tr(U32.or(U32.and(U32.shrn(s, 4n), 7), U32.and(U32.shrn(U32.shln(p, 2n), 4n), 7)), U32.or(0, 0), 0, Equal.trans(U32, U32.or(U32.and(U32.shrn(s, 4n), 7), U32.and(U32.shrn(U32.shln(p, 2n), 4n), 7)), U32.or(0, U32.and(U32.shrn(U32.shln(p, 2n), 4n), 7)), U32.or(0, 0), cgu(U32.and(U32.shrn(s, 4n), 7), 0, (z => U32.or(z, U32.and(U32.shrn(U32.shln(p, 2n), 4n), 7))), tr(U32.and(U32.shrn(s, 4n), 7), U32.and(U32.shrn(s, 4n), U32.and(U32.shrn(3, 4n), 7)), 0, Laws.field_mask(s, 3, 4n, 7, hs), u32.and_zero(U32.shrn(s, 4n)))), cgu(U32.and(U32.shrn(U32.shln(p, 2n), 4n), 7), 0, (z => U32.or(0, z)), tr(U32.and(U32.shrn(U32.shln(p, 2n), 4n), 7), U32.and(U32.shrn(U32.shln(p, 2n), 4n), U32.and(U32.shrn(12, 4n), 7)), 0, Laws.field_mask(U32.shln(p, 2n), 12, 4n, 7, Laws.shln_sub(2n, p, 12, hp)), u32.and_zero(U32.shrn(U32.shln(p, 2n), 4n))))), {==}))), cgu(U32.and(U32.shrn(U32.shln(l, 4n), 4n), 7), l, (z => U32.or(0, z)), tr(U32.and(U32.shrn(U32.shln(l, 4n), 4n), 7), U32.and(U32.and(l, S.keep(4n)), 7), l, cgu(U32.shrn(U32.shln(l, 4n), 4n), U32.and(l, S.keep(4n)), (z => U32.and(z, 7)), Laws.shrn_shln(4n, l)), tr(U32.and(U32.and(l, S.keep(4n)), 7), U32.and(l, U32.and(S.keep(4n), 7)), l, Laws.and_assoc32(l, S.keep(4n), 7), hl)))), or0l(l)))), cgu(U32.and(U32.shrn(U32.shln(o, 7n), 4n), 7), 0, (z => U32.or(l, z)), tr(U32.and(U32.shrn(U32.shln(o, 7n), 4n), 7), U32.and(U32.shrn(U32.shln(o, 7n), 4n), U32.and(U32.shrn(384, 4n), 7)), 0, Laws.field_mask(U32.shln(o, 7n), 384, 4n, 7, Laws.shln_sub(7n, o, 384, ho)), u32.and_zero(U32.shrn(U32.shln(o, 7n), 4n))))), u32.or_zero(l)))), cgu(U32.and(U32.shrn(U32.shln(b, 9n), 4n), 7), 0, (z => U32.or(l, z)), tr(U32.and(U32.shrn(U32.shln(b, 9n), 4n), 7), U32.and(U32.shrn(U32.shln(b, 9n), 4n), U32.and(U32.shrn(32256, 4n), 7)), 0, Laws.field_mask(U32.shln(b, 9n), 32256, 4n, 7, Laws.shln_sub(9n, b, 32256, hb)), u32.and_zero(U32.shrn(U32.shln(b, 9n), 4n))))), u32.or_zero(l)))
+
+# The same with the rank bit on top.
+
+def Laws.lead_make_r(s, p, l, o, b, r, hs, hp, hl, ho, hb, hr):
+  tr(U32.and(U32.shrn(U32.or(R.trick.make(s, p, l, o, b), U32.shln(r, 15n)), 4n), 7), U32.or(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 4n), 7), U32.and(U32.shrn(U32.shln(r, 15n), 4n), 7)), l, Laws.field_or(4n, 7, R.trick.make(s, p, l, o, b), U32.shln(r, 15n)),
+    tr(U32.or(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 4n), 7), U32.and(U32.shrn(U32.shln(r, 15n), 4n), 7)), U32.or(l, 0), l,
+      Equal.trans(U32, U32.or(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 4n), 7), U32.and(U32.shrn(U32.shln(r, 15n), 4n), 7)), U32.or(l, U32.and(U32.shrn(U32.shln(r, 15n), 4n), 7)), U32.or(l, 0),
+        cgu(U32.and(U32.shrn(R.trick.make(s, p, l, o, b), 4n), 7), l, (z => U32.or(z, U32.and(U32.shrn(U32.shln(r, 15n), 4n), 7))), Laws.lead_make(s, p, l, o, b, hs, hp, hl, ho, hb)),
+        cgu(U32.and(U32.shrn(U32.shln(r, 15n), 4n), 7), 0, (z => U32.or(l, z)), tr(U32.and(U32.shrn(U32.shln(r, 15n), 4n), 7), U32.and(U32.shrn(U32.shln(r, 15n), 4n), U32.and(U32.shrn(32768, 4n), 7)), 0, Laws.field_mask(U32.shln(r, 15n), 32768, 4n, 7, Laws.shln_sub(15n, r, 32768, hr)), u32.and_zero(U32.shrn(U32.shln(r, 15n), 4n))))),
+      u32.or_zero(l)))
+
+
+# ---------------------------------------------------------------------------
+# The winning card through a trick
+
+def idem(+y: U32, +m: U32, +e: {U32.and(m, m) == m : U32}) -> S.Sub32(U32.and(y, m), m):
+  tr(U32.and(U32.and(y, m), m), U32.and(y, U32.and(m, m)), U32.and(y, m), Laws.and_assoc32(y, m, m), cgu(U32.and(m, m), m, (z => U32.and(y, z)), e))
+
+def bit1(+b: Bool) -> S.Sub32(Bool.to_u32(b), 1):
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+# The lead: the card led wins so far, for its seat, and its suit is the suit led.
+
+def Laws.first_win(win, rank, seat, played, lead, owner, best, c, ep, hs, hu, hc):
+  %Equal.sym(U32, played, 0, ep) : S.And({R.trick.owner(R.trick.next.go(U32.is_eq(_, 0), U32.is_eq(_, 3), win, rank, seat, _, lead, owner, best, c)) == seat : U32}, S.And({R.trick.best(R.trick.next.go(U32.is_eq(_, 0), U32.is_eq(_, 3), win, rank, seat, _, lead, owner, best, c)) == c : U32}, {R.trick.lead(R.trick.next.go(U32.is_eq(_, 0), U32.is_eq(_, 3), win, rank, seat, _, lead, owner, best, c)) == C.card.suit(c) : U32}))
+  (Laws.owner_make(U32.and((seat + 1 : U32), 3), 1, C.card.suit(c), seat, c, idem((seat + 1 : U32), 3, {==}), {==}, hu, hs, hc),
+    (Laws.best_make(U32.and((seat + 1 : U32), 3), 1, C.card.suit(c), seat, c, idem((seat + 1 : U32), 3, {==}), {==}, hu, hs, hc),
+      Laws.lead_make(U32.and((seat + 1 : U32), 3), 1, C.card.suit(c), seat, c, idem((seat + 1 : U32), 3, {==}), {==}, hu, hs, hc)))
+
+def mid.keep(+win: Bool, +rank: Bool, +seat: U32, +q: U32, +lead: U32, +owner: U32, +best: U32, +c: U32, +ew: {win == False{} : Bool}, +hq: S.Sub32(q, 3), +hl: S.Sub32(lead, 7), +ho: S.Sub32(owner, 3), +hb: S.Sub32(best, 63)) ->
+    S.And({R.trick.owner(U32.or(R.trick.make(U32.and((seat + 1 : U32), 3), q, lead, R.sel(win, seat, owner), R.sel(win, c, best)), U32.shln(Bool.to_u32(rank), 15n))) == owner : U32},
+      S.And({R.trick.best(U32.or(R.trick.make(U32.and((seat + 1 : U32), 3), q, lead, R.sel(win, seat, owner), R.sel(win, c, best)), U32.shln(Bool.to_u32(rank), 15n))) == best : U32},
+        {R.trick.lead(U32.or(R.trick.make(U32.and((seat + 1 : U32), 3), q, lead, R.sel(win, seat, owner), R.sel(win, c, best)), U32.shln(Bool.to_u32(rank), 15n))) == lead : U32})):
+  %Equal.sym(Bool, win, False{}, ew) : S.And({R.trick.owner(U32.or(R.trick.make(U32.and((seat + 1 : U32), 3), q, lead, R.sel(_, seat, owner), R.sel(_, c, best)), U32.shln(Bool.to_u32(rank), 15n))) == owner : U32}, S.And({R.trick.best(U32.or(R.trick.make(U32.and((seat + 1 : U32), 3), q, lead, R.sel(_, seat, owner), R.sel(_, c, best)), U32.shln(Bool.to_u32(rank), 15n))) == best : U32}, {R.trick.lead(U32.or(R.trick.make(U32.and((seat + 1 : U32), 3), q, lead, R.sel(_, seat, owner), R.sel(_, c, best)), U32.shln(Bool.to_u32(rank), 15n))) == lead : U32}))
+  (Laws.owner_make_r(U32.and((seat + 1 : U32), 3), q, lead, owner, best, Bool.to_u32(rank), idem((seat + 1 : U32), 3, {==}), hq, hl, ho, hb, bit1(rank)),
+    (Laws.best_make_r(U32.and((seat + 1 : U32), 3), q, lead, owner, best, Bool.to_u32(rank), idem((seat + 1 : U32), 3, {==}), hq, hl, ho, hb, bit1(rank)),
+      Laws.lead_make_r(U32.and((seat + 1 : U32), 3), q, lead, owner, best, Bool.to_u32(rank), idem((seat + 1 : U32), 3, {==}), hq, hl, ho, hb, bit1(rank))))
+
+# The second and third cards: a card that doesn't win leaves the winner, the
+# winning card and the suit led as they were.
+
+def Laws.mid_keep(k, lk, nk, win, rank, seat, played, lead, owner, best, c, ep, ew, hl, ho, hb):
+  match k:
+    case 0n:
+      Empty.absurd(S.And({R.trick.owner(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == owner : U32}, S.And({R.trick.best(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == best : U32}, {R.trick.lead(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == lead : U32})), no_tf(nk))
+    case 1n:
+      %Equal.sym(U32, played, U32.from_nat(1n), ep) : S.And({R.trick.owner(R.trick.next.go(U32.is_eq(_, 0), U32.is_eq(_, 3), win, rank, seat, _, lead, owner, best, c)) == owner : U32}, S.And({R.trick.best(R.trick.next.go(U32.is_eq(_, 0), U32.is_eq(_, 3), win, rank, seat, _, lead, owner, best, c)) == best : U32}, {R.trick.lead(R.trick.next.go(U32.is_eq(_, 0), U32.is_eq(_, 3), win, rank, seat, _, lead, owner, best, c)) == lead : U32}))
+      mid.keep(win, rank, seat, 2, lead, owner, best, c, ew, {==}, hl, ho, hb)
+    case 2n:
+      %Equal.sym(U32, played, U32.from_nat(2n), ep) : S.And({R.trick.owner(R.trick.next.go(U32.is_eq(_, 0), U32.is_eq(_, 3), win, rank, seat, _, lead, owner, best, c)) == owner : U32}, S.And({R.trick.best(R.trick.next.go(U32.is_eq(_, 0), U32.is_eq(_, 3), win, rank, seat, _, lead, owner, best, c)) == best : U32}, {R.trick.lead(R.trick.next.go(U32.is_eq(_, 0), U32.is_eq(_, 3), win, rank, seat, _, lead, owner, best, c)) == lead : U32}))
+      mid.keep(win, rank, seat, 3, lead, owner, best, c, ew, {==}, hl, ho, hb)
+    case 3n+y:
+      Empty.absurd(S.And({R.trick.owner(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == owner : U32}, S.And({R.trick.best(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == best : U32}, {R.trick.lead(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == lead : U32})), no_lt0(y, lk))

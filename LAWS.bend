@@ -1464,3 +1464,171 @@ law ex_mem:
   for mem: S.Mem(c, ms)
   for k: S.Kid(lb, p, t, pos, c)
   S.ExK(lb, p, t, pos, ms)
+
+
+# ---------------------------------------------------------------------------
+# The winning card in the trick word: owner, best and lead read back out, and
+# kept by a card that does not win
+
+law shrn_or:
+  for +k: Nat
+  for +a: U32
+  for +b: U32
+  {U32.shrn(U32.or(a, b), k) == U32.or(U32.shrn(a, k), U32.shrn(b, k)) : U32}
+
+law field_or:
+  for +k: Nat
+  for +m: U32
+  for +a: U32
+  for +b: U32
+  {U32.and(U32.shrn(U32.or(a, b), k), m) == U32.or(U32.and(U32.shrn(a, k), m), U32.and(U32.shrn(b, k), m)) : U32}
+
+law field_mask:
+  for +x: U32
+  for +kk: U32
+  for +k: Nat
+  for +m: U32
+  for +h: S.Sub32(x, kk)
+  {U32.and(U32.shrn(x, k), m) == U32.and(U32.shrn(x, k), U32.and(U32.shrn(kk, k), m)) : U32}
+
+law shr_shl_w:
+  for +p: Nat
+  for +b: Bool
+  for +t: Word(p)
+  {Word.shr.pad(p, Word.shl.put(p, b, t)) == Word.and(1n+p, WCon{b, t}, S.ones(1n+p, p)) : Word(1n+p)}
+
+law shr_shl:
+  for +x: U32
+  {U32.shr(U32.shl(x)) == U32.and(x, 2147483647) : U32}
+
+law and_all_w:
+  for +n: Nat
+  for +w: Word(n)
+  {Word.and(n, w, S.ones(n, n)) == w : Word(n)}
+
+law shrn_shln:
+  for +k: Nat
+  for +x: U32
+  {U32.shrn(U32.shln(x, k), k) == U32.and(x, S.keep(k)) : U32}
+
+law owner_make:
+  for +s: U32
+  for +p: U32
+  for +l: U32
+  for +o: U32
+  for +b: U32
+  for +hs: S.Sub32(s, 3)
+  for +hp: S.Sub32(p, 3)
+  for +hl: S.Sub32(l, 7)
+  for +ho: S.Sub32(o, 3)
+  for +hb: S.Sub32(b, 63)
+  {R.trick.owner(R.trick.make(s, p, l, o, b)) == o : U32}
+
+law owner_make_r:
+  for +s: U32
+  for +p: U32
+  for +l: U32
+  for +o: U32
+  for +b: U32
+  for +r: U32
+  for +hs: S.Sub32(s, 3)
+  for +hp: S.Sub32(p, 3)
+  for +hl: S.Sub32(l, 7)
+  for +ho: S.Sub32(o, 3)
+  for +hb: S.Sub32(b, 63)
+  for +hr: S.Sub32(r, 1)
+  {R.trick.owner(U32.or(R.trick.make(s, p, l, o, b), U32.shln(r, 15n))) == o : U32}
+
+law best_make:
+  for +s: U32
+  for +p: U32
+  for +l: U32
+  for +o: U32
+  for +b: U32
+  for +hs: S.Sub32(s, 3)
+  for +hp: S.Sub32(p, 3)
+  for +hl: S.Sub32(l, 7)
+  for +ho: S.Sub32(o, 3)
+  for +hb: S.Sub32(b, 63)
+  {R.trick.best(R.trick.make(s, p, l, o, b)) == b : U32}
+
+law best_make_r:
+  for +s: U32
+  for +p: U32
+  for +l: U32
+  for +o: U32
+  for +b: U32
+  for +r: U32
+  for +hs: S.Sub32(s, 3)
+  for +hp: S.Sub32(p, 3)
+  for +hl: S.Sub32(l, 7)
+  for +ho: S.Sub32(o, 3)
+  for +hb: S.Sub32(b, 63)
+  for +hr: S.Sub32(r, 1)
+  {R.trick.best(U32.or(R.trick.make(s, p, l, o, b), U32.shln(r, 15n))) == b : U32}
+
+law lead_make:
+  for +s: U32
+  for +p: U32
+  for +l: U32
+  for +o: U32
+  for +b: U32
+  for +hs: S.Sub32(s, 3)
+  for +hp: S.Sub32(p, 3)
+  for +hl: S.Sub32(l, 7)
+  for +ho: S.Sub32(o, 3)
+  for +hb: S.Sub32(b, 63)
+  {R.trick.lead(R.trick.make(s, p, l, o, b)) == l : U32}
+
+law lead_make_r:
+  for +s: U32
+  for +p: U32
+  for +l: U32
+  for +o: U32
+  for +b: U32
+  for +r: U32
+  for +hs: S.Sub32(s, 3)
+  for +hp: S.Sub32(p, 3)
+  for +hl: S.Sub32(l, 7)
+  for +ho: S.Sub32(o, 3)
+  for +hb: S.Sub32(b, 63)
+  for +hr: S.Sub32(r, 1)
+  {R.trick.lead(U32.or(R.trick.make(s, p, l, o, b), U32.shln(r, 15n))) == l : U32}
+
+law first_win:
+  for +win: Bool
+  for +rank: Bool
+  for +seat: U32
+  for +played: U32
+  for +lead: U32
+  for +owner: U32
+  for +best: U32
+  for +c: U32
+  for +ep: {played == 0 : U32}
+  for +hs: S.Sub32(seat, 3)
+  for +hu: S.Sub32(C.card.suit(c), 7)
+  for +hc: S.Sub32(c, 63)
+  S.And({R.trick.owner(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == seat : U32},
+    S.And({R.trick.best(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == c : U32},
+      {R.trick.lead(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == C.card.suit(c) : U32}))
+
+law mid_keep:
+  for +k: Nat
+  for +lk: {Nat.is_lt(k, 3n) == True{} : Bool}
+  for +nk: {Nat.is_eq(k, 0n) == False{} : Bool}
+  for +win: Bool
+  for +rank: Bool
+  for +seat: U32
+  for +played: U32
+  for +lead: U32
+  for +owner: U32
+  for +best: U32
+  for +c: U32
+  for +ep: {played == U32.from_nat(k) : U32}
+  for +ew: {win == False{} : Bool}
+  for +hl: S.Sub32(lead, 7)
+  for +ho: S.Sub32(owner, 3)
+  for +hb: S.Sub32(best, 63)
+  S.And({R.trick.owner(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == owner : U32},
+    S.And({R.trick.best(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == best : U32},
+      {R.trick.lead(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == lead : U32}))

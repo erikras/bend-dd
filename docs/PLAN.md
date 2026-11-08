@@ -657,9 +657,14 @@ play of a suit takes a trick, so North-South on lead make at least won + 1. Its 
    the lowest bit of what is left or among the rest (`unit_split`), and `count_le`
    keeps the 13 rounds of fuel enough. `ex_mem` makes such a card the witness `max_ex`
    wants.
-3. The winning card in the trick word: after each card, `R.trick.owner` and
-   `R.trick.best` stay the leader and the card led while nothing beats it. These are
-   like the other trick word laws, at the higher fields.
+3. *Done:* the winning card in the trick word (under "The winning card" in
+   `LAWS.bend`). `owner_make`, `best_make` and `lead_make`, and their `_r` forms with
+   the rank bit on top, read the fields back out of `R.trick.make` when each part fits
+   its field. The proofs split a field read over the parts of an or (`field_or`), and
+   each part outside the field reads as nothing (`field_mask`). Shifting up and back
+   down keeps what fits (`shrn_shln`, from `shr_shl`). `first_win` says that after the
+   lead, the leader owns the trick with the card led, in its suit. `mid_keep` says the
+   second and third cards keep all three when they don't win.
 4. A card no other card in play can beat at no trumps: one of the same suit is lower
    by rank, and one of another suit never wins.
 5. The rule: three plies of any legal card, by `min_all` and `max_ex`, then the trick

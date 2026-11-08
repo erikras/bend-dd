@@ -1042,3 +1042,13 @@ def Mem(+c: U32, xs: List<&2, U32>) -> Type:
       {h == c : U32} | Mem(c, t)
 
 # The peel keeps what was already in acc.
+
+
+# What survives shifting a word up k places and back down.
+
+def keep(k: Nat) -> U32:
+  match k:
+    case 0n:
+      4294967295
+    case 1n++j:
+      U32.and(keep(j), U32.shrn(2147483647, j))
