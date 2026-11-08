@@ -786,8 +786,15 @@ def And(-A: Data, -B: Data) -> Data:
 
 # A card is in a hand: what play takes out of each word is in that word, and
 # it is one card.
+# A card code as the moves make them: a suit below 4, a rank below 13, and the code
+# is the card of that suit and rank.
+def card.shape(+c: U32) -> Bool:
+  Bool.and(Nat.is_lt(U32.to_nat(C.card.suit(c)), 4n), Bool.and(Nat.is_lt(U32.to_nat(C.card.rank(c)), 13n), U32.is_eq(c, C.card.make(C.card.suit(c), C.card.rank(c)))))
+
+# Where a card's code sits among the numbers: 16 for each suit, then the rank.
+
 def InHand(+c: U32, +h01: U32, +h23: U32) -> Data:
-  Sigma<&2, &2, Sub32(play.a(c), h01), (x => Sigma<&2, &2, Sub32(play.b(c), h23), (y => {bits(play.x(c)) == 1n : Nat})>)>
+  Sigma<&2, &2, Sub32(play.a(c), h01), (x => Sigma<&2, &2, Sub32(play.b(c), h23), (y => Sigma<&2, &2, {bits(play.x(c)) == 1n : Nat}, (z => {card.shape(c) == True{} : Bool})>)>)>
 
 
 def AllH(xs: List<&2, U32>, +h01: U32, +h23: U32) -> Type:
@@ -1052,3 +1059,11 @@ def keep(k: Nat) -> U32:
       4294967295
     case 1n++j:
       U32.and(keep(j), U32.shrn(2147483647, j))
+
+
+# Where a card's code sits among the numbers: 16 for each suit, then the rank.
+
+def code.at(+s: Nat, +r: Nat) -> Bool:
+  Nat.is_eq(U32.to_nat(C.card.make(U32.from_nat(s), U32.from_nat(r))), Nat.add(r, Nat.mul(16n, s)))
+
+# Each of the 52 cards is one.

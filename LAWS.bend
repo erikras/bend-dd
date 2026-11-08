@@ -1632,3 +1632,70 @@ law mid_keep:
   S.And({R.trick.owner(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == owner : U32},
     S.And({R.trick.best(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == best : U32},
       {R.trick.lead(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == lead : U32}))
+
+
+# ---------------------------------------------------------------------------
+# Nothing beats the top card at no trumps
+
+law card_shape:
+  for +s: Nat
+  for +r: Nat
+  for +ls: {Nat.is_lt(s, 4n) == True{} : Bool}
+  for +lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  {S.card.shape(C.card.make(U32.from_nat(s), U32.from_nat(r))) == True{} : Bool}
+
+law code_at:
+  for +s: Nat
+  for +r: Nat
+  for +ls: {Nat.is_lt(s, 4n) == True{} : Bool}
+  for +lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  {S.code.at(s, r) == True{} : Bool}
+
+law lt_ne:
+  for +n: Nat
+  for +m: Nat
+  for +e: {Nat.is_lt(n, m) == True{} : Bool}
+  {Cmp.is_eq(Nat.cmp(n, m)) == False{} : Bool}
+
+law lt_ngt:
+  for +n: Nat
+  for +m: Nat
+  for +e: {Nat.is_lt(n, m) == True{} : Bool}
+  {Cmp.is_gt(Nat.cmp(n, m)) == False{} : Bool}
+
+law cmp_add:
+  for +a: Nat
+  for +b: Nat
+  for +x: Nat
+  {Nat.cmp(Nat.add(a, x), Nat.add(b, x)) == Nat.cmp(a, b) : Cmp}
+
+law beats_top:
+  for +j: Nat
+  for +r: Nat
+  for +c: U32
+  for +lj: {Nat.is_lt(j, 4n) == True{} : Bool}
+  for +lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  for +ok: {S.card.shape(c) == True{} : Bool}
+  for lo: Either<&2, &2, {U32.is_eq(C.card.suit(c), U32.from_nat(j)) == False{} : Bool}, S.And({C.card.suit(c) == U32.from_nat(j) : U32}, {Nat.is_lt(U32.to_nat(C.card.rank(c)), r) == True{} : Bool})>
+  {R.beats(4, C.card.make(U32.from_nat(j), U32.from_nat(r)), c) == False{} : Bool}
+
+law unit_lt:
+  for +n: Nat
+  for +q: Nat
+  for +r: Nat
+  for +lq: {Nat.is_lt(q, n) == True{} : Bool}
+  for +h: S.Sub(n, S.unit(n, q), S.ones(n, r))
+  {Nat.is_lt(q, r) == True{} : Bool}
+
+law below_top:
+  for +c: U32
+  for +j: Nat
+  for +r: Nat
+  for +h01: U32
+  for +h23: U32
+  for +ok: {S.card.shape(c) == True{} : Bool}
+  for +i1: S.Sub32(S.play.a(c), h01)
+  for +i2: S.Sub32(S.play.b(c), h23)
+  for +top: S.Sub32(R.suit.mask(j, h01, h23), U32{S.ones(32n, r)})
+  for +lj: {Nat.is_lt(j, 4n) == True{} : Bool}
+  Either<&2, &2, {U32.is_eq(C.card.suit(c), U32.from_nat(j)) == False{} : Bool}, S.And({C.card.suit(c) == U32.from_nat(j) : U32}, {Nat.is_lt(U32.to_nat(C.card.rank(c)), r) == True{} : Bool})>

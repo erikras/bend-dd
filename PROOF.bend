@@ -1789,24 +1789,142 @@ def lo.in(+m: U32, +h: U32, +i: S.Sub32(m, (h .&. 65535 : U32))) -> S.Sub32(m, h
   Laws.sub_trans32(m, (h .&. 65535 : U32), h, i, Laws.and_sub32(h, 65535))
 
 
-def to.hand.go(+s: Nat, +c: U32, +h01: U32, +h23: U32, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +i: S.Sub32(C.card.bit(c), R.suit.mask(s, h01, h23)), +one: {S.bits(S.play.x(c)) == 1n : Nat}) -> S.And(S.Sub32(R.sel(U32.is_lt(U32.from_nat(s), 2), R.sel(U32.is_zero((U32.from_nat(s) .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c)), 0), h01), S.And(S.Sub32(R.sel(U32.is_lt(U32.from_nat(s), 2), 0, R.sel(U32.is_zero((U32.from_nat(s) .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c))), h23), {S.bits(S.play.x(c)) == 1n : Nat})):
+def Laws.card_shape(s, r, ls, lr):
+  match s r:
+    case 0n 0n:
+      {==}
+    case 0n 1n:
+      {==}
+    case 0n 2n:
+      {==}
+    case 0n 3n:
+      {==}
+    case 0n 4n:
+      {==}
+    case 0n 5n:
+      {==}
+    case 0n 6n:
+      {==}
+    case 0n 7n:
+      {==}
+    case 0n 8n:
+      {==}
+    case 0n 9n:
+      {==}
+    case 0n 10n:
+      {==}
+    case 0n 11n:
+      {==}
+    case 0n 12n:
+      {==}
+    case 0n 13n+y:
+      Empty.absurd({S.card.shape(C.card.make(U32.from_nat(0n), U32.from_nat(13n+y))) == True{} : Bool}, no_lt0(y, lr))
+    case 1n 0n:
+      {==}
+    case 1n 1n:
+      {==}
+    case 1n 2n:
+      {==}
+    case 1n 3n:
+      {==}
+    case 1n 4n:
+      {==}
+    case 1n 5n:
+      {==}
+    case 1n 6n:
+      {==}
+    case 1n 7n:
+      {==}
+    case 1n 8n:
+      {==}
+    case 1n 9n:
+      {==}
+    case 1n 10n:
+      {==}
+    case 1n 11n:
+      {==}
+    case 1n 12n:
+      {==}
+    case 1n 13n+y:
+      Empty.absurd({S.card.shape(C.card.make(U32.from_nat(1n), U32.from_nat(13n+y))) == True{} : Bool}, no_lt0(y, lr))
+    case 2n 0n:
+      {==}
+    case 2n 1n:
+      {==}
+    case 2n 2n:
+      {==}
+    case 2n 3n:
+      {==}
+    case 2n 4n:
+      {==}
+    case 2n 5n:
+      {==}
+    case 2n 6n:
+      {==}
+    case 2n 7n:
+      {==}
+    case 2n 8n:
+      {==}
+    case 2n 9n:
+      {==}
+    case 2n 10n:
+      {==}
+    case 2n 11n:
+      {==}
+    case 2n 12n:
+      {==}
+    case 2n 13n+y:
+      Empty.absurd({S.card.shape(C.card.make(U32.from_nat(2n), U32.from_nat(13n+y))) == True{} : Bool}, no_lt0(y, lr))
+    case 3n 0n:
+      {==}
+    case 3n 1n:
+      {==}
+    case 3n 2n:
+      {==}
+    case 3n 3n:
+      {==}
+    case 3n 4n:
+      {==}
+    case 3n 5n:
+      {==}
+    case 3n 6n:
+      {==}
+    case 3n 7n:
+      {==}
+    case 3n 8n:
+      {==}
+    case 3n 9n:
+      {==}
+    case 3n 10n:
+      {==}
+    case 3n 11n:
+      {==}
+    case 3n 12n:
+      {==}
+    case 3n 13n+y:
+      Empty.absurd({S.card.shape(C.card.make(U32.from_nat(3n), U32.from_nat(13n+y))) == True{} : Bool}, no_lt0(y, lr))
+    case 4n+y _:
+      Empty.absurd({S.card.shape(C.card.make(U32.from_nat(4n+y), U32.from_nat(r))) == True{} : Bool}, no_lt0(y, ls))
+
+
+def to.hand.go(+s: Nat, +c: U32, +h01: U32, +h23: U32, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +i: S.Sub32(C.card.bit(c), R.suit.mask(s, h01, h23)), +one: {S.bits(S.play.x(c)) == 1n : Nat}, +ok: {S.card.shape(c) == True{} : Bool}) -> S.And(S.Sub32(R.sel(U32.is_lt(U32.from_nat(s), 2), R.sel(U32.is_zero((U32.from_nat(s) .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c)), 0), h01), S.And(S.Sub32(R.sel(U32.is_lt(U32.from_nat(s), 2), 0, R.sel(U32.is_zero((U32.from_nat(s) .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c))), h23), S.And({S.bits(S.play.x(c)) == 1n : Nat}, {S.card.shape(c) == True{} : Bool}))):
   match s:
     case 0n:
-      (hi.in(C.card.bit(c), h01, i), (zero_sub32(h23), one))
+      (hi.in(C.card.bit(c), h01, i), (zero_sub32(h23), (one, ok)))
     case 1n:
-      (lo.in(C.card.bit(c), h01, i), (zero_sub32(h23), one))
+      (lo.in(C.card.bit(c), h01, i), (zero_sub32(h23), (one, ok)))
     case 2n:
-      (zero_sub32(h01), (hi.in(C.card.bit(c), h23, i), one))
+      (zero_sub32(h01), (hi.in(C.card.bit(c), h23, i), (one, ok)))
     case 3n:
-      (zero_sub32(h01), (lo.in(C.card.bit(c), h23, i), one))
+      (zero_sub32(h01), (lo.in(C.card.bit(c), h23, i), (one, ok)))
     case 4n+y:
-      Empty.absurd(S.And(S.Sub32(R.sel(U32.is_lt(U32.from_nat(4n+y), 2), R.sel(U32.is_zero((U32.from_nat(4n+y) .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c)), 0), h01), S.And(S.Sub32(R.sel(U32.is_lt(U32.from_nat(4n+y), 2), 0, R.sel(U32.is_zero((U32.from_nat(4n+y) .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c))), h23), {S.bits(S.play.x(c)) == 1n : Nat})), no_lt0(y, ls))
+      Empty.absurd(S.And(S.Sub32(R.sel(U32.is_lt(U32.from_nat(4n+y), 2), R.sel(U32.is_zero((U32.from_nat(4n+y) .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c)), 0), h01), S.And(S.Sub32(R.sel(U32.is_lt(U32.from_nat(4n+y), 2), 0, R.sel(U32.is_zero((U32.from_nat(4n+y) .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c))), h23), S.And({S.bits(S.play.x(c)) == 1n : Nat}, {S.card.shape(c) == True{} : Bool}))), no_lt0(y, ls))
 
 
 # A card of suit s in that suit's holding of a hand is in the hand.
-def to.hand(+s: Nat, +c: U32, +h01: U32, +h23: U32, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +isub: S.Sub32(C.card.bit(c), R.suit.mask(s, h01, h23)), +isuit: {C.card.suit(c) == U32.from_nat(s) : U32}, +one: {S.bits(S.play.x(c)) == 1n : Nat}) -> S.InHand(c, h01, h23):
-  %Equal.sym(U32, C.card.suit(c), U32.from_nat(s), isuit) : S.And(S.Sub32(R.sel(U32.is_lt(_, 2), R.sel(U32.is_zero((_ .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c)), 0), h01), S.And(S.Sub32(R.sel(U32.is_lt(_, 2), 0, R.sel(U32.is_zero((_ .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c))), h23), {S.bits(S.play.x(c)) == 1n : Nat}))
-  to.hand.go(s, c, h01, h23, ls, isub, one)
+def to.hand(+s: Nat, +c: U32, +h01: U32, +h23: U32, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +isub: S.Sub32(C.card.bit(c), R.suit.mask(s, h01, h23)), +isuit: {C.card.suit(c) == U32.from_nat(s) : U32}, +one: {S.bits(S.play.x(c)) == 1n : Nat}, +ok: {S.card.shape(c) == True{} : Bool}) -> S.InHand(c, h01, h23):
+  %Equal.sym(U32, C.card.suit(c), U32.from_nat(s), isuit) : S.And(S.Sub32(R.sel(U32.is_lt(_, 2), R.sel(U32.is_zero((_ .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c)), 0), h01), S.And(S.Sub32(R.sel(U32.is_lt(_, 2), 0, R.sel(U32.is_zero((_ .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c))), h23), S.And({S.bits(S.play.x(c)) == 1n : Nat}, {S.card.shape(c) == True{} : Bool})))
+  to.hand.go(s, c, h01, h23, ls, isub, one, ok)
 
 
 
@@ -1825,7 +1943,8 @@ def Laws.peel_hand(n, z, s, m, acc, h01, h23, ls, zf, hm, sm, ok):
            card.suit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf))),
            Laws.x_one(C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m)))), s, U32.ctz(S.low(m)), ls, low.lt(m, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)),
              card.suit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf))),
-             card.bit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf))))), ok))
+             card.bit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)))),
+           Laws.card_shape(s, U32.ctz(S.low(m)), ls, low.lt(m, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)))), ok))
 
 
 def suit.hand(+s: Nat, +acc: List<&2, U32>, +h01: U32, +h23: U32, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +hm: S.Sub32(R.suit.mask(s, h01, h23), 8191), ok: S.AllH(acc, h01, h23)) -> S.AllH(R.moves.suit(U32.from_nat(s), R.suit.mask(s, h01, h23), acc), h01, h23):
@@ -3208,7 +3327,7 @@ def Laws.search_in(d, ms, t, pos, ns, best, r, L, inv, hand, bok, vin):
         case Inr{i}:
           Laws.in_better(ns, best, v, U32.to_nat(won), L, bok, i)
     case 1n+p Con{+c, +rest} R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, +tr, +won} B.Res{+v, +n}:
-      ((+i1, (+i2, +one)), hrest) = hand
+      ((+i1, (+i2, (+one, +cok))), hrest) = hand
       +ci = Laws.play_inv(t, c, p, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, i1, i2, one)
       +cns = R.pos.ns(R.play(t, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c))
       +L2 = S.lnext(U32.to_nat(R.trick.played(tr)), L)
@@ -3692,3 +3811,396 @@ def Laws.mid_keep(k, lk, nk, win, rank, seat, played, lead, owner, best, c, ep, 
       mid.keep(win, rank, seat, 3, lead, owner, best, c, ew, {==}, hl, ho, hb)
     case 3n+y:
       Empty.absurd(S.And({R.trick.owner(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == owner : U32}, S.And({R.trick.best(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == best : U32}, {R.trick.lead(R.trick.next.go(U32.is_eq(played, 0), U32.is_eq(played, 3), win, rank, seat, played, lead, owner, best, c)) == lead : U32})), no_lt0(y, lk))
+
+
+# ---------------------------------------------------------------------------
+# Nothing beats the top card at no trumps
+
+def Laws.code_at(s, r, ls, lr):
+  match s r:
+    case 0n 0n:
+      {==}
+    case 0n 1n:
+      {==}
+    case 0n 2n:
+      {==}
+    case 0n 3n:
+      {==}
+    case 0n 4n:
+      {==}
+    case 0n 5n:
+      {==}
+    case 0n 6n:
+      {==}
+    case 0n 7n:
+      {==}
+    case 0n 8n:
+      {==}
+    case 0n 9n:
+      {==}
+    case 0n 10n:
+      {==}
+    case 0n 11n:
+      {==}
+    case 0n 12n:
+      {==}
+    case 0n 13n+y:
+      Empty.absurd({S.code.at(0n, 13n+y) == True{} : Bool}, no_lt0(y, lr))
+    case 1n 0n:
+      {==}
+    case 1n 1n:
+      {==}
+    case 1n 2n:
+      {==}
+    case 1n 3n:
+      {==}
+    case 1n 4n:
+      {==}
+    case 1n 5n:
+      {==}
+    case 1n 6n:
+      {==}
+    case 1n 7n:
+      {==}
+    case 1n 8n:
+      {==}
+    case 1n 9n:
+      {==}
+    case 1n 10n:
+      {==}
+    case 1n 11n:
+      {==}
+    case 1n 12n:
+      {==}
+    case 1n 13n+y:
+      Empty.absurd({S.code.at(1n, 13n+y) == True{} : Bool}, no_lt0(y, lr))
+    case 2n 0n:
+      {==}
+    case 2n 1n:
+      {==}
+    case 2n 2n:
+      {==}
+    case 2n 3n:
+      {==}
+    case 2n 4n:
+      {==}
+    case 2n 5n:
+      {==}
+    case 2n 6n:
+      {==}
+    case 2n 7n:
+      {==}
+    case 2n 8n:
+      {==}
+    case 2n 9n:
+      {==}
+    case 2n 10n:
+      {==}
+    case 2n 11n:
+      {==}
+    case 2n 12n:
+      {==}
+    case 2n 13n+y:
+      Empty.absurd({S.code.at(2n, 13n+y) == True{} : Bool}, no_lt0(y, lr))
+    case 3n 0n:
+      {==}
+    case 3n 1n:
+      {==}
+    case 3n 2n:
+      {==}
+    case 3n 3n:
+      {==}
+    case 3n 4n:
+      {==}
+    case 3n 5n:
+      {==}
+    case 3n 6n:
+      {==}
+    case 3n 7n:
+      {==}
+    case 3n 8n:
+      {==}
+    case 3n 9n:
+      {==}
+    case 3n 10n:
+      {==}
+    case 3n 11n:
+      {==}
+    case 3n 12n:
+      {==}
+    case 3n 13n+y:
+      Empty.absurd({S.code.at(3n, 13n+y) == True{} : Bool}, no_lt0(y, lr))
+    case 4n+y _:
+      Empty.absurd({S.code.at(4n+y, r) == True{} : Bool}, no_lt0(y, ls))
+
+def or_ff(+a: Bool, +b: Bool, +ea: {a == False{} : Bool}, +eb: {b == False{} : Bool}) -> {Bool.or(a, b) == False{} : Bool}:
+  %Equal.sym(Bool, a, False{}, ea) : {Bool.or(_, b) == False{} : Bool}
+  eb
+
+def and_fl(+a: Bool, +b: Bool, +ea: {a == False{} : Bool}) -> {Bool.and(a, b) == False{} : Bool}:
+  %Equal.sym(Bool, a, False{}, ea) : {Bool.and(_, b) == False{} : Bool}
+  {==}
+
+def and_fr(+a: Bool, +b: Bool, +eb: {b == False{} : Bool}) -> {Bool.and(a, b) == False{} : Bool}:
+  match a:
+    case True{}:
+      eb
+    case False{}:
+      {==}
+
+def Laws.lt_ne(n, m, e):
+  match n m:
+    case 0n 0n:
+      Empty.absurd({Cmp.is_eq(Nat.cmp(0n, 0n)) == False{} : Bool}, no_ft(e))
+    case 0n 1n+q:
+      {==}
+    case 1n+p 0n:
+      {==}
+    case 1n+p 1n+q:
+      Laws.lt_ne(p, q, e)
+
+def Laws.lt_ngt(n, m, e):
+  match n m:
+    case 0n _:
+      match m:
+        case 0n:
+          {==}
+        case 1n+q:
+          {==}
+    case 1n+p 0n:
+      Empty.absurd({Cmp.is_gt(Nat.cmp(1n+p, 0n)) == False{} : Bool}, no_ft(e))
+    case 1n+p 1n+q:
+      Laws.lt_ngt(p, q, e)
+
+def add.s(+a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+p:
+      Equal.cong(Nat, Nat, (z => 1n+z), Nat.add(p, 1n+b), 1n+Nat.add(p, b), add.s(p, b))
+
+def cmp_x(+x: Nat, +b: Nat) -> {Nat.cmp(x, 1n+Nat.add(b, x)) == LT{} : Cmp}:
+  match x:
+    case 0n:
+      {==}
+    case 1n+p:
+      %Equal.sym(Nat, Nat.add(b, 1n+p), 1n+Nat.add(b, p), add.s(b, p)) : {Nat.cmp(p, _) == LT{} : Cmp}
+      cmp_x(p, b)
+
+def cmp_x2(+x: Nat, +b: Nat) -> {Nat.cmp(1n+Nat.add(b, x), x) == GT{} : Cmp}:
+  match x:
+    case 0n:
+      {==}
+    case 1n+p:
+      %Equal.sym(Nat, Nat.add(b, 1n+p), 1n+Nat.add(b, p), add.s(b, p)) : {Nat.cmp(_, p) == GT{} : Cmp}
+      cmp_x2(p, b)
+
+def cmp_refl(+x: Nat) -> {Nat.cmp(x, x) == EQ{} : Cmp}:
+  match x:
+    case 0n:
+      {==}
+    case 1n+p:
+      cmp_refl(p)
+
+# Adding the same to both sides keeps the order.
+
+def Laws.cmp_add(a, b, x):
+  match a b:
+    case 0n 0n:
+      cmp_refl(x)
+    case 0n 1n+q:
+      cmp_x(x, q)
+    case 1n+p 0n:
+      cmp_x2(x, p)
+    case 1n+p 1n+q:
+      Laws.cmp_add(p, q, x)
+
+def ok.a(+c: U32, +ok: {S.card.shape(c) == True{} : Bool}) -> {Nat.is_lt(U32.to_nat(C.card.suit(c)), 4n) == True{} : Bool}:
+  Sigma.fst.bool(Nat.is_lt(U32.to_nat(C.card.suit(c)), 4n), Bool.and(Nat.is_lt(U32.to_nat(C.card.rank(c)), 13n), U32.is_eq(c, C.card.make(C.card.suit(c), C.card.rank(c)))), and_true(Nat.is_lt(U32.to_nat(C.card.suit(c)), 4n), Bool.and(Nat.is_lt(U32.to_nat(C.card.rank(c)), 13n), U32.is_eq(c, C.card.make(C.card.suit(c), C.card.rank(c)))), ok))
+
+def ok.bc(+c: U32, +ok: {S.card.shape(c) == True{} : Bool}) -> {Bool.and(Nat.is_lt(U32.to_nat(C.card.rank(c)), 13n), U32.is_eq(c, C.card.make(C.card.suit(c), C.card.rank(c)))) == True{} : Bool}:
+  Sigma.snd.bool(Nat.is_lt(U32.to_nat(C.card.suit(c)), 4n), Bool.and(Nat.is_lt(U32.to_nat(C.card.rank(c)), 13n), U32.is_eq(c, C.card.make(C.card.suit(c), C.card.rank(c)))), and_true(Nat.is_lt(U32.to_nat(C.card.suit(c)), 4n), Bool.and(Nat.is_lt(U32.to_nat(C.card.rank(c)), 13n), U32.is_eq(c, C.card.make(C.card.suit(c), C.card.rank(c)))), ok))
+
+def ok.b(+c: U32, +ok: {S.card.shape(c) == True{} : Bool}) -> {Nat.is_lt(U32.to_nat(C.card.rank(c)), 13n) == True{} : Bool}:
+  Sigma.fst.bool(Nat.is_lt(U32.to_nat(C.card.rank(c)), 13n), U32.is_eq(c, C.card.make(C.card.suit(c), C.card.rank(c))), and_true(Nat.is_lt(U32.to_nat(C.card.rank(c)), 13n), U32.is_eq(c, C.card.make(C.card.suit(c), C.card.rank(c))), ok.bc(c, ok)))
+
+def ok.c(+c: U32, +ok: {S.card.shape(c) == True{} : Bool}) -> {c == C.card.make(C.card.suit(c), C.card.rank(c)) : U32}:
+  Laws.u32_eq(c, C.card.make(C.card.suit(c), C.card.rank(c)), Sigma.snd.bool(Nat.is_lt(U32.to_nat(C.card.rank(c)), 13n), U32.is_eq(c, C.card.make(C.card.suit(c), C.card.rank(c))), and_true(Nat.is_lt(U32.to_nat(C.card.rank(c)), 13n), U32.is_eq(c, C.card.make(C.card.suit(c), C.card.rank(c))), ok.bc(c, ok))))
+
+def ne4(+x: U32, +lt: {Nat.is_lt(U32.to_nat(x), 4n) == True{} : Bool}) -> {U32.is_eq(x, 4) == False{} : Bool}:
+  %Equal.sym(Cmp, U32.cmp(x, 4), Nat.cmp(U32.to_nat(x), U32.to_nat(4)), Laws.u32_cmp_nat(x, 4)) : {Cmp.is_eq(_) == False{} : Bool}
+  Laws.lt_ne(U32.to_nat(x), 4n, lt)
+
+def code.nat(+s: Nat, +r: Nat, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}) -> {U32.to_nat(C.card.make(U32.from_nat(s), U32.from_nat(r))) == Nat.add(r, Nat.mul(16n, s)) : Nat}:
+  nat.eq(U32.to_nat(C.card.make(U32.from_nat(s), U32.from_nat(r))), Nat.add(r, Nat.mul(16n, s)), Laws.code_at(s, r, ls, lr))
+
+# A card of the suit with a lower rank is a lower code.
+
+def card.nat(+c: U32, +j: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +ok: {S.card.shape(c) == True{} : Bool}, +es: {C.card.suit(c) == U32.from_nat(j) : U32}) -> {U32.to_nat(c) == Nat.add(U32.to_nat(C.card.rank(c)), Nat.mul(16n, j)) : Nat}:
+  Equal.trans(Nat, U32.to_nat(c), U32.to_nat(C.card.make(U32.from_nat(j), U32.from_nat(U32.to_nat(C.card.rank(c))))), Nat.add(U32.to_nat(C.card.rank(c)), Nat.mul(16n, j)),
+    Equal.cong(U32, Nat, (z => U32.to_nat(z)), c, C.card.make(U32.from_nat(j), U32.from_nat(U32.to_nat(C.card.rank(c)))),
+      Equal.trans(U32, c, C.card.make(C.card.suit(c), C.card.rank(c)), C.card.make(U32.from_nat(j), U32.from_nat(U32.to_nat(C.card.rank(c)))), ok.c(c, ok),
+        Equal.trans(U32, C.card.make(C.card.suit(c), C.card.rank(c)), C.card.make(U32.from_nat(j), C.card.rank(c)), C.card.make(U32.from_nat(j), U32.from_nat(U32.to_nat(C.card.rank(c)))),
+          Equal.cong(U32, U32, (z => C.card.make(z, C.card.rank(c))), C.card.suit(c), U32.from_nat(j), es),
+          Equal.cong(U32, U32, (z => C.card.make(U32.from_nat(j), z)), C.card.rank(c), U32.from_nat(U32.to_nat(C.card.rank(c))), Equal.sym(U32, U32.from_nat(U32.to_nat(C.card.rank(c))), C.card.rank(c), Laws.u32_roundtrip(C.card.rank(c))))))),
+    code.nat(j, U32.to_nat(C.card.rank(c)), lj, ok.b(c, ok)))
+
+def gt.no(+c: U32, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +ok: {S.card.shape(c) == True{} : Bool}, +es: {C.card.suit(c) == U32.from_nat(j) : U32}, +er: {Nat.is_lt(U32.to_nat(C.card.rank(c)), r) == True{} : Bool}) -> {U32.is_gt(c, C.card.make(U32.from_nat(j), U32.from_nat(r))) == False{} : Bool}:
+  %Equal.sym(Cmp, U32.cmp(c, C.card.make(U32.from_nat(j), U32.from_nat(r))), Nat.cmp(U32.to_nat(c), U32.to_nat(C.card.make(U32.from_nat(j), U32.from_nat(r)))), Laws.u32_cmp_nat(c, C.card.make(U32.from_nat(j), U32.from_nat(r)))) : {Cmp.is_gt(_) == False{} : Bool}
+  %Equal.sym(Nat, U32.to_nat(c), Nat.add(U32.to_nat(C.card.rank(c)), Nat.mul(16n, j)), card.nat(c, j, lj, ok, es)) : {Cmp.is_gt(Nat.cmp(_, U32.to_nat(C.card.make(U32.from_nat(j), U32.from_nat(r))))) == False{} : Bool}
+  %Equal.sym(Nat, U32.to_nat(C.card.make(U32.from_nat(j), U32.from_nat(r))), Nat.add(r, Nat.mul(16n, j)), code.nat(j, r, lj, lr)) : {Cmp.is_gt(Nat.cmp(Nat.add(U32.to_nat(C.card.rank(c)), Nat.mul(16n, j)), _)) == False{} : Bool}
+  %Equal.sym(Cmp, Nat.cmp(Nat.add(U32.to_nat(C.card.rank(c)), Nat.mul(16n, j)), Nat.add(r, Nat.mul(16n, j))), Nat.cmp(U32.to_nat(C.card.rank(c)), r), Laws.cmp_add(U32.to_nat(C.card.rank(c)), r, Nat.mul(16n, j))) : {Cmp.is_gt(_) == False{} : Bool}
+  Laws.lt_ngt(U32.to_nat(C.card.rank(c)), r, er)
+
+def beats.first(+c: U32, +j: Nat, +r: Nat, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +ok: {S.card.shape(c) == True{} : Bool},
+    lo: Either<&2, &2, {U32.is_eq(C.card.suit(c), U32.from_nat(j)) == False{} : Bool}, S.And({C.card.suit(c) == U32.from_nat(j) : U32}, {Nat.is_lt(U32.to_nat(C.card.rank(c)), r) == True{} : Bool})>) ->
+    {Bool.and(U32.is_eq(C.card.suit(c), C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.is_gt(c, C.card.make(U32.from_nat(j), U32.from_nat(r)))) == False{} : Bool}:
+  match lo:
+    case Inl{e}:
+      and_fl(U32.is_eq(C.card.suit(c), C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.is_gt(c, C.card.make(U32.from_nat(j), U32.from_nat(r))),
+        Equal.trans(Bool, U32.is_eq(C.card.suit(c), C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.is_eq(C.card.suit(c), U32.from_nat(j)), False{},
+          Equal.cong(U32, Bool, (z => U32.is_eq(C.card.suit(c), z)), C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))), U32.from_nat(j), card.suit.of(j, r, lj, lr)), e))
+    case Inr{p}:
+      (+es, +er) = p
+      and_fr(U32.is_eq(C.card.suit(c), C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.is_gt(c, C.card.make(U32.from_nat(j), U32.from_nat(r))), gt.no(c, j, r, lj, lr, ok, es, er))
+
+# At no trumps, no card beats the card led when it is of another suit, or of the
+# suit with a lower rank.
+
+def Laws.beats_top(j, r, c, lj, lr, ok, lo):
+  or_ff(Bool.and(U32.is_eq(C.card.suit(c), C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r)))), U32.is_gt(c, C.card.make(U32.from_nat(j), U32.from_nat(r)))),
+    Bool.and(U32.is_eq(C.card.suit(c), 4), U32.is_ne(C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))), 4)),
+    beats.first(c, j, r, lj, lr, ok, lo),
+    and_fl(U32.is_eq(C.card.suit(c), 4), U32.is_ne(C.card.suit(C.card.make(U32.from_nat(j), U32.from_nat(r))), 4), ne4(C.card.suit(c), ok.a(c, ok))))
+
+def Laws.unit_lt(n, q, r, lq, h):
+  match n:
+    case 0n:
+      Empty.absurd({Nat.is_lt(q, r) == True{} : Bool}, no_lt0(q, lq))
+    case 1n+p:
+      match q r:
+        case 0n 0n:
+          Empty.absurd({Nat.is_lt(0n, 0n) == True{} : Bool}, no_ft(hd(p, False{}, True{}, Word.and(p, Word.zero(p), S.ones(p, 0n)), Word.zero(p), h)))
+        case 0n 1n+i:
+          {==}
+        case 1n+k 0n:
+          Empty.absurd({Nat.is_lt(1n+k, 0n) == True{} : Bool}, no_lt0(k, Laws.unit_lt(p, k, 0n, lq, tl(p, False{}, False{}, Word.and(p, S.unit(p, k), S.ones(p, 0n)), S.unit(p, k), h))))
+        case 1n+k 1n+i:
+          Laws.unit_lt(p, k, i, lq, tl(p, False{}, False{}, Word.and(p, S.unit(p, k), S.ones(p, i)), S.unit(p, k), h))
+
+def sub.at(-a: U32, -b: U32, +k: U32, e: {a == b : U32}, h: S.Sub32(a, k)) -> S.Sub32(b, k):
+  %e : S.Sub32(_, k)
+  h
+
+def hi.back(+b: U32, +h: U32, +hb: S.Sub32(b, 65535), +i: S.Sub32(U32.shln(b, 16n), h)) -> S.Sub32(b, U32.shrn(h, 16n)):
+  sub.at(U32.shrn(U32.shln(b, 16n), 16n), b, U32.shrn(h, 16n), Equal.trans(U32, U32.shrn(U32.shln(b, 16n), 16n), U32.and(b, S.keep(16n)), b, Laws.shrn_shln(16n, b), hb), Laws.shrn_mono(16n, U32.shln(b, 16n), h, i))
+
+def lo.back(+b: U32, +h: U32, +hb: S.Sub32(b, 65535), +i: S.Sub32(b, h)) -> S.Sub32(b, U32.and(h, 65535)):
+  Equal.trans(U32, U32.and(b, U32.and(h, 65535)), U32.and(U32.and(b, h), 65535), b, Equal.sym(U32, U32.and(U32.and(b, h), 65535), U32.and(b, U32.and(h, 65535)), Laws.and_assoc32(b, h, 65535)),
+    Equal.trans(U32, U32.and(U32.and(b, h), 65535), U32.and(b, 65535), b, Equal.cong(U32, U32, (z => U32.and(z, 65535)), U32.and(b, h), b, i), hb))
+
+# What playing a card of suit j takes out of a hand is the card's bit in that
+# suit's holding.
+
+def back.j(+j: Nat, +b: U32, +h01: U32, +h23: U32, +lj: {Nat.is_lt(j, 4n) == True{} : Bool}, +hb: S.Sub32(b, 65535),
+    +i1: S.Sub32(R.sel(U32.is_lt(U32.from_nat(j), 2), R.sel(U32.is_zero((U32.from_nat(j) .&. 1 : U32)), (b << 16n : U32), b), 0), h01),
+    +i2: S.Sub32(R.sel(U32.is_lt(U32.from_nat(j), 2), 0, R.sel(U32.is_zero((U32.from_nat(j) .&. 1 : U32)), (b << 16n : U32), b)), h23)) -> S.Sub32(b, R.suit.mask(j, h01, h23)):
+  match j:
+    case 0n:
+      hi.back(b, h01, hb, i1)
+    case 1n:
+      lo.back(b, h01, hb, i1)
+    case 2n:
+      hi.back(b, h23, hb, i2)
+    case 3n:
+      lo.back(b, h23, hb, i2)
+    case 4n+y:
+      Empty.absurd(S.Sub32(b, R.suit.mask(4n+y, h01, h23)), no_lt0(y, lj))
+
+def lt32(+q: Nat, +lq: {Nat.is_lt(q, 13n) == True{} : Bool}) -> {Nat.is_lt(q, 32n) == True{} : Bool}:
+  match q:
+    case 0n:
+      {==}
+    case 1n:
+      {==}
+    case 2n:
+      {==}
+    case 3n:
+      {==}
+    case 4n:
+      {==}
+    case 5n:
+      {==}
+    case 6n:
+      {==}
+    case 7n:
+      {==}
+    case 8n:
+      {==}
+    case 9n:
+      {==}
+    case 10n:
+      {==}
+    case 11n:
+      {==}
+    case 12n:
+      {==}
+    case 13n+x:
+      Empty.absurd({Nat.is_lt(13n+x, 32n) == True{} : Bool}, no_lt0(x, lq))
+
+def bit16(+q: Nat, +lq: {Nat.is_lt(q, 13n) == True{} : Bool}) -> S.Sub32((1 << q : U32), 65535):
+  match q:
+    case 0n:
+      {==}
+    case 1n:
+      {==}
+    case 2n:
+      {==}
+    case 3n:
+      {==}
+    case 4n:
+      {==}
+    case 5n:
+      {==}
+    case 6n:
+      {==}
+    case 7n:
+      {==}
+    case 8n:
+      {==}
+    case 9n:
+      {==}
+    case 10n:
+      {==}
+    case 11n:
+      {==}
+    case 12n:
+      {==}
+    case 13n+x:
+      Empty.absurd(S.Sub32((1 << 13n+x : U32), 65535), no_lt0(x, lq))
+
+def below.go(+bq: Bool, +c: U32, +j: Nat, +r: Nat, +h01: U32, +h23: U32, +eb: {U32.is_eq(C.card.suit(c), U32.from_nat(j)) == bq : Bool}, +ok: {S.card.shape(c) == True{} : Bool},
+    +i1: S.Sub32(S.play.a(c), h01), +i2: S.Sub32(S.play.b(c), h23), +top: S.Sub32(R.suit.mask(j, h01, h23), U32{S.ones(32n, r)}), +lj: {Nat.is_lt(j, 4n) == True{} : Bool}) ->
+    Either<&2, &2, {U32.is_eq(C.card.suit(c), U32.from_nat(j)) == False{} : Bool}, S.And({C.card.suit(c) == U32.from_nat(j) : U32}, {Nat.is_lt(U32.to_nat(C.card.rank(c)), r) == True{} : Bool})>:
+  match bq:
+    case False{}:
+      Inl{eb}
+    case True{}:
+      +es = Laws.u32_eq(C.card.suit(c), U32.from_nat(j), eb)
+      +q = U32.to_nat(C.card.rank(c))
+      +lq = ok.b(c, ok)
+      +sm = back.j(j, C.card.bit(c), h01, h23, lj, bit16(q, lq),
+        sub.at(S.play.a(c), R.sel(U32.is_lt(U32.from_nat(j), 2), R.sel(U32.is_zero((U32.from_nat(j) .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c)), 0), h01,
+          Equal.cong(U32, U32, (z => R.sel(U32.is_lt(z, 2), R.sel(U32.is_zero((z .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c)), 0)), C.card.suit(c), U32.from_nat(j), es), i1),
+        sub.at(S.play.b(c), R.sel(U32.is_lt(U32.from_nat(j), 2), 0, R.sel(U32.is_zero((U32.from_nat(j) .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c))), h23,
+          Equal.cong(U32, U32, (z => R.sel(U32.is_lt(z, 2), 0, R.sel(U32.is_zero((z .&. 1 : U32)), (C.card.bit(c) << 16n : U32), C.card.bit(c)))), C.card.suit(c), U32.from_nat(j), es), i2))
+      +so = Laws.sub_trans32(C.card.bit(c), R.suit.mask(j, h01, h23), U32{S.ones(32n, r)}, sm, top)
+      Inr{(es, Laws.unit_lt(32n, q, r, lt32(q, lq),
+        u.unwrap(Word.and(32n, S.unit(32n, q), S.ones(32n, r)), S.unit(32n, q),
+          sub.at((1 << q : U32), U32{S.unit(32n, q)}, U32{S.ones(32n, r)}, Equal.sym(U32, U32{S.unit(32n, q)}, (1 << q : U32), Laws.unit_shl(q, lq)), so))))}
+
+# A card of another hand, when no card of that hand in suit j is as high as rank r,
+# is of another suit or lower in suit j.
+
+def Laws.below_top(c, j, r, h01, h23, ok, i1, i2, top, lj):
+  below.go(U32.is_eq(C.card.suit(c), U32.from_nat(j)), c, j, r, h01, h23, {==}, ok, i1, i2, top, lj)

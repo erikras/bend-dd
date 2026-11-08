@@ -665,8 +665,14 @@ play of a suit takes a trick, so North-South on lead make at least won + 1. Its 
    down keeps what fits (`shrn_shln`, from `shr_shl`). `first_win` says that after the
    lead, the leader owns the trick with the card led, in its suit. `mid_keep` says the
    second and third cards keep all three when they don't win.
-4. A card no other card in play can beat at no trumps: one of the same suit is lower
-   by rank, and one of another suit never wins.
+4. *Done:* nothing beats the top card at no trumps. `beats_top`: a card of another
+   suit, or of the suit led with a lower rank, never beats the card led. Codes compare
+   as 16 for each suit plus the rank (`code_at`, `cmp_add`). `below_top`: another
+   hand's card is of another suit, or below rank r in suit j, when that hand's
+   holding in j lies within the low r bits. Taking the masks `R.play` uses back to the
+   suit's holding gives `back.j`, and `unit_lt` gives the rank bound. For these, every
+   move now also carries `S.card.shape`: a suit below 4, a rank below 13, and the
+   code of that suit and rank (`card_shape`, in `S.InHand`).
 5. The rule: three plies of any legal card, by `min_all` and `max_ex`, then the trick
    goes to the leader and `search_in` puts what follows at won + 1 or more.
 
