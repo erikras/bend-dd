@@ -779,8 +779,15 @@ def play.b(+c: U32) -> U32:
 
 
 # A card is in a hand: what play takes out of each word is in that word.
-def InHand(+c: U32, +h01: U32, +h23: U32) -> Type:
-  Sub32(play.a(c), h01) & Sub32(play.b(c), h23)
+# Two facts that can be used many times, unlike a pair, which is used once.
+def And(-A: Data, -B: Data) -> Data:
+  Sigma<&2, &2, A, (x => B)>
+
+
+# A card is in a hand: what play takes out of each word is in that word, and
+# it is one card.
+def InHand(+c: U32, +h01: U32, +h23: U32) -> Data:
+  Sigma<&2, &2, Sub32(play.a(c), h01), (x => Sigma<&2, &2, Sub32(play.b(c), h23), (y => {bits(play.x(c)) == 1n : Nat})>)>
 
 
 def AllH(xs: List<&2, U32>, +h01: U32, +h23: U32) -> Type:
@@ -798,3 +805,172 @@ def NE(xs: List<&2, U32>) -> Type:
     case Con{_, _}:
       Unit
 
+
+# What the laws about the trick word and the value bounds are stated with.
+
+def w0(p: Nat, k: Word(p)) -> Bool:
+  match p:
+    case 0n:
+      False{}
+    case 1n+q:
+      match k:
+        case WCon{h, _}:
+          h
+
+def bitnat(+b: Bool, +x: Nat) -> Nat:
+  match b:
+    case False{}:
+      Nat.double(x)
+    case True{}:
+      1n+Nat.double(x)
+
+def InR(+v: U32, +w: Nat, +L: Nat) -> Data:
+  And({Nat.is_le(w, U32.to_nat(v)) == True{} : Bool}, {Nat.is_le(U32.to_nat(v), Nat.add(w, L)) == True{} : Bool})
+
+# What a node's best so far keeps: the bound that the side to play can only push
+# away from. North-South take the max, so their values stay below the top, and
+# East-West take the min, so theirs stay above the bottom.
+
+def Ok(ns: Bool, +v: U32, +w: Nat, +L: Nat) -> Data:
+  match ns:
+    case True{}:
+      {Nat.is_le(U32.to_nat(v), Nat.add(w, L)) == True{} : Bool}
+    case False{}:
+      {Nat.is_le(w, U32.to_nat(v)) == True{} : Bool}
+
+def cnt(+h01: U32, +h23: U32) -> Nat:
+  Nat.add(bits(h01), bits(h23))
+
+def one16.ok(+r: Nat) -> Bool:
+  Nat.is_eq(bits(((1 << r : U32) << 16n : U32)), 1n)
+
+# A card's bit moved to the high half is still one bit, for each of the 13 ranks.
+
+def gone(k: Nat, +s: Nat, +j: Nat) -> Bool:
+  match k:
+    case 0n:
+      False{}
+    case 1n+q:
+      Bool.and(Nat.is_lt(0n, Nat.mod(Nat.sub(Nat.add(s, 4n), j), 4n)), Nat.is_le(Nat.mod(Nat.sub(Nat.add(s, 4n), j), 4n), 1n+q))
+
+# A hand of c cards, when the seat to play has L: one fewer if it has played.
+
+def has(+L: Nat, +c: Nat, g: Bool) -> Data:
+  match g:
+    case True{}:
+      {1n+c == L : Nat}
+    case False{}:
+      {c == L : Nat}
+
+def Even(+s: Nat, +k: Nat, +L: Nat, +a: Nat, +b: Nat, +c: Nat, +d: Nat) -> Data:
+  And(has(L, a, gone(k, s, 0n)), And(has(L, b, gone(k, s, 1n)), And(has(L, c, gone(k, s, 2n)), has(L, d, gone(k, s, 3n)))))
+
+def pred(n: Nat) -> Nat:
+  match n:
+    case 0n:
+      0n
+    case 1n+p:
+      p
+
+def V(+h: U32) -> Data:
+  Sub32(h, valid.mask())
+
+def Valid(+n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32) -> Data:
+  And(V(n01), And(V(n23), And(V(e01), And(V(e23), And(V(s01), And(V(s23), And(V(w01), V(w23))))))))
+
+# Four cards for each card the seat to play holds.
+
+def r4(L: Nat) -> Nat:
+  match L:
+    case 0n:
+      0n
+    case 1n+x:
+      4n+r4(x)
+
+# The invariant of a position with d cards left to play, in which the seat to
+# play holds L cards: valid hands, the seat s to play and the k cards played
+# below 4, each hand L cards or one fewer as it has played, d + k = 4L, and the
+# w tricks won plus L at most 13.
+
+def Inv.go(+n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +s: Nat, +k: Nat, +w: Nat, +d: Nat, +L: Nat) -> Data:
+  And(Valid(n01, n23, e01, e23, s01, s23, w01, w23),
+    And({Nat.is_lt(s, 4n) == True{} : Bool},
+      And({Nat.is_lt(k, 4n) == True{} : Bool},
+        And(Even(s, k, L, cnt(n01, n23), cnt(e01, e23), cnt(s01, s23), cnt(w01, w23)),
+          And({Nat.add(k, d) == r4(L) : Nat}, {Nat.is_le(Nat.add(w, L), 13n) == True{} : Bool})))))
+
+def Inv(pos: R.Pos, +d: Nat, +L: Nat) -> Data:
+  match pos:
+    case R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, +tr, +won}:
+      Inv.go(n01, n23, e01, e23, s01, s23, w01, w23, U32.to_nat(R.trick.seat(tr)), U32.to_nat(R.trick.played(tr)), U32.to_nat(won), d, L)
+
+# The hand to play, as R.moves picks it.
+
+def hand01(pos: R.Pos) -> U32:
+  match pos:
+    case R.Pos{n01, _, e01, _, s01, _, w01, _, +tr, _}:
+      R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01)
+
+def hand23(pos: R.Pos) -> U32:
+  match pos:
+    case R.Pos{_, n23, _, e23, _, s23, _, w23, +tr, _}:
+      R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)
+
+def wN(pos: R.Pos) -> Nat:
+  U32.to_nat(R.pos.won(pos))
+
+def rv(r: B.Res) -> U32:
+  match r:
+    case B.Res{v, _}:
+      v
+
+# The cards the next seat to play holds: one fewer once a trick is over.
+
+def lnext(k: Nat, +L: Nat) -> Nat:
+  match k:
+    case 0n:
+      L
+    case 1n:
+      L
+    case 2n:
+      L
+    case _:
+      pred(L)
+
+# ---------------------------------------------------------------------------
+# The trick word after a card, as the invariant needs it
+
+def b2n(b: Bool) -> Nat:
+  match b:
+    case False{}:
+      0n
+    case True{}:
+      1n
+
+# Adding a bit to a count below 13 adds it to the number.
+
+def pickn(s: Nat, a: Nat, b: Nat, c: Nat, d: Nat) -> Nat:
+  match s:
+    case 0n:
+      a
+    case 1n:
+      b
+    case 2n:
+      c
+    case _:
+      d
+
+def NeIn(d: Nat, ms: List<&2, U32>, ns: Bool, +v: U32, +w: Nat, +L: Nat) -> Type:
+  match d:
+    case 0n:
+      Unit
+    case 1n+q:
+      (NE(ms) & Ok(ns, v, w, L)) | InR(v, w, L)
+
+def HandOk(+h: C.Hand, +L: Nat) -> Data:
+  And(V(R.hand.pack01(h)), And(V(R.hand.pack23(h)), {cnt(R.hand.pack01(h), R.hand.pack23(h)) == L : Nat}))
+
+def DealOk(d: C.Deal, +L: Nat) -> Data:
+  match d:
+    case C.Deal{+n, +e, +s, +w}:
+      And(HandOk(n, L), And(HandOk(e, L), And(HandOk(s, L), HandOk(w, L))))

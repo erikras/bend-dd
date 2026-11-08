@@ -553,7 +553,7 @@ every 3-card position and on most 4-card ones was still wrong.
 
 | Rule | Every position up to | Samples beyond | For every position |
 |---|---|---|---|
-| Target cuts | 3 cards; law for every won, left and target, given that the value lies in range | lists | No: needs foundation 2 |
+| Target cuts | 3 cards; law for every won, left and target, given that the value lies in range | lists | The range is proved for the brute force value (`solve_in`); tying it to the fast search needs `search_is_brute` beyond samples |
 | Quick tricks: top runs, safe from ruffs | 3 cards | 4 and 5 cards, lists | No |
 | Quick tricks: long suits and second cards (`qs.alt`) | 3 cards | 4 and 5 cards, lists | No |
 | Quick tricks: the trump suit | 3 cards | 4 and 5 cards, lists | No |
@@ -607,21 +607,53 @@ of that size or a few times it:
    `moves_ne01` and `moves_ne23` say the list isn't empty when either word has a card.
    Beneath them, `peel_sound` and `peel_hand` follow the peel card by card, and
    `card_bit` and `one_bit` check the 52 card codes and 13 rank bits.
-6. The trick word: seat, cards played, lead and winner after `R.trick.next`, for every
-   value of each field. They are packed with shifts and masks, so this is like 3.
-7. Hands stay even: with the seat to play and the cards played, each hand has the
-   right number of cards (step 2 of the plan).
-8. Small comparisons and adding one to the tricks won, for values up to 13.
-9. The bounds on the value (step 3), by induction over `B.search`.
+6. *Done:* the trick word (under "The trick word" in `LAWS.bend`). `seat_make`,
+   `played_make` and `low4_make` read the fields back out of `R.trick.make`.
+   `next_seat` and `next_played` cover a card in the middle of a trick: the next seat
+   is to play and one more card is down. `next_end` covers the fourth card, after which
+   none are down. All of these hold for any lead, winner, best card and card played.
+   `cmp_nat` says `Word.cmp` is the order of the numbers the words stand for.
+7. *Done:* hands stay even. `S.Inv(pos, d, L)` says the eight words are valid hands, the
+   seat to play and the cards played are below 4, each hand holds L cards or one fewer
+   if it has played to the trick (`S.Even`, read off a table by seat and cards played),
+   d + k = 4L for the k cards played, and the tricks won plus L are at most 13.
+   `play_inv` says playing any card of the hand to play keeps it, with one ply fewer.
+   L stays the same within a trick and drops by one when the trick ends. Under it,
+   `take.go` (via `count_xor32`) says playing the card leaves one card fewer, and
+   `x_one` says each card's mask is one bit. `seat_mid`, `played_mid`, `played_end`,
+   `won_mid` and `won_end` give the trick word and the tricks won after the card. The
+   proof splits into the 16 cases of seat and cards played, which a script wrote.
+8. *Done:* small arithmetic. These are the order on `Nat` (`le_refl`, `le_trans`,
+   `le_succ`, `le_add`, `lt_le`, `nlt_le`, `le_lt`, `le_lt_trans`), `add_zero` and
+   `add_succ`, `max_le` and `min_ge` (`U32.max` and `U32.min` against bounds, through
+   `u32_cmp_nat`), `tn14`, and `add_bit`, which adds a trick to a count below 13 without
+   overflow.
+9. *Done:* the bounds on the value. `search_in`, by induction over `B.search`, mirrors
+   its recursion: the child at one ply fewer, and the sibling on the rest of the moves.
+   In any position that keeps the invariant, the brute force value lies between the
+   tricks won and those plus the cards the seat to play holds. That holds for any trick
+   so far, any side to play and any strain. `solve_in` states it for `B.solve`. On the
+   way, `kid_hand` and `kid_vin` say the child's moves come from its hand and that there
+   is one while plies are left (`ne_cnt`), and `ok_better` and `in_better` carry the
+   bound through max and min.
 
-That is about 60 to 120 lemmas, or 1,500 to 3,000 lines, before the first sure-trick
-rule. Every check of the whole `PROOF.bend` takes 13 minutes or more, and the facts
-about holdings will make it longer. It can be done; it is days of steady work, not a
-night's.
+All of foundation steps 1 to 3 are proved now: about 130 laws, none by sampling.
+`start_inv` ties them to a dealt position. Any deal whose hands are valid words holding
+L cards each (`S.DealOk`), with L at most 13 and any leader below 4, starts out
+keeping the invariant. So `solve_deal` holds: `B.solve` on such a deal gives a value
+from 0 to L, in every strain. The invariant never needs the hands to be disjoint.
 
 **The kernel check.** `bend PROOF.bend --verdict` rechecks proofs with a kernel proved
-in Lean. It has never run here: Bend 2.0.40 needs Lean 4.34.0 exactly, and only 4.35.0
-is installed.
+in Lean, using Lean 4.34.0. On the whole file it stops at the first law that walks a
+whole domain (`holding_roundtrip`, over the 8192 holdings) with "out of fuel". Bend
+2.0.40's kernel gives evaluation a fixed fuel of 8192 steps, with no option to raise
+it, and Bend reports this as a mismatch between its own checker and the kernel, not as
+a wrong proof. So no law proved by running a check over a whole domain can pass
+`--verdict` yet, and neither can anything that rests on one, such as `facts_holding`
+and the move laws under it. With those laws and what rests on them taken out (30 of
+89 laws at the time), the other 59 passed `--verdict`. Those are the proofs by
+induction on words, the conversions and the finite case splits. `tools/verdict.sh`
+repeats that check.
 
 ## 3. Data representation
 

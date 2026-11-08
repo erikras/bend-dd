@@ -12,6 +12,7 @@ import ./src/cards.bend as C
 import ./src/pbn.bend as P
 import ./src/rules.bend as R
 import ./src/search.bend as Z
+import ./src/brute.bend as B
 import ./SPEC.bend as S
 
 # ---------------------------------------------------------------------------
@@ -772,3 +773,535 @@ law moves_ne23:
   for +e: {U32.is_zero(h23) == False{} : Bool}
   S.NE(R.moves.of(lead, h01, h23))
 
+
+# ---------------------------------------------------------------------------
+# The trick word
+
+law and_assoc:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  for +c: Word(n)
+  {Word.and(n, Word.and(n, a, b), c) == Word.and(n, a, Word.and(n, b, c)) : Word(n)}
+
+law and_assoc32:
+  for +a: U32
+  for +b: U32
+  for +c: U32
+  {U32.and(U32.and(a, b), c) == U32.and(a, U32.and(b, c)) : U32}
+
+law pad_and:
+  for +p: Nat
+  for +a: Word(p)
+  for +b: Word(p)
+  {Word.shr.pad(p, Word.and(p, a, b)) == Word.and(1n+p, Word.shr.pad(p, a), Word.shr.pad(p, b)) : Word(1n+p)}
+
+law shr_and:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  {Word.shr(n, Word.and(n, a, b)) == Word.and(n, Word.shr(n, a), Word.shr(n, b)) : Word(n)}
+
+law shrn_and:
+  for +k: Nat
+  for +a: U32
+  for +b: U32
+  {U32.shrn(U32.and(a, b), k) == U32.and(U32.shrn(a, k), U32.shrn(b, k)) : U32}
+
+law seat_low:
+  for +x: U32
+  {R.trick.seat(x) == R.trick.seat((x .&. 15 : U32)) : U32}
+
+law played_low:
+  for +x: U32
+  {R.trick.played(x) == R.trick.played((x .&. 15 : U32)) : U32}
+
+law put_and:
+  for +p: Nat
+  for +c: Bool
+  for +at: Word(p)
+  for +kt: Word(p)
+  {Word.and(p, Word.shl.put(p, c, at), kt) == Word.shl.put(p, Bool.and(c, S.w0(p, kt)), Word.and(p, at, Word.shr(p, kt))) : Word(p)}
+
+law shl_and:
+  for +n: Nat
+  for +z: Word(n)
+  for +k: Word(n)
+  {Word.and(n, Word.shl(n, z), k) == Word.shl(n, Word.and(n, z, Word.shr(n, k))) : Word(n)}
+
+law or_and:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  for +k: Word(n)
+  {Word.and(n, Word.or(n, a, b), k) == Word.or(n, Word.and(n, a, k), Word.and(n, b, k)) : Word(n)}
+
+law or_zero:
+  for +n: Nat
+  for +a: Word(n)
+  {Word.or(n, a, Word.zero(n)) == a : Word(n)}
+
+law shl2_low:
+  for +z: U32
+  {U32.and(U32.shl(U32.shl(z)), 3) == 0 : U32}
+
+law shl4_low:
+  for +z: U32
+  {U32.and(U32.shl(U32.shl(U32.shl(U32.shl(z)))), 15) == 0 : U32}
+
+law kill4:
+  for +x: U32
+  for +z: U32
+  {U32.and(U32.or(x, U32.shl(U32.shl(U32.shl(U32.shl(z))))), 15) == U32.and(x, 15) : U32}
+
+law low4_make:
+  for +s: U32
+  for +p: U32
+  for +l: U32
+  for +o: U32
+  for +b: U32
+  {U32.and(R.trick.make(s, p, l, o, b), 15) == U32.and(U32.or(s, U32.shl(U32.shl(p))), 15) : U32}
+
+law seat_make:
+  for +s: U32
+  for +p: U32
+  for +l: U32
+  for +o: U32
+  for +b: U32
+  {R.trick.seat(R.trick.make(s, p, l, o, b)) == U32.and(s, 3) : U32}
+
+law played_make:
+  for +k: Nat
+  for +lk: {Nat.is_lt(k, 4n) == True{} : Bool}
+  for +y: U32
+  for +l: U32
+  for +o: U32
+  for +b: U32
+  {R.trick.played(R.trick.make(U32.and(y, 3), U32.from_nat(k), l, o, b)) == U32.from_nat(k) : U32}
+
+law seat_make_r:
+  for +s: U32
+  for +p: U32
+  for +l: U32
+  for +o: U32
+  for +b: U32
+  for +r: U32
+  {R.trick.seat(U32.or(R.trick.make(s, p, l, o, b), (r << 15n : U32))) == U32.and(s, 3) : U32}
+
+law played_make_r:
+  for +k: Nat
+  for +lk: {Nat.is_lt(k, 4n) == True{} : Bool}
+  for +y: U32
+  for +l: U32
+  for +o: U32
+  for +b: U32
+  for +r: U32
+  {R.trick.played(U32.or(R.trick.make(U32.and(y, 3), U32.from_nat(k), l, o, b), (r << 15n : U32))) == U32.from_nat(k) : U32}
+
+law next_seat:
+  for +k: Nat
+  for +lk: {Nat.is_lt(k, 3n) == True{} : Bool}
+  for +win: Bool
+  for +rank: Bool
+  for +seat: U32
+  for +lead: U32
+  for +owner: U32
+  for +best: U32
+  for +c: U32
+  {R.trick.seat(R.trick.next.go(U32.is_eq(U32.from_nat(k), 0), U32.is_eq(U32.from_nat(k), 3), win, rank, seat, U32.from_nat(k), lead, owner, best, c)) == U32.and((seat + 1 : U32), 3) : U32}
+
+law next_played:
+  for +k: Nat
+  for +lk: {Nat.is_lt(k, 3n) == True{} : Bool}
+  for +win: Bool
+  for +rank: Bool
+  for +seat: U32
+  for +lead: U32
+  for +owner: U32
+  for +best: U32
+  for +c: U32
+  {R.trick.played(R.trick.next.go(U32.is_eq(U32.from_nat(k), 0), U32.is_eq(U32.from_nat(k), 3), win, rank, seat, U32.from_nat(k), lead, owner, best, c)) == U32.from_nat(1n+k) : U32}
+
+law next_end:
+  for +win: Bool
+  for +rank: Bool
+  for +y1: U32
+  for +lead: U32
+  for +y2: U32
+  for +best: U32
+  for +c: U32
+  {R.trick.played(R.trick.next.go(False{}, True{}, win, rank, U32.and(y1, 3), 3, lead, U32.and(y2, 3), best, c)) == 0 : U32}
+
+law cmp_dbl:
+  for +a: Bool
+  for +b: Bool
+  for +x: Nat
+  for +y: Nat
+  {Nat.cmp(S.bitnat(a, x), S.bitnat(b, y)) == Word.cmp.fin(a, b, Nat.cmp(x, y)) : Cmp}
+
+law cmp_nat:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  {Word.cmp(n, a, b) == Nat.cmp(Word.to_nat(n, a), Word.to_nat(n, b)) : Cmp}
+
+law u32_cmp_nat:
+  for +a: U32
+  for +b: U32
+  {U32.cmp(a, b) == Nat.cmp(U32.to_nat(a), U32.to_nat(b)) : Cmp}
+
+law adc00:
+  for +n: Nat
+  for +w: Word(n)
+  {Word.adc(n, w, Word.zero(n), False{}, False{}) == w : Word(n)}
+
+law adc01:
+  for +n: Nat
+  for +w: Word(n)
+  {Word.adc(n, w, Word.zero(n), False{}, True{}) == Word.inc(n, w) : Word(n)}
+
+law add_one:
+  for +u: U32
+  {U32.add(u, 1) == U32.inc(u) : U32}
+
+law add_zero32:
+  for +u: U32
+  {U32.add(u, 0) == u : U32}
+
+law side_seat:
+  for +x: U32
+  {U32.and(x, 1) == U32.and(R.trick.seat(x), 1) : U32}
+
+
+# ---------------------------------------------------------------------------
+# Hands stay even, and the value bounds
+
+law le_refl:
+  for +a: Nat
+  {Nat.is_le(a, a) == True{} : Bool}
+
+law le_zero:
+  for +a: Nat
+  {Nat.is_le(0n, a) == True{} : Bool}
+
+law le_trans:
+  for +a: Nat
+  for +b: Nat
+  for +c: Nat
+  for x: {Nat.is_le(a, b) == True{} : Bool}
+  for y: {Nat.is_le(b, c) == True{} : Bool}
+  {Nat.is_le(a, c) == True{} : Bool}
+
+law le_succ:
+  for +a: Nat
+  for +b: Nat
+  for x: {Nat.is_le(a, b) == True{} : Bool}
+  {Nat.is_le(a, 1n+b) == True{} : Bool}
+
+law le_add:
+  for +a: Nat
+  for +b: Nat
+  {Nat.is_le(a, Nat.add(a, b)) == True{} : Bool}
+
+law add_zero:
+  for +a: Nat
+  {Nat.add(a, 0n) == a : Nat}
+
+law add_succ:
+  for +a: Nat
+  for +b: Nat
+  {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}
+
+law lt_le:
+  for +m: Nat
+  for +n: Nat
+  for e: {Cmp.is_lt(Nat.cmp(m, n)) == True{} : Bool}
+  {Nat.is_le(m, n) == True{} : Bool}
+
+law nlt_le:
+  for +m: Nat
+  for +n: Nat
+  for e: {Cmp.is_lt(Nat.cmp(m, n)) == False{} : Bool}
+  {Nat.is_le(n, m) == True{} : Bool}
+
+law max_le:
+  for +a: U32
+  for +b: U32
+  for +hi: Nat
+  for +ha: {Nat.is_le(U32.to_nat(a), hi) == True{} : Bool}
+  for +hb: {Nat.is_le(U32.to_nat(b), hi) == True{} : Bool}
+  {Nat.is_le(U32.to_nat(U32.max(a, b)), hi) == True{} : Bool} & {Nat.is_le(U32.to_nat(b), U32.to_nat(U32.max(a, b))) == True{} : Bool}
+
+law min_ge:
+  for +a: U32
+  for +b: U32
+  for +lo: Nat
+  for +la: {Nat.is_le(lo, U32.to_nat(a)) == True{} : Bool}
+  for +lb: {Nat.is_le(lo, U32.to_nat(b)) == True{} : Bool}
+  {Nat.is_le(lo, U32.to_nat(U32.min(a, b))) == True{} : Bool} & {Nat.is_le(U32.to_nat(U32.min(a, b)), U32.to_nat(b)) == True{} : Bool}
+
+law ok_in:
+  for +ns: Bool
+  for +v: U32
+  for +w: Nat
+  for +L: Nat
+  for +i: S.InR(v, w, L)
+  S.Ok(ns, v, w, L)
+
+law ok_better:
+  for +ns: Bool
+  for +a: U32
+  for +b: U32
+  for +w: Nat
+  for +L: Nat
+  for oa: S.Ok(ns, a, w, L)
+  for ob: S.Ok(ns, b, w, L)
+  S.Ok(ns, B.better(ns, a, b), w, L)
+
+law in_better:
+  for +ns: Bool
+  for +a: U32
+  for +b: U32
+  for +w: Nat
+  for +L: Nat
+  for +oa: S.Ok(ns, a, w, L)
+  for +ib: S.InR(b, w, L)
+  S.InR(B.better(ns, a, b), w, L)
+
+law ok_seed:
+  for +ns: Bool
+  for +w: Nat
+  for +L: Nat
+  for +h: {Nat.is_le(Nat.add(w, L), 13n) == True{} : Bool}
+  S.Ok(ns, B.seed(ns), w, L)
+
+law xor0:
+  for +h: U32
+  {U32.xor(h, 0) == h : U32}
+
+law one_bit16:
+  for +r: Nat
+  for lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  {S.one16.ok(r) == True{} : Bool}
+
+law x_one:
+  for +c: U32
+  for +s: Nat
+  for +r: Nat
+  for +ls: {Nat.is_lt(s, 4n) == True{} : Bool}
+  for +lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  for +es: {C.card.suit(c) == U32.from_nat(s) : U32}
+  for +eb: {C.card.bit(c) == (1 << r : U32) : U32}
+  {S.bits(S.play.x(c)) == 1n : Nat}
+
+law and3_lt:
+  for +x: U32
+  {Nat.is_lt(U32.to_nat(U32.and(x, 3)), 4n) == True{} : Bool}
+
+law seat_mid:
+  for +k: Nat
+  for +lk: {Nat.is_lt(k, 3n) == True{} : Bool}
+  for +tr: U32
+  for +t: U32
+  for +c: U32
+  for +ep: {R.trick.played(tr) == U32.from_nat(k) : U32}
+  {R.trick.seat(R.trick.next(tr, t, c)) == U32.and((R.trick.seat(tr) + 1 : U32), 3) : U32}
+
+law played_mid:
+  for +k: Nat
+  for +lk: {Nat.is_lt(k, 3n) == True{} : Bool}
+  for +tr: U32
+  for +t: U32
+  for +c: U32
+  for +ep: {R.trick.played(tr) == U32.from_nat(k) : U32}
+  {R.trick.played(R.trick.next(tr, t, c)) == U32.from_nat(1n+k) : U32}
+
+law played_end:
+  for +tr: U32
+  for +t: U32
+  for +c: U32
+  for +ep: {R.trick.played(tr) == 3 : U32}
+  {R.trick.played(R.trick.next(tr, t, c)) == 0 : U32}
+
+law won_mid:
+  for +k: Nat
+  for +lk: {Nat.is_lt(k, 3n) == True{} : Bool}
+  for +x: U32
+  for +won: U32
+  for +e: {R.trick.played(x) == U32.from_nat(1n+k) : U32}
+  {R.won.next(x, won) == won : U32}
+
+law tn14:
+  for +n: Nat
+  for lt: {Nat.is_lt(n, 14n) == True{} : Bool}
+  {U32.to_nat(U32.from_nat(n)) == n : Nat}
+
+law add_bit:
+  for +u: U32
+  for +b: Bool
+  for +lt: {Nat.is_lt(U32.to_nat(u), 13n) == True{} : Bool}
+  {U32.to_nat((u + Bool.to_u32(b) : U32)) == Nat.add(S.b2n(b), U32.to_nat(u)) : Nat}
+
+law won_end:
+  for +x: U32
+  for +won: U32
+  for +e: {R.trick.played(x) == 0 : U32}
+  for +lt: {Nat.is_lt(U32.to_nat(won), 13n) == True{} : Bool}
+  {U32.to_nat(R.won.next(x, won)) == Nat.add(S.b2n(U32.is_eq((x .&. 1 : U32), 0)), U32.to_nat(won)) : Nat}
+
+law le_lt:
+  for +a: Nat
+  for +b: Nat
+  for e: {Nat.is_le(1n+a, b) == True{} : Bool}
+  {Nat.is_lt(a, b) == True{} : Bool}
+
+law le_lt_trans:
+  for +a: Nat
+  for +b: Nat
+  for +c: Nat
+  for x: {Nat.is_le(a, b) == True{} : Bool}
+  for y: {Nat.is_lt(b, c) == True{} : Bool}
+  {Nat.is_lt(a, c) == True{} : Bool}
+
+law d_end:
+  for +p: Nat
+  for +L: Nat
+  for +x: Nat
+  for +e1: {1n+x == L : Nat}
+  for +ed: {4n+p == S.r4(L) : Nat}
+  {p == S.r4(S.pred(L)) : Nat}
+
+law w_end:
+  for +bb: Bool
+  for +w: Nat
+  for +L: Nat
+  for +x: Nat
+  for +e1: {1n+x == L : Nat}
+  for +h: {Nat.is_le(Nat.add(w, L), 13n) == True{} : Bool}
+  {Nat.is_le(Nat.add(Nat.add(S.b2n(bb), w), S.pred(L)), 13n) == True{} : Bool}
+
+law w_lt:
+  for +w: Nat
+  for +L: Nat
+  for +x: Nat
+  for +e1: {1n+x == L : Nat}
+  for +h: {Nat.is_le(Nat.add(w, L), 13n) == True{} : Bool}
+  {Nat.is_lt(w, 13n) == True{} : Bool}
+
+law play_inv:
+  for +t: U32
+  for +c: U32
+  for +p: Nat
+  for +L: Nat
+  for +n01: U32
+  for +n23: U32
+  for +e01: U32
+  for +e23: U32
+  for +s01: U32
+  for +s23: U32
+  for +w01: U32
+  for +w23: U32
+  for +tr: U32
+  for +won: U32
+  for +inv: S.Inv.go(n01, n23, e01, e23, s01, s23, w01, w23, U32.to_nat(R.trick.seat(tr)), U32.to_nat(R.trick.played(tr)), U32.to_nat(won), 1n+p, L)
+  for +i1: S.Sub32(S.play.a(c), R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01))
+  for +i2: S.Sub32(S.play.b(c), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23))
+  for +one: {S.bits(S.play.x(c)) == 1n : Nat}
+  S.Inv(R.play(t, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, c), p, S.lnext(U32.to_nat(R.trick.played(tr)), L))
+
+law even_self:
+  for +s: Nat
+  for +k: Nat
+  for +L: Nat
+  for +a: Nat
+  for +b: Nat
+  for +c: Nat
+  for +d: Nat
+  for +ev: S.Even(s, k, L, a, b, c, d)
+  for +ls: {Nat.is_lt(s, 4n) == True{} : Bool}
+  for +lk: {Nat.is_lt(k, 4n) == True{} : Bool}
+  {S.pickn(s, a, b, c, d) == L : Nat}
+
+law ne_cnt:
+  for +lead: U32
+  for +h01: U32
+  for +h23: U32
+  for +x: Nat
+  for +e: {S.cnt(h01, h23) == 1n+x : Nat}
+  S.NE(R.moves.of(lead, h01, h23))
+
+law kid_hand:
+  for +pos: R.Pos
+  for +p: Nat
+  for +L: Nat
+  for +ci: S.Inv(pos, p, L)
+  S.AllH(R.moves(pos), S.hand01(pos), S.hand23(pos))
+
+law kid_h:
+  for +pos: R.Pos
+  for +p: Nat
+  for +L: Nat
+  for +ci: S.Inv(pos, p, L)
+  {Nat.is_le(Nat.add(S.wN(pos), L), 13n) == True{} : Bool}
+
+law kid_vin:
+  for +pos: R.Pos
+  for +p: Nat
+  for +L: Nat
+  for +ns: Bool
+  for +ci: S.Inv(pos, p, L)
+  S.NeIn(p, R.moves(pos), ns, B.seed(ns), S.wN(pos), L)
+
+law widen_end:
+  for +x: U32
+  for +bb: Bool
+  for +w: Nat
+  for +L: Nat
+  for +y: Nat
+  for +e1: {1n+y == L : Nat}
+  for +i: S.InR(x, Nat.add(S.b2n(bb), w), S.pred(L))
+  S.InR(x, w, L)
+
+law search_in:
+  for +d: Nat
+  for ms: List<&2, U32>
+  for +t: U32
+  for +pos: R.Pos
+  for +ns: Bool
+  for +best: U32
+  for r: B.Res
+  for +L: Nat
+  for +inv: S.Inv(pos, d, L)
+  for hand: S.AllH(ms, S.hand01(pos), S.hand23(pos))
+  for +bok: S.Ok(ns, best, S.wN(pos), L)
+  for vin: S.NeIn(d, ms, ns, S.rv(r), S.wN(pos), L)
+  S.InR(S.rv(B.search(d, ms, t, pos, ns, best, r)), S.wN(pos), L)
+
+law solve_in:
+  for +d: Nat
+  for +t: U32
+  for +pos: R.Pos
+  for +nodes: Nat
+  for +L: Nat
+  for +inv: S.Inv(pos, d, L)
+  S.InR(S.rv(B.solve(d, t, pos, nodes)), S.wN(pos), L)
+
+law start_inv:
+  for +deal: C.Deal
+  for +leader: U32
+  for +L: Nat
+  for +ok: S.DealOk(deal, L)
+  for +el: {U32.and(leader, 3) == leader : U32}
+  for +lL: {Nat.is_le(L, 13n) == True{} : Bool}
+  S.Inv(R.pos.start(deal, leader), S.r4(L), L)
+
+law solve_deal:
+  for +deal: C.Deal
+  for +leader: U32
+  for +L: Nat
+  for +t: U32
+  for +nodes: Nat
+  for +ok: S.DealOk(deal, L)
+  for +el: {U32.and(leader, 3) == leader : U32}
+  for +lL: {Nat.is_le(L, 13n) == True{} : Bool}
+  S.InR(S.rv(B.solve(S.r4(L), t, R.pos.start(deal, leader), nodes)), 0n, L)
