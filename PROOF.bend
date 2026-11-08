@@ -676,3 +676,519 @@ def Laws.card_code(s, r, ls, lr):
     case 4n+y:
       Empty.absurd({S.code.ok(4n+y, r) == True{} : Bool}, no_lt0(y, ls))
 
+
+# ---------------------------------------------------------------------------
+# Words as sets of bits
+
+def no_tf(e: {True{} == False{} : Bool}) -> Empty:
+  no_ft(Equal.sym(Bool, True{}, False{}, e))
+
+
+def hd(-p: Nat, -x: Bool, -y: Bool, -a: Word(p), -b: Word(p), e: {WCon{x, a} == WCon{y, b} : Word(1n+p)}) -> {x == y : Bool}:
+  Equal.cong(Word(1n+p), Bool, (w => S.w.head(p, w)), WCon{x, a}, WCon{y, b}, e)
+
+
+def tl(-p: Nat, -x: Bool, -y: Bool, -a: Word(p), -b: Word(p), e: {WCon{x, a} == WCon{y, b} : Word(1n+p)}) -> {a == b : Word(p)}:
+  Equal.cong(Word(1n+p), Word(p), (w => S.w.tail(p, w)), WCon{x, a}, WCon{y, b}, e)
+
+
+def cons.eq(-p: Nat, -x: Bool, -y: Bool, -a: Word(p), -b: Word(p), h: {x == y : Bool}, t: {a == b : Word(p)}) -> {WCon{x, a} == WCon{y, b} : Word(1n+p)}:
+  %h : {WCon{x, a} == WCon{_, b} : Word(1n+p)}
+  %t : {WCon{x, a} == WCon{x, _} : Word(1n+p)}
+  {==}
+
+
+def isz(n: Nat) -> Type:
+  match n:
+    case 0n:
+      Empty
+    case 1n+k:
+      Unit
+
+
+def no_s0(-k: Nat, e: {1n+k == 0n : Nat}) -> Empty:
+  %e : isz(_)
+  Unit{}
+
+
+def no_0s(-k: Nat, e: {0n == 1n+k : Nat}) -> Empty:
+  no_s0(k, Equal.sym(Nat, 0n, 1n+k, e))
+
+
+def pred(n: Nat) -> Nat:
+  match n:
+    case 0n:
+      0n
+    case 1n+k:
+      k
+
+
+def s_inj(-a: Nat, -b: Nat, e: {1n+a == 1n+b : Nat}) -> {a == b : Nat}:
+  Equal.cong(Nat, Nat, (x => pred(x)), 1n+a, 1n+b, e)
+
+
+def andand(+x: Bool, +y: Bool) -> {Bool.and(Bool.and(x, y), x) == Bool.and(x, y) : Bool}:
+  match x y:
+    case False{} _:
+      {==}
+    case True{} False{}:
+      {==}
+    case True{} True{}:
+      {==}
+
+
+def Laws.and_sub_left(n, a, k):
+  match n:
+    case 0n:
+      match a k:
+        case WNil{} WNil{}:
+          {==}
+    case 1n+p:
+      match a k:
+        case WCon{+x, +at} WCon{+y, +kt}:
+          cons.eq(p, Bool.and(Bool.and(x, y), x), Bool.and(x, y), Word.and(p, Word.and(p, at, kt), at), Word.and(p, at, kt), andand(x, y), Laws.and_sub_left(p, at, kt))
+
+
+def btrans(+x: Bool, +y: Bool, +z: Bool, h1: {Bool.and(x, y) == x : Bool}, h2: {Bool.and(y, z) == y : Bool}) -> {Bool.and(x, z) == x : Bool}:
+  match x y z:
+    case False{} _ _:
+      {==}
+    case True{} False{} _:
+      Empty.absurd({Bool.and(True{}, z) == True{} : Bool}, no_ft(h1))
+    case True{} True{} False{}:
+      Empty.absurd({Bool.and(True{}, False{}) == True{} : Bool}, no_ft(h2))
+    case True{} True{} True{}:
+      {==}
+
+
+def Laws.sub_trans(n, a, b, c, ab, bc):
+  match n:
+    case 0n:
+      match a c:
+        case WNil{} WNil{}:
+          {==}
+    case 1n+p:
+      match a b c:
+        case WCon{+x, +at} WCon{+y, +bt} WCon{+z, +ct}:
+          cons.eq(p, Bool.and(x, z), x, Word.and(p, at, ct), at,
+            btrans(x, y, z, hd(p, Bool.and(x, y), x, Word.and(p, at, bt), at, ab), hd(p, Bool.and(y, z), y, Word.and(p, bt, ct), bt, bc)),
+            Laws.sub_trans(p, at, bt, ct, tl(p, Bool.and(x, y), x, Word.and(p, at, bt), at, ab), tl(p, Bool.and(y, z), y, Word.and(p, bt, ct), bt, bc)))
+
+
+def Laws.count0_zero(n, x, e):
+  match n:
+    case 0n:
+      match x:
+        case WNil{}:
+          {==}
+    case 1n+p:
+      match x:
+        case WCon{False{}, +t}:
+          cons.eq(p, False{}, False{}, t, Word.zero(p), {==}, Laws.count0_zero(p, t, e))
+        case WCon{True{}, +t}:
+          Empty.absurd({WCon{True{}, t} == Word.zero(1n+p) : Word(1n+p)}, no_s0(S.word.count(p, t), e))
+
+
+def bxor_f(+b: Bool) -> {Bool.xor(b, False{}) == b : Bool}:
+  match b:
+    case False{}:
+      {==}
+    case True{}:
+      {==}
+
+
+def Laws.xor_zero(n, w):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          {==}
+    case 1n+p:
+      match w:
+        case WCon{+b, +t}:
+          cons.eq(p, Bool.xor(b, False{}), b, Word.xor(p, t, Word.zero(p)), t, bxor_f(b), Laws.xor_zero(p, t))
+
+
+def count_xor.top(+p: Nat, +xt: Word(p), +wb: Bool, +wt: Word(p), h: {wb == True{} : Bool}, z: {xt == Word.zero(p) : Word(p)}) -> {S.word.count(1n+p, WCon{wb, wt}) == 1n+S.word.count(1n+p, Word.xor(1n+p, WCon{wb, wt}, WCon{True{}, xt})) : Nat}:
+  %Equal.sym(Bool, wb, True{}, h) : {S.word.count(1n+p, WCon{_, wt}) == 1n+S.word.count(1n+p, Word.xor(1n+p, WCon{_, wt}, WCon{True{}, xt})) : Nat}
+  %Equal.sym(Word(p), xt, Word.zero(p), z) : {S.word.count(1n+p, WCon{True{}, wt}) == 1n+S.word.count(1n+p, Word.xor(1n+p, WCon{True{}, wt}, WCon{True{}, _})) : Nat}
+  %Equal.sym(Word(p), Word.xor(p, wt, Word.zero(p)), wt, Laws.xor_zero(p, wt)) : {1n+S.word.count(p, wt) == 1n+S.word.count(p, _) : Nat}
+  {==}
+
+
+def count_xor.low(+p: Nat, +xt: Word(p), +wb: Bool, +wt: Word(p), ih: {S.word.count(p, wt) == 1n+S.word.count(p, Word.xor(p, wt, xt)) : Nat}) -> {S.word.count(1n+p, WCon{wb, wt}) == 1n+S.word.count(1n+p, Word.xor(1n+p, WCon{wb, wt}, WCon{False{}, xt})) : Nat}:
+  match wb:
+    case False{}:
+      ih
+    case True{}:
+      %Equal.sym(Nat, S.word.count(p, wt), 1n+S.word.count(p, Word.xor(p, wt, xt)), ih) : {1n+_ == 2n+S.word.count(p, Word.xor(p, wt, xt)) : Nat}
+      {==}
+
+
+def Laws.count_xor(n, x, w, s, one):
+  match n:
+    case 0n:
+      match x w:
+        case WNil{} WNil{}:
+          Empty.absurd({0n == 1n : Nat}, no_0s(0n, one))
+    case 1n+p:
+      match x w:
+        case WCon{True{}, +xt} WCon{+wb, +wt}:
+          count_xor.top(p, xt, wb, wt, hd(p, wb, True{}, Word.and(p, xt, wt), xt, s), Laws.count0_zero(p, xt, s_inj(S.word.count(p, xt), 0n, one)))
+        case WCon{False{}, +xt} WCon{+wb, +wt}:
+          count_xor.low(p, xt, wb, wt, Laws.count_xor(p, xt, wt, tl(p, False{}, False{}, Word.and(p, xt, wt), xt, s), one))
+
+
+def put_sub(+p: Nat, +c: Bool, +at: Word(p), +wt: Word(p), +h: S.Sub(1n+p, WCon{c, at}, Word.shr.pad(p, wt))) -> S.Sub(p, Word.shl.put(p, c, at), wt):
+  match p:
+    case 0n:
+      match at wt:
+        case WNil{} WNil{}:
+          {==}
+    case 1n+q:
+      match at wt:
+        case WCon{+a1, +ar} WCon{+w0, +wr}:
+          cons.eq(q, Bool.and(c, w0), c, Word.and(q, Word.shl.put(q, a1, ar), wr), Word.shl.put(q, a1, ar),
+            hd(1n+q, Bool.and(c, w0), c, Word.and(1n+q, WCon{a1, ar}, Word.shr.pad(q, wr)), WCon{a1, ar}, h),
+            put_sub(q, a1, ar, wr, tl(1n+q, Bool.and(c, w0), c, Word.and(1n+q, WCon{a1, ar}, Word.shr.pad(q, wr)), WCon{a1, ar}, h)))
+
+
+def Laws.shl_sub(n, a, w, h):
+  match n:
+    case 0n:
+      match a w:
+        case WNil{} WNil{}:
+          {==}
+    case 1n+p:
+      match a w:
+        case WCon{+a0, +at} WCon{+w0, +wt}:
+          cons.eq(p, False{}, False{}, Word.and(p, Word.shl.put(p, a0, at), wt), Word.shl.put(p, a0, at), {==}, put_sub(p, a0, at, wt, h))
+
+
+def u.unwrap(-x: Word(32n), -y: Word(32n), e: {U32{x} == U32{y} : U32}) -> {x == y : Word(32n)}:
+  Equal.cong(U32, Word(32n), (u => S.u.word(u)), U32{x}, U32{y}, e)
+
+
+def u.wrap(-x: Word(32n), -y: Word(32n), e: {x == y : Word(32n)}) -> {U32{x} == U32{y} : U32}:
+  Equal.cong(Word(32n), U32, (v => U32{v}), x, y, e)
+
+
+def Laws.shl_sub32(a, w, h):
+  match a w:
+    case U32{+x} U32{+y}:
+      u.wrap(Word.and(32n, Word.shl(32n, x), y), Word.shl(32n, x), Laws.shl_sub(32n, x, y, u.unwrap(Word.and(32n, x, Word.shr(32n, y)), x, h)))
+
+
+def Laws.shln_comm(a, k):
+  match k:
+    case 0n:
+      {==}
+    case 1n+j:
+      %Equal.sym(U32, U32.shln(U32.shl(a), j), U32.shl(U32.shln(a, j)), Laws.shln_comm(a, j)) : {U32.shl(_) == U32.shl(U32.shl(U32.shln(a, j))) : U32}
+      {==}
+
+
+def Laws.shln_sub(k, a, w, h):
+  match k:
+    case 0n:
+      h
+    case 1n+j:
+      %Laws.shln_comm(a, j) : S.Sub32(_, w)
+      Laws.shln_sub(j, U32.shl(a), w, Laws.shl_sub32(a, U32.shrn(w, j), h))
+
+
+def Laws.shr_op(x):
+  {==}
+
+
+def bxor_sub(+w: Bool, +x: Bool, +m: Bool, h1: {Bool.and(w, m) == w : Bool}, h2: {Bool.and(x, w) == x : Bool}) -> {Bool.and(Bool.xor(w, x), m) == Bool.xor(w, x) : Bool}:
+  match w x m:
+    case False{} False{} _:
+      {==}
+    case False{} True{} _:
+      Empty.absurd({Bool.and(True{}, m) == True{} : Bool}, no_ft(h2))
+    case True{} _ False{}:
+      Empty.absurd({Bool.and(Bool.xor(True{}, x), False{}) == Bool.xor(True{}, x) : Bool}, no_ft(h1))
+    case True{} False{} True{}:
+      {==}
+    case True{} True{} True{}:
+      {==}
+
+
+def Laws.xor_sub(n, w, x, m, wm, xw):
+  match n:
+    case 0n:
+      match w x m:
+        case WNil{} WNil{} WNil{}:
+          {==}
+    case 1n+p:
+      match w x m:
+        case WCon{+w0, +wt} WCon{+x0, +xt} WCon{+m0, +mt}:
+          cons.eq(p, Bool.and(Bool.xor(w0, x0), m0), Bool.xor(w0, x0), Word.and(p, Word.xor(p, wt, xt), mt), Word.xor(p, wt, xt),
+            bxor_sub(w0, x0, m0, hd(p, Bool.and(w0, m0), w0, Word.and(p, wt, mt), wt, wm), hd(p, Bool.and(x0, w0), x0, Word.and(p, xt, wt), xt, xw)),
+            Laws.xor_sub(p, wt, xt, mt, tl(p, Bool.and(w0, m0), w0, Word.and(p, wt, mt), wt, wm), tl(p, Bool.and(x0, w0), x0, Word.and(p, xt, wt), xt, xw)))
+
+
+def band_mono(+a: Bool, +b: Bool, +k: Bool, h: {Bool.and(a, b) == a : Bool}) -> {Bool.and(Bool.and(a, k), Bool.and(b, k)) == Bool.and(a, k) : Bool}:
+  match a b k:
+    case False{} _ _:
+      {==}
+    case True{} False{} _:
+      Empty.absurd({Bool.and(Bool.and(True{}, k), Bool.and(False{}, k)) == Bool.and(True{}, k) : Bool}, no_ft(h))
+    case True{} True{} False{}:
+      {==}
+    case True{} True{} True{}:
+      {==}
+
+
+def Laws.and_mono(n, a, b, k, h):
+  match n:
+    case 0n:
+      match a b k:
+        case WNil{} WNil{} WNil{}:
+          {==}
+    case 1n+p:
+      match a b k:
+        case WCon{+a0, +at} WCon{+b0, +bt} WCon{+k0, +kt}:
+          cons.eq(p, Bool.and(Bool.and(a0, k0), Bool.and(b0, k0)), Bool.and(a0, k0), Word.and(p, Word.and(p, at, kt), Word.and(p, bt, kt)), Word.and(p, at, kt),
+            band_mono(a0, b0, k0, hd(p, Bool.and(a0, b0), a0, Word.and(p, at, bt), at, h)),
+            Laws.and_mono(p, at, bt, kt, tl(p, Bool.and(a0, b0), a0, Word.and(p, at, bt), at, h)))
+
+
+def Laws.pad_mono(p, a, b, h):
+  match p:
+    case 0n:
+      match a b:
+        case WNil{} WNil{}:
+          {==}
+    case 1n+q:
+      match a b:
+        case WCon{+a0, +at} WCon{+b0, +bt}:
+          cons.eq(1n+q, Bool.and(a0, b0), a0, Word.and(1n+q, Word.shr.pad(q, at), Word.shr.pad(q, bt)), Word.shr.pad(q, at),
+            hd(q, Bool.and(a0, b0), a0, Word.and(q, at, bt), at, h),
+            Laws.pad_mono(q, at, bt, tl(q, Bool.and(a0, b0), a0, Word.and(q, at, bt), at, h)))
+
+
+def Laws.shr_mono(n, a, b, h):
+  match n:
+    case 0n:
+      match a b:
+        case WNil{} WNil{}:
+          {==}
+    case 1n+p:
+      match a b:
+        case WCon{+a0, +at} WCon{+b0, +bt}:
+          Laws.pad_mono(p, at, bt, tl(p, Bool.and(a0, b0), a0, Word.and(p, at, bt), at, h))
+
+
+def shrn_mono.one(+a: U32, +b: U32, +h: S.Sub32(a, b)) -> S.Sub32(U32.shr(a), U32.shr(b)):
+  match a b:
+    case U32{+x} U32{+y}:
+      u.wrap(Word.and(32n, Word.shr(32n, x), Word.shr(32n, y)), Word.shr(32n, x), Laws.shr_mono(32n, x, y, u.unwrap(Word.and(32n, x, y), x, h)))
+
+
+def Laws.shrn_mono(k, a, b, h):
+  match k:
+    case 0n:
+      h
+    case 1n+j:
+      shrn_mono.one(U32.shrn(a, j), U32.shrn(b, j), Laws.shrn_mono(j, a, b, h))
+
+
+def Laws.and_mono32(a, b, k, h):
+  match a b k:
+    case U32{+x} U32{+y} U32{+z}:
+      u.wrap(Word.and(32n, Word.and(32n, x, z), Word.and(32n, y, z)), Word.and(32n, x, z), Laws.and_mono(32n, x, y, z, u.unwrap(Word.and(32n, x, y), x, h)))
+
+
+def Laws.hi_holding(w, h):
+  Laws.shrn_mono(16n, w, S.valid.mask(), h)
+
+
+def Laws.lo_holding(w, h):
+  Laws.and_mono32(w, S.valid.mask(), 65535, h)
+
+
+def band_t(+b: Bool) -> {Bool.and(b, True{}) == b : Bool}:
+  match b:
+    case False{}:
+      {==}
+    case True{}:
+      {==}
+
+
+def Laws.pad_ones(p, x, j):
+  match p:
+    case 0n:
+      match x j:
+        case WNil{} 0n:
+          {==}
+        case WNil{} 1n+i:
+          {==}
+    case 1n+q:
+      match x j:
+        case WCon{+b, +r} 0n:
+          cons.eq(1n+q, Bool.and(b, False{}), Bool.and(b, False{}), Word.and(1n+q, Word.shr.pad(q, r), S.ones(1n+q, 0n)), Word.shr.pad(q, Word.and(q, r, S.ones(q, 0n))), {==}, Laws.pad_ones(q, r, 0n))
+        case WCon{+b, +r} 1n+i:
+          cons.eq(1n+q, Bool.and(b, True{}), Bool.and(b, True{}), Word.and(1n+q, Word.shr.pad(q, r), S.ones(1n+q, i)), Word.shr.pad(q, Word.and(q, r, S.ones(q, i))), {==}, Laws.pad_ones(q, r, i))
+
+
+def Laws.pad_inj(p, x, y, e):
+  match p:
+    case 0n:
+      match x y:
+        case WNil{} WNil{}:
+          {==}
+    case 1n+q:
+      match x y:
+        case WCon{+a, +r} WCon{+b, +t}:
+          cons.eq(q, a, b, r, t, hd(1n+q, a, b, Word.shr.pad(q, r), Word.shr.pad(q, t), e), Laws.pad_inj(q, r, t, tl(1n+q, a, b, Word.shr.pad(q, r), Word.shr.pad(q, t), e)))
+
+
+def Laws.shr_ones(n, w, j, h):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          {==}
+    case 1n+p:
+      match w:
+        case WCon{+w0, +wt}:
+          cons.eq(p, Bool.and(w0, True{}), w0, Word.and(p, wt, S.ones(p, j)), wt, band_t(w0), Laws.pad_inj(p, Word.and(p, wt, S.ones(p, j)), wt,
+            Equal.trans(Word(1n+p), Word.shr.pad(p, Word.and(p, wt, S.ones(p, j))), Word.and(1n+p, Word.shr.pad(p, wt), S.ones(1n+p, j)), Word.shr.pad(p, wt),
+              Equal.sym(Word(1n+p), Word.and(1n+p, Word.shr.pad(p, wt), S.ones(1n+p, j)), Word.shr.pad(p, Word.and(p, wt, S.ones(p, j))), Laws.pad_ones(p, wt, j)), h)))
+
+
+def zero_and(+n: Nat, +k: Word(n)) -> {Word.and(n, Word.zero(n), k) == Word.zero(n) : Word(n)}:
+  match n:
+    case 0n:
+      match k:
+        case WNil{}:
+          {==}
+    case 1n+p:
+      match k:
+        case WCon{+k0, +kt}:
+          cons.eq(p, False{}, False{}, Word.and(p, Word.zero(p), kt), Word.zero(p), {==}, zero_and(p, kt))
+
+
+def Laws.zero_ones(n, w, z):
+  %Equal.sym(Word(n), w, Word.zero(n), z) : S.Sub(n, _, S.ones(n, 0n))
+  zero_and(n, S.ones(n, 0n))
+
+
+def Laws.shrn_comm(a, k):
+  match k:
+    case 0n:
+      {==}
+    case 1n+j:
+      %Equal.sym(U32, U32.shrn(U32.shr(a), j), U32.shr(U32.shrn(a, j)), Laws.shrn_comm(a, j)) : {U32.shr(_) == U32.shr(U32.shr(U32.shrn(a, j))) : U32}
+      {==}
+
+
+def shr_ones32(+w: U32, +j: Nat, +h: S.Sub32.ones(U32.shr(w), j)) -> S.Sub32.ones(w, 1n+j):
+  match w:
+    case U32{+x}:
+      Laws.shr_ones(32n, x, j, h)
+
+
+# If w shifted down k times is zero, w is under its first k bits.
+def shrn_zero.step(+w: U32, +j: Nat, +z: {U32.shr(U32.shrn(w, j)) == 0 : U32}) -> {U32.shrn(U32.shr(w), j) == 0 : U32}:
+  %Equal.sym(U32, U32.shrn(U32.shr(w), j), U32.shr(U32.shrn(w, j)), Laws.shrn_comm(w, j)) : {_ == 0 : U32}
+  z
+
+
+def Laws.shrn_zero(k, w, z):
+  match k:
+    case 0n:
+      match w:
+        case U32{+x}:
+          Laws.zero_ones(32n, x, u.unwrap(x, Word.zero(32n), z))
+    case 1n+j:
+      shr_ones32(w, j, Laws.shrn_zero(j, U32.shr(w), shrn_zero.step(w, j, z)))
+
+
+def Laws.split_zero(w, z1, z2):
+  match w:
+    case U32{+x}:
+      u.wrap(x, Word.zero(32n), Equal.trans(Word(32n), x, Word.and(32n, x, S.ones(32n, 16n)), Word.zero(32n),
+        Equal.sym(Word(32n), Word.and(32n, x, S.ones(32n, 16n)), x, Laws.shrn_zero(16n, U32{x}, z1)),
+        u.unwrap(Word.and(32n, x, S.ones(32n, 16n)), Word.zero(32n), z2)))
+
+
+def cmp.fin.eq(+t: Cmp, +ab: Bool, +bb: Bool, e: {Word.cmp.fin(ab, bb, t) == EQ{} : Cmp}) -> {t == EQ{} : Cmp} & {ab == bb : Bool}:
+  match t ab bb:
+    case LT{} _ _:
+      Empty.absurd({LT{} == EQ{} : Cmp} & {ab == bb : Bool}, no_lt(e))
+    case GT{} _ _:
+      Empty.absurd({GT{} == EQ{} : Cmp} & {ab == bb : Bool}, no_gt(e))
+    case EQ{} False{} False{}:
+      ({==}, {==})
+    case EQ{} True{} True{}:
+      ({==}, {==})
+    case EQ{} False{} True{}:
+      Empty.absurd({EQ{} == EQ{} : Cmp} & {False{} == True{} : Bool}, no_lt(e))
+    case EQ{} True{} False{}:
+      Empty.absurd({EQ{} == EQ{} : Cmp} & {True{} == False{} : Bool}, no_gt(e))
+
+
+def fin.fst(-t: Cmp, -x: Bool, -y: Bool, r: {t == EQ{} : Cmp} & {x == y : Bool}) -> {t == EQ{} : Cmp}:
+  (c, h) = r
+  c
+
+
+def fin.snd(-t: Cmp, -x: Bool, -y: Bool, r: {t == EQ{} : Cmp} & {x == y : Bool}) -> {x == y : Bool}:
+  (c, h) = r
+  h
+
+
+def Laws.cmp_eq(n, a, b, e):
+  match n:
+    case 0n:
+      match a b:
+        case WNil{} WNil{}:
+          {==}
+    case 1n+p:
+      match a b:
+        case WCon{+x, +at} WCon{+y, +bt}:
+          cons.eq(p, x, y, at, bt, fin.snd(Word.cmp(p, at, bt), x, y, cmp.fin.eq(Word.cmp(p, at, bt), x, y, e)), Laws.cmp_eq(p, at, bt, fin.fst(Word.cmp(p, at, bt), x, y, cmp.fin.eq(Word.cmp(p, at, bt), x, y, e))))
+
+
+def is_eq.true(+c: Cmp, e: {Cmp.is_eq(c) == True{} : Bool}) -> {c == EQ{} : Cmp}:
+  match c:
+    case LT{}:
+      Empty.absurd({LT{} == EQ{} : Cmp}, no_ft(e))
+    case EQ{}:
+      {==}
+    case GT{}:
+      Empty.absurd({GT{} == EQ{} : Cmp}, no_ft(e))
+
+
+def Laws.u32_eq(a, b, e):
+  match a b:
+    case U32{+x} U32{+y}:
+      u.wrap(x, y, Laws.cmp_eq(32n, x, y, is_eq.true(Word.cmp(32n, x, y), e)))
+
+
+def Laws.and_sub32(a, k):
+  match a k:
+    case U32{+x} U32{+y}:
+      u.wrap(Word.and(32n, Word.and(32n, x, y), x), Word.and(32n, x, y), Laws.and_sub_left(32n, x, y))
+
+
+def Laws.sub_trans32(a, b, c, ab, bc):
+  match a b c:
+    case U32{+x} U32{+y} U32{+z}:
+      u.wrap(Word.and(32n, x, z), x, Laws.sub_trans(32n, x, y, z, u.unwrap(Word.and(32n, x, y), x, ab), u.unwrap(Word.and(32n, y, z), y, bc)))
+
+
+def Laws.count_xor32(x, w, s, one):
+  match x w:
+    case U32{+a} U32{+b}:
+      Laws.count_xor(32n, a, b, u.unwrap(Word.and(32n, a, b), a, s), one)
+
+
+def Laws.xor_sub32(w, x, m, wm, xw):
+  match w x m:
+    case U32{+a} U32{+b} U32{+c}:
+      u.wrap(Word.and(32n, Word.xor(32n, a, b), c), Word.xor(32n, a, b), Laws.xor_sub(32n, a, b, c, u.unwrap(Word.and(32n, a, c), a, wm), u.unwrap(Word.and(32n, b, a), b, xw)))
+

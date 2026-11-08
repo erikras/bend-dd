@@ -408,3 +408,253 @@ law u32_from:
 law u32_roundtrip:
   for +u: U32
   {U32.from_nat(U32.to_nat(u)) == u : U32}
+
+# ---------------------------------------------------------------------------
+# Words as sets of bits
+#
+# Sub(a, b) says every bit of a is in b. These carry a card from a holding to the word
+# of a hand, count the cards left when one is taken, and keep hands valid.
+
+# The bits of a and k are in a.
+law and_sub_left:
+  for +n: Nat
+  for +a: Word(n)
+  for +k: Word(n)
+  S.Sub(n, Word.and(n, a, k), a)
+
+
+law sub_trans:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  for +c: Word(n)
+  for +ab: S.Sub(n, a, b)
+  for +bc: S.Sub(n, b, c)
+  S.Sub(n, a, c)
+
+
+law count0_zero:
+  for +n: Nat
+  for +x: Word(n)
+  for e: {S.word.count(n, x) == 0n : Nat}
+  {x == Word.zero(n) : Word(n)}
+
+
+law xor_zero:
+  for +n: Nat
+  for +w: Word(n)
+  {Word.xor(n, w, Word.zero(n)) == w : Word(n)}
+
+
+# Taking one bit that is in w leaves one fewer.
+law count_xor:
+  for +n: Nat
+  for +x: Word(n)
+  for +w: Word(n)
+  for s: S.Sub(n, x, w)
+  for one: {S.word.count(n, x) == 1n : Nat}
+  {S.word.count(n, w) == 1n+S.word.count(n, Word.xor(n, w, x)) : Nat}
+
+
+# If a is under w shifted down, a shifted up is under w.
+law shl_sub:
+  for +n: Nat
+  for +a: Word(n)
+  for +w: Word(n)
+  for h: S.Sub(n, a, Word.shr(n, w))
+  S.Sub(n, Word.shl(n, a), w)
+
+
+law shl_sub32:
+  for +a: U32
+  for +w: U32
+  for h: S.Sub32(a, U32.shr(w))
+  S.Sub32(U32.shl(a), w)
+
+
+law shln_comm:
+  for +a: U32
+  for +k: Nat
+  {U32.shln(U32.shl(a), k) == U32.shl(U32.shln(a, k)) : U32}
+
+
+# If a is under w shifted down k times, a shifted up k times is under w.
+law shln_sub:
+  for +k: Nat
+  for +a: U32
+  for +w: U32
+  for h: S.Sub32(a, U32.shrn(w, k))
+  S.Sub32(U32.shln(a, k), w)
+
+
+# LAW: >> by 16 is U32.shrn, as the code writes it.
+law shr_op:
+  for +x: U32
+  {(x >> 16n : U32) == U32.shrn(x, 16n) : U32}
+
+
+# Taking bits of w out of w keeps it under m.
+law xor_sub:
+  for +n: Nat
+  for +w: Word(n)
+  for +x: Word(n)
+  for +m: Word(n)
+  for +wm: S.Sub(n, w, m)
+  for +xw: S.Sub(n, x, w)
+  S.Sub(n, Word.xor(n, w, x), m)
+
+
+law and_mono:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  for +k: Word(n)
+  for +h: S.Sub(n, a, b)
+  S.Sub(n, Word.and(n, a, k), Word.and(n, b, k))
+
+
+law pad_mono:
+  for +p: Nat
+  for +a: Word(p)
+  for +b: Word(p)
+  for +h: S.Sub(p, a, b)
+  S.Sub(1n+p, Word.shr.pad(p, a), Word.shr.pad(p, b))
+
+
+law shr_mono:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  for +h: S.Sub(n, a, b)
+  S.Sub(n, Word.shr(n, a), Word.shr(n, b))
+
+
+law shrn_mono:
+  for +k: Nat
+  for +a: U32
+  for +b: U32
+  for +h: S.Sub32(a, b)
+  S.Sub32(U32.shrn(a, k), U32.shrn(b, k))
+
+
+law and_mono32:
+  for +a: U32
+  for +b: U32
+  for +k: U32
+  for +h: S.Sub32(a, b)
+  S.Sub32(U32.and(a, k), U32.and(b, k))
+
+
+law hi_holding:
+  for +w: U32
+  for +h: S.Sub32(w, S.valid.mask())
+  S.Sub32(U32.shrn(w, 16n), 8191)
+
+
+law lo_holding:
+  for +w: U32
+  for +h: S.Sub32(w, S.valid.mask())
+  S.Sub32(U32.and(w, 65535), 8191)
+
+
+law pad_ones:
+  for +p: Nat
+  for +x: Word(p)
+  for +j: Nat
+  {Word.and(1n+p, Word.shr.pad(p, x), S.ones(1n+p, j)) == Word.shr.pad(p, Word.and(p, x, S.ones(p, j))) : Word(1n+p)}
+
+
+law pad_inj:
+  for +p: Nat
+  for +x: Word(p)
+  for +y: Word(p)
+  for +e: {Word.shr.pad(p, x) == Word.shr.pad(p, y) : Word(1n+p)}
+  {x == y : Word(p)}
+
+
+# With w shifted down under the first j bits, w is under the first j + 1.
+law shr_ones:
+  for +n: Nat
+  for +w: Word(n)
+  for +j: Nat
+  for +h: S.Sub(n, Word.shr(n, w), S.ones(n, j))
+  S.Sub(n, w, S.ones(n, 1n+j))
+
+
+# A zero word is under anything, here under no bits at all.
+law zero_ones:
+  for +n: Nat
+  for +w: Word(n)
+  for +z: {w == Word.zero(n) : Word(n)}
+  S.Sub(n, w, S.ones(n, 0n))
+
+
+law shrn_comm:
+  for +a: U32
+  for +k: Nat
+  {U32.shrn(U32.shr(a), k) == U32.shr(U32.shrn(a, k)) : U32}
+
+
+law shrn_zero:
+  for +k: Nat
+  for +w: U32
+  for +z: {U32.shrn(w, k) == 0 : U32}
+  S.Sub32.ones(w, k)
+
+
+# A word with nothing in its low 16 bits and nothing above them is zero.
+law split_zero:
+  for +w: U32
+  for +z1: {U32.shrn(w, 16n) == 0 : U32}
+  for +z2: {U32.and(w, 65535) == 0 : U32}
+  {w == 0 : U32}
+
+
+# Words that compare as equal are equal.
+law cmp_eq:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  for +e: {Word.cmp(n, a, b) == EQ{} : Cmp}
+  {a == b : Word(n)}
+
+
+# U32.is_eq saying yes means the words are the same.
+law u32_eq:
+  for +a: U32
+  for +b: U32
+  for e: {U32.is_eq(a, b) == True{} : Bool}
+  {a == b : U32}
+
+
+law and_sub32:
+  for +a: U32
+  for +k: U32
+  S.Sub32(U32.and(a, k), a)
+
+
+law sub_trans32:
+  for +a: U32
+  for +b: U32
+  for +c: U32
+  for +ab: S.Sub32(a, b)
+  for +bc: S.Sub32(b, c)
+  S.Sub32(a, c)
+
+
+law count_xor32:
+  for +x: U32
+  for +w: U32
+  for +s: S.Sub32(x, w)
+  for +one: {S.bits(x) == 1n : Nat}
+  {S.bits(w) == 1n+S.bits(U32.xor(w, x)) : Nat}
+
+
+law xor_sub32:
+  for +w: U32
+  for +x: U32
+  for +m: U32
+  for +wm: S.Sub32(w, m)
+  for +xw: S.Sub32(x, w)
+  S.Sub32(U32.xor(w, x), m)
+

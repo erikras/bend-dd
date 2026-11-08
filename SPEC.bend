@@ -695,3 +695,25 @@ def W.from(+n: Nat, k: Nat) -> Word(n):
       Word.zero(n)
     case 1n+j:
       Word.inc(n, W.from(n, j))
+
+# Words as sets of bits, for the laws below.
+
+# a is a subset of b: every bit of a is in b.
+def Sub(n: Nat, a: Word(n), b: Word(n)) -> Data:
+  {Word.and(n, a, b) == a : Word(n)}
+
+
+def Sub32(a: U32, b: U32) -> Data:
+  {U32.and(a, b) == a : U32}
+
+
+# A valid hand word: its two holdings are 13 bits each. Its holdings are holdings.
+def valid.mask() -> U32:
+  536813567
+
+
+def Sub32.ones(a: U32, +j: Nat) -> Data:
+  match a:
+    case U32{w}:
+      Sub(32n, w, ones(32n, j))
+
