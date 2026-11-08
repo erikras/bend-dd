@@ -1297,23 +1297,6 @@ def f.c2(+m: U32, +fe: {S.facts(m) == True{} : Bool}, +nz: {U32.is_eq(m, 0) == F
 
 
 # What the facts about a non-empty holding give, one at a time.
-def low.in(+m: U32, +fe: {S.facts(m) == True{} : Bool}) -> S.Sub32(S.low(m), m):
-  Laws.u32_eq((S.low(m) .&. m : U32), S.low(m), f.in(m, fe))
-
-
-def low.lt(+m: U32, +fe: {S.facts(m) == True{} : Bool}, +nz: {U32.is_eq(m, 0) == False{} : Bool}) -> {Nat.is_lt(U32.ctz(S.low(m)), 13n) == True{} : Bool}:
-  Sigma.fst.bool(S.fact.lt(m), Bool.and(S.fact.bit(m), Bool.and(S.fact.cnt(m), S.fact.rest(m))), and_true(S.fact.lt(m), Bool.and(S.fact.bit(m), Bool.and(S.fact.cnt(m), S.fact.rest(m))), f.card(m, fe, nz)))
-
-
-def low.bit(+m: U32, +fe: {S.facts(m) == True{} : Bool}, +nz: {U32.is_eq(m, 0) == False{} : Bool}) -> {(1 << U32.ctz(S.low(m)) : U32) == S.low(m) : U32}:
-  Laws.u32_eq((1 << U32.ctz(S.low(m)) : U32), S.low(m), Sigma.fst.bool(S.fact.bit(m), Bool.and(S.fact.cnt(m), S.fact.rest(m)), and_true(S.fact.bit(m), Bool.and(S.fact.cnt(m), S.fact.rest(m)), f.c1(m, fe, nz))))
-
-
-def low.rest(+m: U32, +fe: {S.facts(m) == True{} : Bool}, +nz: {U32.is_eq(m, 0) == False{} : Bool}) -> S.Sub32(S.rest(m), 8191):
-  Laws.u32_eq((S.rest(m) .&. 8191 : U32), S.rest(m), Sigma.snd.bool(S.fact.cnt(m), S.fact.rest(m), and_true(S.fact.cnt(m), S.fact.rest(m), f.c2(m, fe, nz))))
-
-
-
 def Laws.card_bit(s, r, ls, lr):
   match s:
     case 0n:
@@ -1499,14 +1482,215 @@ def card.one(+s: Nat, +r: Nat, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +lr: {N
 
 
 
-def low.card(+s: Nat, +m: U32, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +fe: {S.facts(m) == True{} : Bool}, +nz: {U32.is_eq(m, 0) == False{} : Bool}) -> S.Sub32(C.card.bit(C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m))))), m):
-  %Equal.sym(U32, C.card.bit(C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m))))), (1 << U32.ctz(S.low(m)) : U32), card.bit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, fe, nz))) : S.Sub32(_, m)
-  %Equal.sym(U32, (1 << U32.ctz(S.low(m)) : U32), S.low(m), low.bit(m, fe, nz)) : S.Sub32(_, m)
-  low.in(m, fe)
+# The lowest card of a holding, by induction on the bits of the word: x & -x
+# is the word of its lowest bit, which is below the 13th in a holding.
+
+def wc(-p: Nat, +b: Bool, -x: Word(p), -y: Word(p), e: {x == y : Word(p)}) -> {WCon{b, x} == WCon{b, y} : Word(1n+p)}:
+  Equal.cong(Word(p), Word(1n+p), (v => WCon{b, v}), x, y, e)
+
+# ---------------------------------------------------------------------------
+# The lowest card of a holding, by induction on its bits
+
+# The place of the lowest bit of a word, or its width when it has none.
+
+def Laws.sub_not(n, w):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          {==}
+    case 1n+p:
+      match w:
+        case WCon{+b, +t}:
+          match b:
+            case False{}:
+              wc(p, True{}, Word.adc(p, Word.zero(p), t, True{}, False{}), Word.not(p, t), Laws.sub_not(p, t))
+            case True{}:
+              wc(p, False{}, Word.adc(p, Word.zero(p), t, True{}, False{}), Word.not(p, t), Laws.sub_not(p, t))
+
+def Laws.and_not(n, w):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          {==}
+    case 1n+p:
+      match w:
+        case WCon{+b, +t}:
+          match b:
+            case False{}:
+              wc(p, False{}, Word.and(p, t, Word.not(p, t)), Word.zero(p), Laws.and_not(p, t))
+            case True{}:
+              wc(p, False{}, Word.and(p, t, Word.not(p, t)), Word.zero(p), Laws.and_not(p, t))
+
+# A word and its negation share exactly its lowest bit.
+
+def Laws.low_unit(n, w):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          {==}
+    case 1n+p:
+      match w:
+        case WCon{+b, +t}:
+          match b:
+            case False{}:
+              wc(p, False{}, Word.and(p, t, Word.adc(p, Word.zero(p), t, True{}, True{})), S.unit(p, S.lsb(p, t)), Laws.low_unit(p, t))
+            case True{}:
+              wc(p, True{}, Word.and(p, t, Word.adc(p, Word.zero(p), t, True{}, False{})), Word.zero(p),
+                Equal.trans(Word(p), Word.and(p, t, Word.adc(p, Word.zero(p), t, True{}, False{})), Word.and(p, t, Word.not(p, t)), Word.zero(p),
+                  Equal.cong(Word(p), Word(p), (v => Word.and(p, t, v)), Word.adc(p, Word.zero(p), t, True{}, False{}), Word.not(p, t), Laws.sub_not(p, t)),
+                  Laws.and_not(p, t)))
+
+def lift0(+p: Nat, +t: Word(p), e: Either<&2, &2, {t == Word.zero(p) : Word(p)}, {Nat.is_lt(S.lsb(p, t), 0n) == True{} : Bool}>) -> Either<&2, &2, {WCon{False{}, t} == Word.zero(1n+p) : Word(1n+p)}, {Nat.is_lt(1n+S.lsb(p, t), 0n) == True{} : Bool}>:
+  match e:
+    case Inl{z}:
+      Inl{wc(p, False{}, t, Word.zero(p), z)}
+    case Inr{l}:
+      Empty.absurd(Either<&2, &2, {WCon{False{}, t} == Word.zero(1n+p) : Word(1n+p)}, {Nat.is_lt(1n+S.lsb(p, t), 0n) == True{} : Bool}>, no_lt0(S.lsb(p, t), l))
+
+def lift1(+p: Nat, +i: Nat, +t: Word(p), e: Either<&2, &2, {t == Word.zero(p) : Word(p)}, {Nat.is_lt(S.lsb(p, t), i) == True{} : Bool}>) -> Either<&2, &2, {WCon{False{}, t} == Word.zero(1n+p) : Word(1n+p)}, {Nat.is_lt(1n+S.lsb(p, t), 1n+i) == True{} : Bool}>:
+  match e:
+    case Inl{z}:
+      Inl{wc(p, False{}, t, Word.zero(p), z)}
+    case Inr{l}:
+      Inr{l}
+
+# A word within the low j bits is empty, or its lowest bit is below j.
+
+def Laws.lsb_lt(n, j, w, h):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          Inl{{==}}
+    case 1n+p:
+      match j w:
+        case 0n WCon{+b, +t}:
+          match b:
+            case True{}:
+              Empty.absurd(Either<&2, &2, {WCon{True{}, t} == Word.zero(1n+p) : Word(1n+p)}, {Nat.is_lt(0n, 0n) == True{} : Bool}>, no_ft(hd(p, False{}, True{}, Word.and(p, t, S.ones(p, 0n)), t, h)))
+            case False{}:
+              lift0(p, t, Laws.lsb_lt(p, 0n, t, tl(p, False{}, False{}, Word.and(p, t, S.ones(p, 0n)), t, h)))
+        case 1n+i WCon{+b, +t}:
+          match b:
+            case True{}:
+              Inr{{==}}
+            case False{}:
+              lift1(p, i, t, Laws.lsb_lt(p, i, t, tl(p, False{}, False{}, Word.and(p, t, S.ones(p, i)), t, h)))
+
+# For the 13 ranks: the word of bit j is 1 << j, and ctz finds j in it.
+
+def Laws.unit_shl(j, lj):
+  match j:
+    case 0n:
+      {==}
+    case 1n:
+      {==}
+    case 2n:
+      {==}
+    case 3n:
+      {==}
+    case 4n:
+      {==}
+    case 5n:
+      {==}
+    case 6n:
+      {==}
+    case 7n:
+      {==}
+    case 8n:
+      {==}
+    case 9n:
+      {==}
+    case 10n:
+      {==}
+    case 11n:
+      {==}
+    case 12n:
+      {==}
+    case 13n+x:
+      Empty.absurd({U32{S.unit(32n, 13n+x)} == (1 << 13n+x : U32) : U32}, no_lt0(x, lj))
+
+def Laws.ctz_shl(j, lj):
+  match j:
+    case 0n:
+      {==}
+    case 1n:
+      {==}
+    case 2n:
+      {==}
+    case 3n:
+      {==}
+    case 4n:
+      {==}
+    case 5n:
+      {==}
+    case 6n:
+      {==}
+    case 7n:
+      {==}
+    case 8n:
+      {==}
+    case 9n:
+      {==}
+    case 10n:
+      {==}
+    case 11n:
+      {==}
+    case 12n:
+      {==}
+    case 13n+x:
+      Empty.absurd({U32.ctz((1 << 13n+x : U32)) == 13n+x : Nat}, no_lt0(x, lj))
+
+def low.in(+m: U32) -> S.Sub32(S.low(m), m):
+  Laws.and_sub32(m, (0 - m : U32))
+
+def rest.in(+m: U32) -> S.Sub32(S.rest(m), m):
+  Laws.xor_sub32(m, S.low(m), m, sub_refl32(m), low.in(m))
+
+def low.rest(+m: U32, +hm: S.Sub32(m, 8191)) -> S.Sub32(S.rest(m), 8191):
+  Laws.sub_trans32(S.rest(m), m, 8191, rest.in(m), hm)
+
+def low.shl(+w: Word(32n), +l: {Nat.is_lt(S.lsb(32n, w), 13n) == True{} : Bool}) -> {S.low(U32{w}) == (1 << S.lsb(32n, w) : U32) : U32}:
+  Equal.trans(U32, S.low(U32{w}), U32{S.unit(32n, S.lsb(32n, w))}, (1 << S.lsb(32n, w) : U32), u.wrap(Word.and(32n, w, Word.adc(32n, Word.zero(32n), w, True{}, True{})), S.unit(32n, S.lsb(32n, w)), Laws.low_unit(32n, w)), Laws.unit_shl(S.lsb(32n, w), l))
+
+def low.ctz(+w: Word(32n), +l: {Nat.is_lt(S.lsb(32n, w), 13n) == True{} : Bool}) -> {U32.ctz(S.low(U32{w})) == S.lsb(32n, w) : Nat}:
+  Equal.trans(Nat, U32.ctz(S.low(U32{w})), U32.ctz((1 << S.lsb(32n, w) : U32)), S.lsb(32n, w), Equal.cong(U32, Nat, (u => U32.ctz(u)), S.low(U32{w}), (1 << S.lsb(32n, w) : U32), low.shl(w, l)), Laws.ctz_shl(S.lsb(32n, w), l))
+
+def nz.absurd(+w: Word(32n), +z: {w == Word.zero(32n) : Word(32n)}, +nz: {U32.is_eq(U32{w}, 0) == False{} : Bool}) -> Empty:
+  no_tf(Equal.trans(Bool, True{}, U32.is_eq(U32{w}, 0), False{}, Equal.sym(Bool, U32.is_eq(U32{w}, 0), True{}, Equal.cong(Word(32n), Bool, (v => U32.is_eq(U32{v}, 0)), w, Word.zero(32n), z)), nz))
+
+def lsb.small(+w: Word(32n), +nz: {U32.is_eq(U32{w}, 0) == False{} : Bool}, e: Either<&2, &2, {w == Word.zero(32n) : Word(32n)}, {Nat.is_lt(S.lsb(32n, w), 13n) == True{} : Bool}>) -> {Nat.is_lt(S.lsb(32n, w), 13n) == True{} : Bool}:
+  match e:
+    case Inl{z}:
+      Empty.absurd({Nat.is_lt(S.lsb(32n, w), 13n) == True{} : Bool}, nz.absurd(w, z, nz))
+    case Inr{l}:
+      l
+
+# A holding that isn't empty has its lowest bit below the 13th.
+
+def Laws.lsb_hold(w, hm, nz):
+  lsb.small(w, nz, Laws.lsb_lt(32n, 13n, w, u.unwrap(Word.and(32n, w, S.ones(32n, 13n)), w, hm)))
+
+def low.lt(+m: U32, +hm: S.Sub32(m, 8191), +nz: {U32.is_eq(m, 0) == False{} : Bool}) -> {Nat.is_lt(U32.ctz(S.low(m)), 13n) == True{} : Bool}:
+  match m:
+    case U32{+w}:
+      %Equal.sym(Nat, U32.ctz(S.low(U32{w})), S.lsb(32n, w), low.ctz(w, Laws.lsb_hold(w, hm, nz))) : {Nat.is_lt(_, 13n) == True{} : Bool}
+      Laws.lsb_hold(w, hm, nz)
+
+def low.bit(+m: U32, +hm: S.Sub32(m, 8191), +nz: {U32.is_eq(m, 0) == False{} : Bool}) -> {(1 << U32.ctz(S.low(m)) : U32) == S.low(m) : U32}:
+  match m:
+    case U32{+w}:
+      %Equal.sym(Nat, U32.ctz(S.low(U32{w})), S.lsb(32n, w), low.ctz(w, Laws.lsb_hold(w, hm, nz))) : {(1 << _ : U32) == S.low(U32{w}) : U32}
+      Equal.sym(U32, S.low(U32{w}), (1 << S.lsb(32n, w) : U32), low.shl(w, Laws.lsb_hold(w, hm, nz)))
 
 
-def rest.in(+m: U32, +fe: {S.facts(m) == True{} : Bool}) -> S.Sub32(S.rest(m), m):
-  Laws.xor_sub32(m, S.low(m), m, sub_refl32(m), low.in(m, fe))
+def low.card(+s: Nat, +m: U32, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +hm: S.Sub32(m, 8191), +nz: {U32.is_eq(m, 0) == False{} : Bool}) -> S.Sub32(C.card.bit(C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m))))), m):
+  %Equal.sym(U32, C.card.bit(C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m))))), (1 << U32.ctz(S.low(m)) : U32), card.bit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, hm, nz))) : S.Sub32(_, m)
+  %Equal.sym(U32, (1 << U32.ctz(S.low(m)) : U32), S.low(m), low.bit(m, hm, nz)) : S.Sub32(_, m)
+  low.in(m)
 
 
 def Laws.one_bit16(r, lr):
@@ -1574,10 +1758,10 @@ def Laws.peel_sound(n, z, s, m, acc, m0, ls, zf, hm, sm, ok):
       ok
     case 1n+p False{}:
       Laws.peel_sound(p, U32.is_zero(S.rest(m)), s, S.rest(m), C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m)))) <> acc, m0, ls, {==},
-        low.rest(m, Laws.facts_holding(m, hm), Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)),
-        Laws.sub_trans32(S.rest(m), m, m0, rest.in(m, Laws.facts_holding(m, hm)), sm),
-        ((Laws.sub_trans32(C.card.bit(C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m))))), m, m0, low.card(s, m, ls, Laws.facts_holding(m, hm), Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)), sm),
-          card.suit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, Laws.facts_holding(m, hm), Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)))), ok))
+        low.rest(m, hm),
+        Laws.sub_trans32(S.rest(m), m, m0, rest.in(m), sm),
+        ((Laws.sub_trans32(C.card.bit(C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m))))), m, m0, low.card(s, m, ls, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)), sm),
+          card.suit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)))), ok))
 
 
 
@@ -1634,14 +1818,14 @@ def Laws.peel_hand(n, z, s, m, acc, h01, h23, ls, zf, hm, sm, ok):
       ok
     case 1n+p False{}:
       Laws.peel_hand(p, U32.is_zero(S.rest(m)), s, S.rest(m), C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m)))) <> acc, h01, h23, ls, {==},
-        low.rest(m, Laws.facts_holding(m, hm), Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)),
-        Laws.sub_trans32(S.rest(m), m, R.suit.mask(s, h01, h23), rest.in(m, Laws.facts_holding(m, hm)), sm),
+        low.rest(m, hm),
+        Laws.sub_trans32(S.rest(m), m, R.suit.mask(s, h01, h23), rest.in(m), sm),
         (to.hand(s, C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m)))), h01, h23, ls,
-           Laws.sub_trans32(C.card.bit(C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m))))), m, R.suit.mask(s, h01, h23), low.card(s, m, ls, Laws.facts_holding(m, hm), Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)), sm),
-           card.suit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, Laws.facts_holding(m, hm), Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf))),
-           Laws.x_one(C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m)))), s, U32.ctz(S.low(m)), ls, low.lt(m, Laws.facts_holding(m, hm), Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)),
-             card.suit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, Laws.facts_holding(m, hm), Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf))),
-             card.bit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, Laws.facts_holding(m, hm), Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf))))), ok))
+           Laws.sub_trans32(C.card.bit(C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m))))), m, R.suit.mask(s, h01, h23), low.card(s, m, ls, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)), sm),
+           card.suit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf))),
+           Laws.x_one(C.card.make(U32.from_nat(s), U32.from_nat(U32.ctz(S.low(m)))), s, U32.ctz(S.low(m)), ls, low.lt(m, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf)),
+             card.suit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf))),
+             card.bit.of(s, U32.ctz(S.low(m)), ls, low.lt(m, hm, Equal.sym(Bool, False{}, U32.is_eq(m, 0), zf))))), ok))
 
 
 def suit.hand(+s: Nat, +acc: List<&2, U32>, +h01: U32, +h23: U32, +ls: {Nat.is_lt(s, 4n) == True{} : Bool}, +hm: S.Sub32(R.suit.mask(s, h01, h23), 8191), ok: S.AllH(acc, h01, h23)) -> S.AllH(R.moves.suit(U32.from_nat(s), R.suit.mask(s, h01, h23), acc), h01, h23):

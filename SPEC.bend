@@ -974,3 +974,34 @@ def DealOk(d: C.Deal, +L: Nat) -> Data:
   match d:
     case C.Deal{+n, +e, +s, +w}:
       And(HandOk(n, L), And(HandOk(e, L), And(HandOk(s, L), HandOk(w, L))))
+
+
+# The lowest bit of a word, for the proofs about the lowest card of a holding.
+
+def lsb(n: Nat, w: Word(n)) -> Nat:
+  match n:
+    case 0n:
+      0n
+    case 1n+p:
+      match w:
+        case WCon{b, t}:
+          match b:
+            case True{}:
+              0n
+            case False{}:
+              1n+lsb(p, t)
+
+# The word with bit j alone, or no bit when j is past the width.
+
+def unit(n: Nat, j: Nat) -> Word(n):
+  match n:
+    case 0n:
+      WNil{}
+    case 1n+p:
+      match j:
+        case 0n:
+          WCon{True{}, Word.zero(p)}
+        case 1n+i:
+          WCon{False{}, unit(p, i)}
+
+# Subtracting from zero with no borrow left flips every bit.

@@ -1305,3 +1305,48 @@ law solve_deal:
   for +el: {U32.and(leader, 3) == leader : U32}
   for +lL: {Nat.is_le(L, 13n) == True{} : Bool}
   S.InR(S.rv(B.solve(S.r4(L), t, R.pos.start(deal, leader), nodes)), 0n, L)
+
+
+# ---------------------------------------------------------------------------
+# The lowest card of a holding, by induction
+#
+# These replace the pass over every holding for the laws about moves, so they and
+# the value bounds on top of them can go through the kernel.
+
+law sub_not:
+  for +n: Nat
+  for +w: Word(n)
+  {Word.adc(n, Word.zero(n), w, True{}, False{}) == Word.not(n, w) : Word(n)}
+
+law and_not:
+  for +n: Nat
+  for +w: Word(n)
+  {Word.and(n, w, Word.not(n, w)) == Word.zero(n) : Word(n)}
+
+law low_unit:
+  for +n: Nat
+  for +w: Word(n)
+  {Word.and(n, w, Word.adc(n, Word.zero(n), w, True{}, True{})) == S.unit(n, S.lsb(n, w)) : Word(n)}
+
+law lsb_lt:
+  for +n: Nat
+  for +j: Nat
+  for +w: Word(n)
+  for +h: S.Sub(n, w, S.ones(n, j))
+  Either<&2, &2, {w == Word.zero(n) : Word(n)}, {Nat.is_lt(S.lsb(n, w), j) == True{} : Bool}>
+
+law unit_shl:
+  for +j: Nat
+  for +lj: {Nat.is_lt(j, 13n) == True{} : Bool}
+  {U32{S.unit(32n, j)} == (1 << j : U32) : U32}
+
+law ctz_shl:
+  for +j: Nat
+  for +lj: {Nat.is_lt(j, 13n) == True{} : Bool}
+  {U32.ctz((1 << j : U32)) == j : Nat}
+
+law lsb_hold:
+  for +w: Word(32n)
+  for +hm: S.Sub32(U32{w}, 8191)
+  for +nz: {U32.is_eq(U32{w}, 0) == False{} : Bool}
+  {Nat.is_lt(S.lsb(32n, w), 13n) == True{} : Bool}

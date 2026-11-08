@@ -648,12 +648,25 @@ in Lean, using Lean 4.34.0. On the whole file it stops at the first law that wal
 whole domain (`holding_roundtrip`, over the 8192 holdings) with "out of fuel". Bend
 2.0.40's kernel gives evaluation a fixed fuel of 8192 steps, with no option to raise
 it, and Bend reports this as a mismatch between its own checker and the kernel, not as
-a wrong proof. So no law proved by running a check over a whole domain can pass
-`--verdict` yet, and neither can anything that rests on one, such as `facts_holding`
-and the move laws under it. With those laws and what rests on them taken out (30 of
-89 laws at the time), the other 59 passed `--verdict`. Those are the proofs by
-induction on words, the conversions and the finite case splits. `tools/verdict.sh`
-repeats that check.
+a wrong proof. So no law proved by running a check over a whole domain can pass `--verdict` yet.
+
+The move laws used to rest on such a law, the one pass over all 8192 holdings
+(`facts_holding`), for facts about a holding's lowest card. They now rest on proofs by
+induction on the bits of the word (under "The lowest card of a holding, by induction"):
+
+- `low_unit`: x & -x is the word of x's lowest bit. Subtracting from zero copies the
+  word up to its lowest bit and flips every bit above it (`sub_not`, `and_not`).
+- `lsb_lt` and `lsb_hold`: that bit is below the 13th in a holding that isn't empty.
+- `unit_shl` and `ctz_shl`: for the 13 ranks, that bit is `1 << j` and `ctz` finds j.
+  These are finite case splits, which the kernel accepts.
+
+`tools/verdict.sh` leaves out the laws that walk a whole domain and whatever rests on
+them, 30 of 179, and runs `--verdict` on the rest. All 149 pass, including the main
+theorem: `search_in`, `solve_in`, `solve_deal`, and under them `moves_hand`,
+`play_inv`, the trick word and the word lemmas. The 30 left out are the PBN and
+holding checks, the samples of the fast search's rules (cut, quick and later tricks,
+the driver, the table) and the old pass over the holdings, which now nothing on the
+path to the bounds uses.
 
 ## 3. Data representation
 
