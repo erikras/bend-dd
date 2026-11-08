@@ -3248,3 +3248,252 @@ def Laws.solve_deal(deal, leader, L, t, nodes, ok, el, lL):
   match deal:
     case C.Deal{+n, +e, +s, +w}:
       Laws.solve_in(S.r4(L), t, R.pos.start(C.Deal{n, e, s, w}, leader), nodes, L, Laws.start_inv(C.Deal{n, e, s, w}, leader, L, ok, el, lL))
+
+
+# ---------------------------------------------------------------------------
+# Toward the sure tricks: lower bounds through the search, and every card a move
+
+def lt.nat2(+a: U32, +b: U32, +c: Bool, e: {U32.is_lt(a, b) == c : Bool}) -> {Cmp.is_lt(Nat.cmp(U32.to_nat(a), U32.to_nat(b))) == c : Bool}:
+  %Laws.u32_cmp_nat(a, b) : {Cmp.is_lt(_) == c : Bool}
+  e
+
+def maxge.go(+c: Bool, +a: U32, +b: U32, +e: {Cmp.is_lt(Nat.cmp(U32.to_nat(a), U32.to_nat(b))) == c : Bool}) -> S.And({Nat.is_le(U32.to_nat(a), U32.to_nat(Bool.pick(U32, c, b, a))) == True{} : Bool}, {Nat.is_le(U32.to_nat(b), U32.to_nat(Bool.pick(U32, c, b, a))) == True{} : Bool}):
+  match c:
+    case True{}:
+      (Laws.lt_le(U32.to_nat(a), U32.to_nat(b), e), Laws.le_refl(U32.to_nat(b)))
+    case False{}:
+      (Laws.le_refl(U32.to_nat(a)), Laws.nlt_le(U32.to_nat(a), U32.to_nat(b), e))
+
+# The max is at least each of the two.
+
+def Laws.max_ge(a, b):
+  match a b:
+    case U32{+x} U32{+y}:
+      maxge.go(U32.is_lt(U32{x}, U32{y}), U32{x}, U32{y}, lt.nat2(U32{x}, U32{y}, U32.is_lt(U32{x}, U32{y}), {==}))
+
+def a1(-A: Data, -B: Data, +p: S.And(A, B)) -> A:
+  (+x, +y) = p
+  x
+
+def a2(-A: Data, -B: Data, +p: S.And(A, B)) -> B:
+  (+x, +y) = p
+  y
+
+def ge.max(+lb: Nat, +a: U32, +b: U32, +h: Either<&2, &2, S.GE(lb, a), S.GE(lb, b)>) -> S.GE(lb, U32.max(a, b)):
+  match h:
+    case Inl{ha}:
+      Laws.le_trans(lb, U32.to_nat(a), U32.to_nat(U32.max(a, b)), ha, a1({Nat.is_le(U32.to_nat(a), U32.to_nat(U32.max(a, b))) == True{} : Bool}, {Nat.is_le(U32.to_nat(b), U32.to_nat(U32.max(a, b))) == True{} : Bool}, Laws.max_ge(a, b)))
+    case Inr{hb}:
+      Laws.le_trans(lb, U32.to_nat(b), U32.to_nat(U32.max(a, b)), hb, a2({Nat.is_le(U32.to_nat(a), U32.to_nat(U32.max(a, b))) == True{} : Bool}, {Nat.is_le(U32.to_nat(b), U32.to_nat(U32.max(a, b))) == True{} : Bool}, Laws.max_ge(a, b)))
+
+def pp1(-A: Type, -B: Type, p: A & B) -> A:
+  (a, b) = p
+  a
+
+# Some move of ms has a child worth at least lb, or every move does.
+
+def Laws.max_keep(p, ms, t, pos, best, r, lb, h):
+  match ms r:
+    case Nil{} B.Res{+v, n}:
+      ge.max(lb, best, v, h)
+    case Con{+c, rest} B.Res{+v, +n}:
+      Laws.max_keep(p, rest, t, pos, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n}), lb, Inl{ge.max(lb, best, v, h)})
+
+# North-South to play reach lb if one of their moves does.
+
+def Laws.max_ex(p, ms, t, pos, best, r, lb, ex):
+  match ms r:
+    case Nil{} B.Res{+v, n}:
+      Empty.absurd(S.GE(lb, U32.max(best, v)), ex)
+    case Con{+c, rest} B.Res{+v, +n}:
+      match ex:
+        case Inl{k}:
+          Laws.max_keep(p, rest, t, pos, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n}), lb, Inr{k(1n+n)})
+        case Inr{e}:
+          Laws.max_ex(p, rest, t, pos, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n}), lb, e)
+
+# East-West to play stay at lb or above if every move does.
+
+def Laws.min_all(p, ms, t, pos, best, r, lb, all, hb, hr):
+  match ms r:
+    case Nil{} B.Res{+v, n}:
+      pp1({Nat.is_le(lb, U32.to_nat(U32.min(best, v))) == True{} : Bool}, {Nat.is_le(U32.to_nat(U32.min(best, v)), U32.to_nat(v)) == True{} : Bool}, Laws.min_ge(best, v, lb, hb, hr))
+    case Con{+c, rest} B.Res{+v, +n}:
+      (k, ra) = all
+      Laws.min_all(p, rest, t, pos, U32.min(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n}), lb, ra,
+        pp1({Nat.is_le(lb, U32.to_nat(U32.min(best, v))) == True{} : Bool}, {Nat.is_le(U32.to_nat(U32.min(best, v)), U32.to_nat(v)) == True{} : Bool}, Laws.min_ge(best, v, lb, hb, hr)), k(1n+n))
+
+# ---------------------------------------------------------------------------
+# Every card of a holding is among the moves
+
+def Laws.count_none(n, w, h):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          {==}
+    case 1n+p:
+      match w:
+        case WCon{+b, +t}:
+          match b:
+            case True{}:
+              Empty.absurd({S.word.count(1n+p, WCon{True{}, t}) == 0n : Nat}, no_ft(hd(p, False{}, True{}, Word.and(p, t, S.ones(p, 0n)), t, h)))
+            case False{}:
+              Laws.count_none(p, t, tl(p, False{}, False{}, Word.and(p, t, S.ones(p, 0n)), t, h))
+
+# A word within the low j bits has at most j bits.
+
+def Laws.count_le(n, j, w, h):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          Laws.le_zero(j)
+    case 1n+p:
+      match j w:
+        case 0n WCon{+b, +t}:
+          %Equal.sym(Nat, S.word.count(1n+p, WCon{b, t}), 0n, Laws.count_none(1n+p, WCon{b, t}, h)) : {Nat.is_le(_, 0n) == True{} : Bool}
+          {==}
+        case 1n+i WCon{+b, +t}:
+          match b:
+            case True{}:
+              Laws.count_le(p, i, t, tl(p, True{}, True{}, Word.and(p, t, S.ones(p, i)), t, h))
+            case False{}:
+              Laws.le_succ(S.word.count(p, t), i, Laws.count_le(p, i, t, tl(p, False{}, False{}, Word.and(p, t, S.ones(p, i)), t, h)))
+
+def split.lift(+p: Nat, +i: Nat, +t: Word(p), e: Either<&2, &2, {i == S.lsb(p, t) : Nat}, S.Sub(p, S.unit(p, i), Word.xor(p, t, S.unit(p, S.lsb(p, t))))>) -> Either<&2, &2, {1n+i == 1n+S.lsb(p, t) : Nat}, S.Sub(1n+p, WCon{False{}, S.unit(p, i)}, WCon{False{}, Word.xor(p, t, S.unit(p, S.lsb(p, t)))})>:
+  match e:
+    case Inl{x}:
+      Inl{Equal.cong(Nat, Nat, (z => 1n+z), i, S.lsb(p, t), x)}
+    case Inr{y}:
+      Inr{wc(p, False{}, Word.and(p, S.unit(p, i), Word.xor(p, t, S.unit(p, S.lsb(p, t)))), S.unit(p, i), y)}
+
+# A bit of w is its lowest bit, or a bit of what is left without it.
+
+def Laws.unit_split(n, r, w, h):
+  match n:
+    case 0n:
+      match w:
+        case WNil{}:
+          Inr{{==}}
+    case 1n+p:
+      match r w:
+        case 0n WCon{+b, +t}:
+          match b:
+            case True{}:
+              Inl{{==}}
+            case False{}:
+              Empty.absurd(Either<&2, &2, {0n == S.lsb(1n+p, WCon{False{}, t}) : Nat}, S.Sub(1n+p, S.unit(1n+p, 0n), Word.xor(1n+p, WCon{False{}, t}, S.unit(1n+p, S.lsb(1n+p, WCon{False{}, t}))))>, no_ft(hd(p, False{}, True{}, Word.and(p, Word.zero(p), t), Word.zero(p), h)))
+        case 1n+i WCon{+b, +t}:
+          match b:
+            case True{}:
+              Inr{wc(p, False{}, Word.and(p, S.unit(p, i), Word.xor(p, t, Word.zero(p))), S.unit(p, i),
+                Equal.trans(Word(p), Word.and(p, S.unit(p, i), Word.xor(p, t, Word.zero(p))), Word.and(p, S.unit(p, i), t), S.unit(p, i),
+                  Equal.cong(Word(p), Word(p), (v => Word.and(p, S.unit(p, i), v)), Word.xor(p, t, Word.zero(p)), t, Laws.xor_zero(p, t)),
+                  tl(p, False{}, False{}, Word.and(p, S.unit(p, i), t), S.unit(p, i), h)))}
+            case False{}:
+              split.lift(p, i, t, Laws.unit_split(p, i, t, tl(p, False{}, False{}, Word.and(p, S.unit(p, i), t), S.unit(p, i), h)))
+
+def Laws.mem_acc(n, z, s, m, acc, c, mem):
+  match n z:
+    case 0n _:
+      mem
+    case 1n+p True{}:
+      mem
+    case 1n+p False{}:
+      Laws.mem_acc(p, U32.is_zero(S.rest(m)), s, S.rest(m), C.card.make(s, U32.from_nat(U32.ctz(S.low(m)))) <> acc, c, Inr{mem})
+
+def sub_at(-a: U32, -b: U32, +k: U32, e: {a == b : U32}, h: S.Sub32(a, k)) -> S.Sub32(b, k):
+  %e : S.Sub32(_, k)
+  h
+
+def sub_in(+x: U32, -a: U32, -b: U32, e: {a == b : U32}, h: S.Sub32(x, a)) -> S.Sub32(x, b):
+  %e : S.Sub32(x, _)
+  h
+
+def one.r(+r: Nat, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}) -> {S.bits((1 << r : U32)) == 1n : Nat}:
+  nat.eq(S.bits((1 << r : U32)), 1n, Laws.one_bit(r, lr))
+
+def unit.sub(+r: Nat, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +w: Word(32n), +xm: S.Sub32((1 << r : U32), U32{w})) -> S.Sub(32n, S.unit(32n, r), w):
+  u.unwrap(Word.and(32n, S.unit(32n, r), w), S.unit(32n, r), sub_at((1 << r : U32), U32{S.unit(32n, r)}, U32{w}, Equal.sym(U32, U32{S.unit(32n, r)}, (1 << r : U32), Laws.unit_shl(r, lr)), xm))
+
+def rest.eq(+w: Word(32n)) -> {S.rest(U32{w}) == U32{Word.xor(32n, w, S.unit(32n, S.lsb(32n, w)))} : U32}:
+  u.wrap(Word.xor(32n, w, Word.and(32n, w, Word.adc(32n, Word.zero(32n), w, True{}, True{}))), Word.xor(32n, w, S.unit(32n, S.lsb(32n, w))),
+    Equal.cong(Word(32n), Word(32n), (v => Word.xor(32n, w, v)), Word.and(32n, w, Word.adc(32n, Word.zero(32n), w, True{}, True{})), S.unit(32n, S.lsb(32n, w)), Laws.low_unit(32n, w)))
+
+def cnt.one(+r: Nat, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +w: Word(32n), +xm: S.Sub32((1 << r : U32), U32{w})) -> {S.bits(U32{w}) == 1n+S.bits(U32.xor(U32{w}, (1 << r : U32))) : Nat}:
+  Laws.count_xor32((1 << r : U32), U32{w}, xm, one.r(r, lr))
+
+def tf.of(+w: Word(32n), +zf: {True{} == U32.is_eq(U32{w}, 0) : Bool}) -> {U32{w} == 0 : U32}:
+  Laws.u32_eq(U32{w}, 0, Equal.sym(Bool, True{}, U32.is_eq(U32{w}, 0), zf))
+
+# Every card of a holding that the peel has yet to reach comes out of it, as long as
+# the fuel n covers the cards left. sp says where the card is in w: its lowest bit,
+# or among the rest.
+
+def Laws.mem_peel(n, z, s, w, acc, c, r, ec, lr, zf, hm, xm, cn, sp):
+  match n z sp:
+    case 0n _ _:
+      Empty.absurd(S.Mem(c, R.moves.peel(0n, z, s, U32{w}, acc)), no_ft(Equal.trans(Bool, False{}, Nat.is_le(S.bits(U32{w}), 0n), True{},
+        Equal.cong(Nat, Bool, (v => Nat.is_le(v, 0n)), 1n+S.bits(U32.xor(U32{w}, (1 << r : U32))), S.bits(U32{w}), Equal.sym(Nat, S.bits(U32{w}), 1n+S.bits(U32.xor(U32{w}, (1 << r : U32))), cnt.one(r, lr, w, xm))), cn)))
+    case 1n+p True{} _:
+      Empty.absurd(S.Mem(c, R.moves.peel(1n+p, True{}, s, U32{w}, acc)), no_zs(S.bits(U32.xor(U32{w}, (1 << r : U32))),
+        Equal.trans(Nat, 0n, S.bits(U32{w}), 1n+S.bits(U32.xor(U32{w}, (1 << r : U32))), Equal.cong(U32, Nat, (u => S.bits(u)), 0, U32{w}, Equal.sym(U32, U32{w}, 0, tf.of(w, zf))), cnt.one(r, lr, w, xm))))
+    case 1n+p False{} Inl{+e}:
+      Laws.mem_acc(p, U32.is_zero(S.rest(U32{w})), s, S.rest(U32{w}), C.card.make(s, U32.from_nat(U32.ctz(S.low(U32{w})))) <> acc, c,
+        Inl{Equal.trans(U32, C.card.make(s, U32.from_nat(U32.ctz(S.low(U32{w})))), C.card.make(s, U32.from_nat(r)), c,
+          Equal.cong(Nat, U32, (x => C.card.make(s, U32.from_nat(x))), U32.ctz(S.low(U32{w})), r,
+            Equal.trans(Nat, U32.ctz(S.low(U32{w})), S.lsb(32n, w), r, low.ctz(w, Laws.lsb_hold(w, hm, Equal.sym(Bool, False{}, U32.is_eq(U32{w}, 0), zf))), Equal.sym(Nat, r, S.lsb(32n, w), e))),
+          Equal.sym(U32, c, C.card.make(s, U32.from_nat(r)), ec))})
+    case 1n+p False{} Inr{+y}:
+      %Equal.sym(U32, S.rest(U32{w}), U32{Word.xor(32n, w, S.unit(32n, S.lsb(32n, w)))}, rest.eq(w)) : S.Mem(c, R.moves.peel(p, U32.is_zero(_), s, _, C.card.make(s, U32.from_nat(U32.ctz(S.low(U32{w})))) <> acc))
+      Laws.mem_peel(p, U32.is_zero(U32{Word.xor(32n, w, S.unit(32n, S.lsb(32n, w)))}), s, Word.xor(32n, w, S.unit(32n, S.lsb(32n, w))), C.card.make(s, U32.from_nat(U32.ctz(S.low(U32{w})))) <> acc, c, r, ec, lr, {==},
+        sub_at(S.rest(U32{w}), U32{Word.xor(32n, w, S.unit(32n, S.lsb(32n, w)))}, 8191, rest.eq(w), low.rest(U32{w}, hm)),
+        sub_at(U32{S.unit(32n, r)}, (1 << r : U32), U32{Word.xor(32n, w, S.unit(32n, S.lsb(32n, w)))}, Laws.unit_shl(r, lr), u.wrap(Word.and(32n, S.unit(32n, r), Word.xor(32n, w, S.unit(32n, S.lsb(32n, w)))), S.unit(32n, r), y)),
+        Equal.trans(Bool, Nat.is_le(1n+S.bits(U32{Word.xor(32n, w, S.unit(32n, S.lsb(32n, w)))}), 1n+p), Nat.is_le(S.bits(U32{w}), 1n+p), True{}, Equal.cong(Nat, Bool, (v => Nat.is_le(v, 1n+p)), 1n+S.bits(U32{Word.xor(32n, w, S.unit(32n, S.lsb(32n, w)))}), S.bits(U32{w}), Equal.sym(Nat, S.bits(U32{w}), 1n+S.bits(U32{Word.xor(32n, w, S.unit(32n, S.lsb(32n, w)))}), Equal.trans(Nat, S.bits(U32{w}), 1n+S.bits(S.rest(U32{w})), 1n+S.bits(U32{Word.xor(32n, w, S.unit(32n, S.lsb(32n, w)))}), Laws.count_xor32(S.low(U32{w}), U32{w}, low.in(U32{w}), Equal.trans(Nat, S.bits(S.low(U32{w})), S.bits((1 << S.lsb(32n, w) : U32)), 1n, Equal.cong(U32, Nat, (u => S.bits(u)), S.low(U32{w}), (1 << S.lsb(32n, w) : U32), low.shl(w, Laws.lsb_hold(w, hm, Equal.sym(Bool, False{}, U32.is_eq(U32{w}, 0), zf)))), one.r(S.lsb(32n, w), Laws.lsb_hold(w, hm, Equal.sym(Bool, False{}, U32.is_eq(U32{w}, 0), zf))))), Equal.cong(U32, Nat, (u => 1n+S.bits(u)), S.rest(U32{w}), U32{Word.xor(32n, w, S.unit(32n, S.lsb(32n, w)))}, rest.eq(w))))), cn),
+        Laws.unit_split(32n, r, Word.xor(32n, w, S.unit(32n, S.lsb(32n, w))), y))
+
+def mem_suit(+sj: U32, +m: U32, acc: List<&2, U32>, +c: U32, +r: Nat, +ec: {c == C.card.make(sj, U32.from_nat(r)) : U32}, +lr: {Nat.is_lt(r, 13n) == True{} : Bool}, +hm: S.Sub32(m, 8191), +xm: S.Sub32((1 << r : U32), m)) -> S.Mem(c, R.moves.suit(sj, m, acc)):
+  match m:
+    case U32{+w}:
+      Laws.mem_peel(13n, U32.is_zero(U32{w}), sj, w, acc, c, r, ec, lr, {==}, hm, xm,
+        Laws.count_le(32n, 13n, w, u.unwrap(Word.and(32n, w, S.ones(32n, 13n)), w, hm)),
+        Laws.unit_split(32n, r, w, unit.sub(r, lr, w, xm)))
+
+# Every card of the hand is a move when the hand is on lead.
+
+def Laws.mem_lead(j, r, h01, h23, v01, v23, lj, lr, xm):
+  match j:
+    case 0n:
+      mem_suit(0, (h01 >> 16n : U32), R.moves.suit(1, (h01 .&. 65535 : U32), R.moves.suit(2, (h23 >> 16n : U32), R.moves.suit(3, (h23 .&. 65535 : U32), Nil{}))), C.card.make(0, U32.from_nat(r)), r, {==}, lr, Laws.hi_holding(h01, v01), xm)
+    case 1n:
+      Laws.mem_acc(13n, U32.is_zero((h01 >> 16n : U32)), 0, (h01 >> 16n : U32), R.moves.suit(1, (h01 .&. 65535 : U32), R.moves.suit(2, (h23 >> 16n : U32), R.moves.suit(3, (h23 .&. 65535 : U32), Nil{}))), C.card.make(1, U32.from_nat(r)),
+        mem_suit(1, (h01 .&. 65535 : U32), R.moves.suit(2, (h23 >> 16n : U32), R.moves.suit(3, (h23 .&. 65535 : U32), Nil{})), C.card.make(1, U32.from_nat(r)), r, {==}, lr, Laws.lo_holding(h01, v01), xm))
+    case 2n:
+      Laws.mem_acc(13n, U32.is_zero((h01 >> 16n : U32)), 0, (h01 >> 16n : U32), R.moves.suit(1, (h01 .&. 65535 : U32), R.moves.suit(2, (h23 >> 16n : U32), R.moves.suit(3, (h23 .&. 65535 : U32), Nil{}))), C.card.make(2, U32.from_nat(r)),
+        Laws.mem_acc(13n, U32.is_zero((h01 .&. 65535 : U32)), 1, (h01 .&. 65535 : U32), R.moves.suit(2, (h23 >> 16n : U32), R.moves.suit(3, (h23 .&. 65535 : U32), Nil{})), C.card.make(2, U32.from_nat(r)),
+          mem_suit(2, (h23 >> 16n : U32), R.moves.suit(3, (h23 .&. 65535 : U32), Nil{}), C.card.make(2, U32.from_nat(r)), r, {==}, lr, Laws.hi_holding(h23, v23), xm)))
+    case 3n:
+      Laws.mem_acc(13n, U32.is_zero((h01 >> 16n : U32)), 0, (h01 >> 16n : U32), R.moves.suit(1, (h01 .&. 65535 : U32), R.moves.suit(2, (h23 >> 16n : U32), R.moves.suit(3, (h23 .&. 65535 : U32), Nil{}))), C.card.make(3, U32.from_nat(r)),
+        Laws.mem_acc(13n, U32.is_zero((h01 .&. 65535 : U32)), 1, (h01 .&. 65535 : U32), R.moves.suit(2, (h23 >> 16n : U32), R.moves.suit(3, (h23 .&. 65535 : U32), Nil{})), C.card.make(3, U32.from_nat(r)),
+          Laws.mem_acc(13n, U32.is_zero((h23 >> 16n : U32)), 2, (h23 >> 16n : U32), R.moves.suit(3, (h23 .&. 65535 : U32), Nil{}), C.card.make(3, U32.from_nat(r)),
+            mem_suit(3, (h23 .&. 65535 : U32), Nil{}, C.card.make(3, U32.from_nat(r)), r, {==}, lr, Laws.lo_holding(h23, v23), xm))))
+    case 4n+y:
+      Empty.absurd(S.Mem(C.card.make(U32.from_nat(4n+y), U32.from_nat(r)), R.moves.of(4, h01, h23)), no_lt0(y, lj))
+
+def kid.at(+lb: Nat, +p: Nat, +t: U32, +pos: R.Pos, +h: U32, +c: U32, e: {h == c : U32}, k: S.Kid(lb, p, t, pos, c)) -> S.Kid(lb, p, t, pos, h):
+  %Equal.sym(U32, h, c, e) : S.Kid(lb, p, t, pos, _)
+  k
+
+# A move that is one of the moves, and whose child reaches lb, is a witness.
+
+def Laws.ex_mem(lb, p, t, pos, ms, c, mem, k):
+  match ms:
+    case Nil{}:
+      Empty.absurd(S.ExK(lb, p, t, pos, Nil{}), mem)
+    case Con{+h, tl}:
+      match mem:
+        case Inl{e}:
+          Inl{kid.at(lb, p, t, pos, h, c, e, k)}
+        case Inr{m2}:
+          Inr{Laws.ex_mem(lb, p, t, pos, tl, c, m2, k)}

@@ -1350,3 +1350,117 @@ law lsb_hold:
   for +hm: S.Sub32(U32{w}, 8191)
   for +nz: {U32.is_eq(U32{w}, 0) == False{} : Bool}
   {Nat.is_lt(S.lsb(32n, w), 13n) == True{} : Bool}
+
+
+# ---------------------------------------------------------------------------
+# Toward the sure tricks: lower bounds through the search, and every card a move
+
+law max_ge:
+  for +a: U32
+  for +b: U32
+  S.And({Nat.is_le(U32.to_nat(a), U32.to_nat(U32.max(a, b))) == True{} : Bool}, {Nat.is_le(U32.to_nat(b), U32.to_nat(U32.max(a, b))) == True{} : Bool})
+
+law max_keep:
+  for +p: Nat
+  for ms: List<&2, U32>
+  for +t: U32
+  for +pos: R.Pos
+  for +best: U32
+  for r: B.Res
+  for +lb: Nat
+  for +h: Either<&2, &2, S.GE(lb, best), S.GE(lb, S.rv(r))>
+  S.GE(lb, S.rv(B.search(1n+p, ms, t, pos, True{}, best, r)))
+
+law max_ex:
+  for +p: Nat
+  for ms: List<&2, U32>
+  for +t: U32
+  for +pos: R.Pos
+  for +best: U32
+  for r: B.Res
+  for +lb: Nat
+  for ex: S.ExK(lb, p, t, pos, ms)
+  S.GE(lb, S.rv(B.search(1n+p, ms, t, pos, True{}, best, r)))
+
+law min_all:
+  for +p: Nat
+  for ms: List<&2, U32>
+  for +t: U32
+  for +pos: R.Pos
+  for +best: U32
+  for r: B.Res
+  for +lb: Nat
+  for all: S.AllK(lb, p, t, pos, ms)
+  for +hb: S.GE(lb, best)
+  for +hr: S.GE(lb, S.rv(r))
+  S.GE(lb, S.rv(B.search(1n+p, ms, t, pos, False{}, best, r)))
+
+law count_none:
+  for +n: Nat
+  for +w: Word(n)
+  for +h: S.Sub(n, w, S.ones(n, 0n))
+  {S.word.count(n, w) == 0n : Nat}
+
+law count_le:
+  for +n: Nat
+  for +j: Nat
+  for +w: Word(n)
+  for +h: S.Sub(n, w, S.ones(n, j))
+  {Nat.is_le(S.word.count(n, w), j) == True{} : Bool}
+
+law unit_split:
+  for +n: Nat
+  for +r: Nat
+  for +w: Word(n)
+  for +h: S.Sub(n, S.unit(n, r), w)
+  Either<&2, &2, {r == S.lsb(n, w) : Nat}, S.Sub(n, S.unit(n, r), Word.xor(n, w, S.unit(n, S.lsb(n, w))))>
+
+law mem_acc:
+  for n: Nat
+  for z: Bool
+  for +s: U32
+  for +m: U32
+  for acc: List<&2, U32>
+  for +c: U32
+  for mem: S.Mem(c, acc)
+  S.Mem(c, R.moves.peel(n, z, s, m, acc))
+
+law mem_peel:
+  for n: Nat
+  for z: Bool
+  for +s: U32
+  for +w: Word(32n)
+  for acc: List<&2, U32>
+  for +c: U32
+  for +r: Nat
+  for +ec: {c == C.card.make(s, U32.from_nat(r)) : U32}
+  for +lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  for +zf: {z == U32.is_eq(U32{w}, 0) : Bool}
+  for +hm: S.Sub32(U32{w}, 8191)
+  for +xm: S.Sub32((1 << r : U32), U32{w})
+  for +cn: {Nat.is_le(S.bits(U32{w}), n) == True{} : Bool}
+  for sp: Either<&2, &2, {r == S.lsb(32n, w) : Nat}, S.Sub(32n, S.unit(32n, r), Word.xor(32n, w, S.unit(32n, S.lsb(32n, w))))>
+  S.Mem(c, R.moves.peel(n, z, s, U32{w}, acc))
+
+law mem_lead:
+  for +j: Nat
+  for +r: Nat
+  for +h01: U32
+  for +h23: U32
+  for +v01: S.Sub32(h01, S.valid.mask())
+  for +v23: S.Sub32(h23, S.valid.mask())
+  for +lj: {Nat.is_lt(j, 4n) == True{} : Bool}
+  for +lr: {Nat.is_lt(r, 13n) == True{} : Bool}
+  for +xm: S.Sub32((1 << r : U32), R.suit.mask(j, h01, h23))
+  S.Mem(C.card.make(U32.from_nat(j), U32.from_nat(r)), R.moves.of(4, h01, h23))
+
+law ex_mem:
+  for +lb: Nat
+  for +p: Nat
+  for +t: U32
+  for +pos: R.Pos
+  for ms: List<&2, U32>
+  for +c: U32
+  for mem: S.Mem(c, ms)
+  for k: S.Kid(lb, p, t, pos, c)
+  S.ExK(lb, p, t, pos, ms)

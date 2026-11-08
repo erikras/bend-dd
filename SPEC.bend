@@ -1005,3 +1005,40 @@ def unit(n: Nat, j: Nat) -> Word(n):
           WCon{False{}, unit(p, i)}
 
 # Subtracting from zero with no borrow left flips every bit.
+
+
+# Lower bounds on the value, for the sure trick rules: a child of a move that
+# reaches lb, some move or every move that does, and a card among the moves.
+
+def GE(+lb: Nat, +x: U32) -> Data:
+  {Nat.is_le(lb, U32.to_nat(x)) == True{} : Bool}
+
+# The value of the child after card c, for any count of nodes so far.
+
+def Kid(+lb: Nat, +p: Nat, +t: U32, +pos: R.Pos, +c: U32) -> Type:
+  @n: Nat -> GE(lb, rv(B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), n})))
+
+def ExK(+lb: Nat, +p: Nat, +t: U32, +pos: R.Pos, ms: List<&2, U32>) -> Type:
+  match ms:
+    case Nil{}:
+      Empty
+    case Con{+h, tl}:
+      Kid(lb, p, t, pos, h) | ExK(lb, p, t, pos, tl)
+
+def AllK(+lb: Nat, +p: Nat, +t: U32, +pos: R.Pos, ms: List<&2, U32>) -> Type:
+  match ms:
+    case Nil{}:
+      Unit
+    case Con{+h, tl}:
+      Kid(lb, p, t, pos, h) & AllK(lb, p, t, pos, tl)
+
+# North-South's max never drops below a value it has reached.
+
+def Mem(+c: U32, xs: List<&2, U32>) -> Type:
+  match xs:
+    case Nil{}:
+      Empty
+    case Con{+h, t}:
+      {h == c : U32} | Mem(c, t)
+
+# The peel keeps what was already in acc.

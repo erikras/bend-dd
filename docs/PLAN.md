@@ -643,6 +643,28 @@ L cards each (`S.DealOk`), with L at most 13 and any leader below 4, starts out
 keeping the invariant. So `solve_deal` holds: `B.solve` on such a deal gives a value
 from 0 to L, in every strain. The invariant never needs the hands to be disjoint.
 
+**Toward the sure tricks, begun.** The first rule to prove for every position is the
+simplest one the quick tricks rest on: at no trumps, a leader holding the top card in
+play of a suit takes a trick, so North-South on lead make at least won + 1. Its pieces:
+
+1. *Done:* lower bounds through the search (under "Toward the sure tricks" in
+   `LAWS.bend`). `max_ex`: North-South to play reach lb if one of their moves has a
+   child that does (`S.Kid`, for any count of nodes so far). `max_keep`: their max
+   never drops below a value it has reached. `min_all`: East-West to play stay at lb
+   or above if every move does. `max_ge` puts the max above both sides.
+2. *Done:* every card is a move. `mem_lead`: on lead, every card of the hand is among
+   `R.moves.of`. Under it, `mem_peel` follows the peel, where a card's bit is either
+   the lowest bit of what is left or among the rest (`unit_split`), and `count_le`
+   keeps the 13 rounds of fuel enough. `ex_mem` makes such a card the witness `max_ex`
+   wants.
+3. The winning card in the trick word: after each card, `R.trick.owner` and
+   `R.trick.best` stay the leader and the card led while nothing beats it. These are
+   like the other trick word laws, at the higher fields.
+4. A card no other card in play can beat at no trumps: one of the same suit is lower
+   by rank, and one of another suit never wins.
+5. The rule: three plies of any legal card, by `min_all` and `max_ex`, then the trick
+   goes to the leader and `search_in` puts what follows at won + 1 or more.
+
 **The kernel check.** `bend PROOF.bend --verdict` rechecks proofs with a kernel proved
 in Lean, using Lean 4.34.0. On the whole file it stops at the first law that walks a
 whole domain (`holding_roundtrip`, over the 8192 holdings) with "out of fuel". Bend
