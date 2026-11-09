@@ -136,6 +136,73 @@ tricks the search counts as sure at the start of each entry, to check them again
 the true results. `dd --print` prints each
 deal back in canonical form, starting from North.
 
+## Simulation
+
+At the table nobody sees all four hands. `sim` takes what one player can see, deals
+the hidden cards at random many times, keeps the layouts that fit the auction and
+the play, solves each one double dummy, and says for each card the player could
+play now how many tricks declarer takes on average and how often the contract
+makes. Every layout that fits is equally likely.
+
+```sh
+tools/sim.sh deal="N:- - - T952.T2.JT754.97" contract=4H by=S \
+  S.hcp=15-19 S.H=5+ N.hcp=8-11 N.H=3+ n=200 seed=11
+```
+
+```
+Contract: 4❤︎ by South.
+
+West              ♠ T952  ❤︎ T2  ◆ JT754  ♣ 97
+
+Auction: South 15-19 points, South 5+ ❤︎, North 8-11 points, North 3+ ❤︎.
+Trick 1: West to lead.
+
+Dealt 11117 layouts and kept 200 (1.8%), solved in 4651 ms on 2 threads, 45001968 nodes.
+
+Card    Tricks   Makes
+♣7      11.15    94.5%
+♣9      11.16    94.5%
+◆7      11.19    95.0%
+◆54     11.19    95.0%
+◆JT     11.21    95.5%
+♠T9     11.22    96.0%
+♠5      11.23    96.0%
+♠2      11.23    96.0%
+❤︎2      11.31    96.0%
+❤︎T      11.32    96.0%
+
+Tricks are declarer's, on average. Makes is how often declarer takes 10 or more.
+Best for West first.
+Seed 11: add seed=11 to see the same layouts again.
+```
+
+The arguments, in any order:
+
+- `deal=` the deal in PBN, with `-` for each hand that can't be seen. A hand in view
+  is written whole, as dealt, even after some of it has been played.
+- `contract=` such as `4S` or `3NT`, and `by=` declarer's seat. The seat on
+  declarer's left leads.
+- `play=` the cards played so far, in order, such as `play="DJ D2 DA D8 S2"`. Suit
+  first or rank first, `T` or `10`, separated by spaces or commas. The seat to play
+  next must be one in view: declarer plays for dummy too, so give both hands.
+- Rules from the auction about hidden hands: `W.hcp=11-15` for high card points,
+  `W.S=5+` for at least five spades, and also `-3` (at most three), `4` (exactly
+  four) and `4-6`. `H`, `D` and `C` for the other suits.
+- `n=` the layouts to keep (200), `seed=` to see the same layouts again, and
+  `tries=` the deals to try for each layout before giving up on it (1000).
+
+A seat that fails to follow suit is known to be void in it from then on, with no
+rule needed. Cards that play the same, such as touching honours, share a row. Each
+layout has its own random state, so a seed gives the same layouts whatever the
+number of threads. The layouts are split over the threads, each with its own
+transposition table, which it keeps from one layout to the next.
+
+Each card is solved by the same search as whole deals, started from the position as
+it stands with its root's moves cut to that card (`src/play.bend`). `tests/play`
+checks that against brute force from random points in random endings, and
+`tools/simcheck.py` replays the first layouts of a simulation in DDS and checks every
+card against its `SolveBoard`.
+
 ## Testing
 
 ```sh
