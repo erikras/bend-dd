@@ -1130,3 +1130,19 @@ def MinD(+v: U32, +best: U32, +rv0: U32, +p: Nat, +t: U32, +pos: R.Pos, +h01: U3
 
 def PartD(+v: U32, +p: Nat, +t: U32, +pos: R.Pos, +h01: U32, +h23: U32) -> Data:
   CNEx((w => And(InHand(cn.c(w), h01, h23), {Nat.is_le(U32.to_nat(CV(p, t, pos, cn.c(w), cn.n(w))), U32.to_nat(v)) == True{} : Bool})))
+
+
+
+# At the start of a trick of the run: the invariant with L cards to each hand, s on
+# lead, nothing played, no suit led, w0 tricks won, the other hands below r0 in suit
+# j, and kk cards of the leader's at rank r0 or above.
+
+def RH(pos: R.Pos, +L: Nat, +j: Nat, +r0: Nat, +w0: Nat, +s: Nat, +kk: Nat) -> Data:
+  match pos:
+    case R.Pos{+n01, +n23, +e01, +e23, +s01, +s23, +w01, +w23, +tr, +won}:
+      And(Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, r4(L), L),
+        And({U32.to_nat(R.trick.seat(tr)) == s : Nat},
+          And({U32.to_nat(R.trick.played(tr)) == 0n : Nat},
+            And({R.trick.lead(tr) == 4 : U32},
+              And({U32.to_nat(won) == w0 : Nat},
+                And(Tops(s, j, r0, n01, n23, e01, e23, s01, s23, w01, w23), {Nat.is_le(kk, bits(U32.and(R.suit.mask(j, R.pick(s, n01, e01, s01, w01), R.pick(s, n23, e23, s23, w23)), above(r0)))) == True{} : Bool}))))))

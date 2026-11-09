@@ -722,17 +722,20 @@ move":
   `step1_*`, `step2_*`, and `end_*`, which put the leader on lead again with one
   trick more and one card fewer in the run. `chain_*` chains the values of a trick
   through the witnesses.
-- *Open:* the recursive def `top_run` that threads these through each trick, and
-  through itself on the next one. Each piece checks in under a second. Called from
-  `top_run`, with the children of the trick as nested `R.play` terms, Bend's checker
-  ran for more than 20 minutes on one step without an answer. The same call checks in
-  about a second when the witnesses (the node counts, the min and max witnesses and the
-  step results) are parameters, even with the lead card and its rank as computed
-  terms. It turns slow only when they are the proof terms themselves, which then sit
-  inside the types the call has to compare. A way through is to keep them opaque. One
-  merged def could take the witnesses as parameters in a second phase, with a selector
-  argument in place of the mutual recursion Bend rules out. That is the next thing to
-  try.
+- *Done:* the rule. `run_north` and `run_south` say this: at no trumps, with North (or
+  South) on lead at the start of a trick, holding k cards of suit j at rank r0 or
+  above, no other hand holding a card of suit j that high, and at least k cards to
+  each hand (`S.RH`), `B.solve` gives North-South at least k tricks more than they
+  have won. This holds in every position that keeps the invariant. The recursive def
+  `top_run_*` follows one trick through the witnesses and calls itself on the next.
+  Bend's checker had stalled for two reasons, both mistakes in the generated proof.
+  A local named `a1` hid the projection helper of that name. And a type had to be
+  matched up to unfolding a definition (`CV` against `B.solve`) while it held large
+  proof terms. With the error in place, Bend spent its time printing those types in
+  the error. With both fixed, each run def checks in a few seconds.
+
+The one-card rule of before is the run with k = 1. Next comes tying these to the
+solver's own count of quick tricks (`Z.quick`).
 
 **The kernel check.** `bend PROOF.bend --verdict` rechecks proofs with a kernel proved
 in Lean, using Lean 4.34.0. On the whole file it stops at the first law that walks a

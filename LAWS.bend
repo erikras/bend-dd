@@ -1883,3 +1883,39 @@ law partner_pick:
   for ah: S.AllH(ms, h01, h23)
   for ne: S.NE(ms)
   S.PartD(S.rv(B.search(1n+p, ms, t, pos, True{}, best, r)), p, t, pos, h01, h23)
+
+
+# ---------------------------------------------------------------------------
+# A run of top cards at no trumps
+
+# LAW: a run of top cards at no trumps. North on lead at the start of a trick, with k
+# cards of suit j at rank r0 or above and no other hand holding a card of suit j that
+# high (S.RH), and at least k cards left in each hand: the brute force value is at
+# least the tricks won plus k, in every position that keeps the invariant.
+law run_north:
+  for +k: Nat
+  for +L: Nat
+  for +j: Nat
+  for +r0: Nat
+  for +lj: {Nat.is_lt(j, 4n) == True{} : Bool}
+  for +l0: {Nat.is_lt(r0, 14n) == True{} : Bool}
+  for +w0: Nat
+  for +pos: R.Pos
+  for +rh: S.RH(pos, L, j, r0, w0, 0n, k)
+  for +kle: {Nat.is_le(k, L) == True{} : Bool}
+  for +n: Nat
+  S.GE(Nat.add(k, w0), S.rv(B.solve(S.r4(L), 4, pos, n)))
+
+law run_south:
+  for +k: Nat
+  for +L: Nat
+  for +j: Nat
+  for +r0: Nat
+  for +lj: {Nat.is_lt(j, 4n) == True{} : Bool}
+  for +l0: {Nat.is_lt(r0, 14n) == True{} : Bool}
+  for +w0: Nat
+  for +pos: R.Pos
+  for +rh: S.RH(pos, L, j, r0, w0, 2n, k)
+  for +kle: {Nat.is_le(k, L) == True{} : Bool}
+  for +n: Nat
+  S.GE(Nat.add(k, w0), S.rv(B.solve(S.r4(L), 4, pos, n)))
