@@ -691,6 +691,28 @@ on lead. Quick tricks also count runs of top cards, both hands of a side, entrie
 second cards and trump control. Each of those is a game argument over several tricks
 on top of these pieces.
 
+**A run of top cards, begun.** The next rule is a run of k top cards: with k cards of
+suit j above every other hand's holding in j, North-South on lead make k more tricks.
+The one-trick proof can't simply be repeated by induction. Bend can't copy a function,
+not even an erased one, so the lemma for the trick can't take "the k-1 case" as an
+argument and use it once per move. And mutual recursion is ruled out, so the chain
+from the lead to the fourth card can't call the induction back. The way through is to
+follow one line of play through each trick, with witnesses in place of "for every
+move":
+
+- *Done:* `min_wit`: an East-West node's value is what it started with, or equal to
+  the value of one move's child at some count of nodes (`S.MinWit`, a dependent pair).
+  `max_child`: North-South's value is at least the value of any one move's child, at
+  some count of nodes (`S.AtLeast`). `keep_le`: their max stays above where it
+  started and above every value it meets. `min_is`: a min is one of its two values.
+- Next: the run's state at the start of each trick. It holds the invariant, the
+  leader on lead, the other hands below rank r0 in suit j, and k cards of the leader's
+  at rank r0 or above. Step lemmas carry it through the four cards of a trick. Then
+  one recursive def on k follows the trick through the witnesses: the lead of the
+  lowest of the run, the card East-West's min comes from, any card from partner, and
+  the card East-West's min comes from again. After that it calls itself on the next
+  trick.
+
 **The kernel check.** `bend PROOF.bend --verdict` rechecks proofs with a kernel proved
 in Lean, using Lean 4.34.0. On the whole file it stops at the first law that walks a
 whole domain (`holding_roundtrip`, over the 8192 holdings) with "out of fuel". Bend

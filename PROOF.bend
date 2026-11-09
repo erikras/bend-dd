@@ -5161,3 +5161,80 @@ def Laws.top_nt_south(p, j, r, lj, lr, L, n01, n23, e01, e23, s01, s23, w01, w23
   k = root(2n, p, j, r, lj, lr, {==}, {==}, {==}, 3n, {==}, {==}, {==}, {==}, 0n, {==}, {==}, {==}, {==}, 1n, {==}, {==}, {==}, {==}, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, el,
     sub_in((1 << r : U32), R.suit.mask(j, s01, s23), R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), Equal.sym(U32, R.suit.mask(j, R.pick(U32.to_nat(R.trick.seat(tr)), n01, e01, s01, w01), R.pick(U32.to_nat(R.trick.seat(tr)), n23, e23, s23, w23)), R.suit.mask(j, s01, s23), Equal.cong(Nat, U32, (z => R.suit.mask(j, R.pick(z, n01, e01, s01, w01), R.pick(z, n23, e23, s23, w23))), U32.to_nat(R.trick.seat(tr)), 2n, es)), hold), tps)
   k(n)
+
+
+# ---------------------------------------------------------------------------
+# Witnesses in the search
+
+def pick.is(+c: Bool, +a: U32, +b: U32) -> Either<&2, &2, {Bool.pick(U32, c, a, b) == a : U32}, {Bool.pick(U32, c, a, b) == b : U32}>:
+  match c:
+    case True{}:
+      Inl{{==}}
+    case False{}:
+      Inr{{==}}
+
+def Laws.min_is(a, b):
+  match a b:
+    case U32{+x} U32{+y}:
+      pick.is(U32.is_lt(U32{x}, U32{y}), U32{x}, U32{y})
+
+# The value of the child of move c, with n nodes counted so far.
+
+def min.res(+v: U32, +best: U32, +vv: U32, +e1: {v == U32.min(best, vv) : U32}, m: Either<&2, &2, {U32.min(best, vv) == best : U32}, {U32.min(best, vv) == vv : U32}>) -> Either<&2, &2, {v == best : U32}, {v == vv : U32}>:
+  match m:
+    case Inl{x}:
+      Inl{Equal.trans(U32, v, U32.min(best, vv), best, e1, x)}
+    case Inr{x}:
+      Inr{Equal.trans(U32, v, U32.min(best, vv), vv, e1, x)}
+
+def wit.lift(+v: U32, +best: U32, +vv: U32, +c: U32, rest: List<&2, U32>, +p: Nat, +t: U32, +pos: R.Pos, +n: Nat,
+    w: S.MinWit(v, U32.min(best, vv), S.CV(p, t, pos, c, 1n+n), p, t, pos, rest)) -> S.MinWit(v, best, vv, p, t, pos, Con{c, rest}):
+  match w:
+    case Inl{e}:
+      match e:
+        case Inl{e1}:
+          Inl{min.res(v, best, vv, e1, Laws.min_is(best, vv))}
+        case Inr{e2}:
+          Inr{(c, (Inl{{==}}, (1n+n, e2)))}
+    case Inr{x}:
+      (c2, rest2) = x
+      (mem, en) = rest2
+      Inr{(c2, (Inr{mem}, en))}
+
+# An East-West node's value is what it started with, or the value of one move's child.
+
+def Laws.min_wit(p, ms, t, pos, best, r):
+  match ms r:
+    case Nil{} B.Res{+v, n}:
+      Inl{min.res(U32.min(best, v), best, v, {==}, Laws.min_is(best, v))}
+    case Con{+c, +rest} B.Res{+v, +n}:
+      wit.lift(S.rv(B.search(1n+p, rest, t, pos, False{}, U32.min(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n}))), best, v, c, rest, p, t, pos, n,
+        Laws.min_wit(p, rest, t, pos, U32.min(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n})))
+
+# North-South's max stays above where it started and above every value it meets.
+
+def Laws.keep_le(p, ms, t, pos, best, r):
+  match ms r:
+    case Nil{} B.Res{+v, n}:
+      Laws.max_ge(best, v)
+    case Con{+c, +rest} B.Res{+v, +n}:
+      (Laws.le_trans(U32.to_nat(best), U32.to_nat(U32.max(best, v)), U32.to_nat(S.rv(B.search(1n+p, rest, t, pos, True{}, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n})))), a1({Nat.is_le(U32.to_nat(best), U32.to_nat(U32.max(best, v))) == True{} : Bool}, {Nat.is_le(U32.to_nat(v), U32.to_nat(U32.max(best, v))) == True{} : Bool}, Laws.max_ge(best, v)), a1({Nat.is_le(U32.to_nat(U32.max(best, v)), U32.to_nat(S.rv(B.search(1n+p, rest, t, pos, True{}, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n}))))) == True{} : Bool}, {Nat.is_le(U32.to_nat(S.rv(B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n}))), U32.to_nat(S.rv(B.search(1n+p, rest, t, pos, True{}, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n}))))) == True{} : Bool}, Laws.keep_le(p, rest, t, pos, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n})))),
+        Laws.le_trans(U32.to_nat(v), U32.to_nat(U32.max(best, v)), U32.to_nat(S.rv(B.search(1n+p, rest, t, pos, True{}, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n})))), a2({Nat.is_le(U32.to_nat(best), U32.to_nat(U32.max(best, v))) == True{} : Bool}, {Nat.is_le(U32.to_nat(v), U32.to_nat(U32.max(best, v))) == True{} : Bool}, Laws.max_ge(best, v)), a1({Nat.is_le(U32.to_nat(U32.max(best, v)), U32.to_nat(S.rv(B.search(1n+p, rest, t, pos, True{}, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n}))))) == True{} : Bool}, {Nat.is_le(U32.to_nat(S.rv(B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n}))), U32.to_nat(S.rv(B.search(1n+p, rest, t, pos, True{}, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n}))))) == True{} : Bool}, Laws.keep_le(p, rest, t, pos, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), 1n+n})))))
+
+def ch.at(+p: Nat, +t: U32, +pos: R.Pos, +h: U32, +c: U32, +n: Nat, +x: U32, +e: {h == c : U32}, +l: {Nat.is_le(U32.to_nat(S.CV(p, t, pos, h, n)), U32.to_nat(x)) == True{} : Bool}) -> {Nat.is_le(U32.to_nat(S.CV(p, t, pos, c, n)), U32.to_nat(x)) == True{} : Bool}:
+  %e : {Nat.is_le(U32.to_nat(S.CV(p, t, pos, _, n)), U32.to_nat(x)) == True{} : Bool}
+  l
+
+# Some count of nodes at which the child of c is worth at most x.
+
+def Laws.max_child(p, ms, t, pos, best, r, c, mem):
+  match ms r:
+    case Nil{} B.Res{+v, n}:
+      Empty.absurd(S.AtLeast(p, t, pos, c, S.rv(B.search(1n+p, Nil{}, t, pos, True{}, best, B.Res{v, n}))), mem)
+    case Con{+h, +rest} B.Res{+v, +n}:
+      match mem:
+        case Inl{e}:
+          (1n+n, ch.at(p, t, pos, h, c, 1n+n, S.rv(B.search(1n+p, rest, t, pos, True{}, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, h)), t, R.play(t, pos, h), R.pos.ns(R.play(t, pos, h)), B.seed(R.pos.ns(R.play(t, pos, h))), B.Res{B.seed(R.pos.ns(R.play(t, pos, h))), 1n+n}))), e,
+            a2({Nat.is_le(U32.to_nat(U32.max(best, v)), U32.to_nat(S.rv(B.search(1n+p, rest, t, pos, True{}, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, h)), t, R.play(t, pos, h), R.pos.ns(R.play(t, pos, h)), B.seed(R.pos.ns(R.play(t, pos, h))), B.Res{B.seed(R.pos.ns(R.play(t, pos, h))), 1n+n}))))) == True{} : Bool}, {Nat.is_le(U32.to_nat(S.rv(B.search(p, R.moves(R.play(t, pos, h)), t, R.play(t, pos, h), R.pos.ns(R.play(t, pos, h)), B.seed(R.pos.ns(R.play(t, pos, h))), B.Res{B.seed(R.pos.ns(R.play(t, pos, h))), 1n+n}))), U32.to_nat(S.rv(B.search(1n+p, rest, t, pos, True{}, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, h)), t, R.play(t, pos, h), R.pos.ns(R.play(t, pos, h)), B.seed(R.pos.ns(R.play(t, pos, h))), B.Res{B.seed(R.pos.ns(R.play(t, pos, h))), 1n+n}))))) == True{} : Bool}, Laws.keep_le(p, rest, t, pos, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, h)), t, R.play(t, pos, h), R.pos.ns(R.play(t, pos, h)), B.seed(R.pos.ns(R.play(t, pos, h))), B.Res{B.seed(R.pos.ns(R.play(t, pos, h))), 1n+n})))))
+        case Inr{m}:
+          Laws.max_child(p, rest, t, pos, U32.max(best, v), B.search(p, R.moves(R.play(t, pos, h)), t, R.play(t, pos, h), R.pos.ns(R.play(t, pos, h)), B.seed(R.pos.ns(R.play(t, pos, h))), B.Res{B.seed(R.pos.ns(R.play(t, pos, h))), 1n+n}), c, m)

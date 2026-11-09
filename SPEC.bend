@@ -1085,3 +1085,20 @@ def Tops(s: Nat, +j: Nat, +r: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +
 # Within a trick that seat s led with its top card of suit j: x is to play, k cards
 # are down, s wins so far with that card, the tricks won are w0, and no other hand
 # can beat it.
+
+
+# Witnesses in the search: a child's value, an East-West node's value as one of
+# its values, and a count of nodes at which a child is worth at most x.
+
+def CV(+p: Nat, +t: U32, +pos: R.Pos, +c: U32, +n: Nat) -> U32:
+  rv(B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), n}))
+
+# Where an East-West node's value comes from: what it started with, or one move's child.
+
+def MinWit(+v: U32, +best: U32, +rv0: U32, +p: Nat, +t: U32, +pos: R.Pos, ms: List<&2, U32>) -> Type:
+  Either<&1, &1, Either<&2, &2, {v == best : U32}, {v == rv0 : U32}>, (&c: U32 -> (Mem(c, ms) & (&n: Nat -> {v == CV(p, t, pos, c, n) : U32})))>
+
+def AtLeast(+p: Nat, +t: U32, +pos: R.Pos, +c: U32, +x: U32) -> Type:
+  &n: Nat -> {Nat.is_le(U32.to_nat(CV(p, t, pos, c, n)), U32.to_nat(x)) == True{} : Bool}
+
+# North-South's value is at least the value of any one move's child.

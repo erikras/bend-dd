@@ -1754,3 +1754,41 @@ law top_nt_south:
   for +tps: S.Tops(2n, j, r, n01, n23, e01, e23, s01, s23, w01, w23)
   for +n: Nat
   S.GE(1n+U32.to_nat(won), S.rv(B.solve(1n+p, 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, n)))
+
+
+# ---------------------------------------------------------------------------
+# Witnesses in the search: the min is one of its values, the max is above each
+
+law min_is:
+  for +a: U32
+  for +b: U32
+  Either<&2, &2, {U32.min(a, b) == a : U32}, {U32.min(a, b) == b : U32}>
+
+law min_wit:
+  for +p: Nat
+  for ms: List<&2, U32>
+  for +t: U32
+  for +pos: R.Pos
+  for +best: U32
+  for +r: B.Res
+  S.MinWit(S.rv(B.search(1n+p, ms, t, pos, False{}, best, r)), best, S.rv(r), p, t, pos, ms)
+
+law keep_le:
+  for +p: Nat
+  for ms: List<&2, U32>
+  for +t: U32
+  for +pos: R.Pos
+  for +best: U32
+  for +r: B.Res
+  S.And({Nat.is_le(U32.to_nat(best), U32.to_nat(S.rv(B.search(1n+p, ms, t, pos, True{}, best, r)))) == True{} : Bool}, {Nat.is_le(U32.to_nat(S.rv(r)), U32.to_nat(S.rv(B.search(1n+p, ms, t, pos, True{}, best, r)))) == True{} : Bool})
+
+law max_child:
+  for +p: Nat
+  for ms: List<&2, U32>
+  for +t: U32
+  for +pos: R.Pos
+  for +best: U32
+  for +r: B.Res
+  for +c: U32
+  for mem: S.Mem(c, ms)
+  S.AtLeast(p, t, pos, c, S.rv(B.search(1n+p, ms, t, pos, True{}, best, r)))
