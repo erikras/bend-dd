@@ -8,6 +8,9 @@ __pycache__/
 /dd
 /dd.c
 /dd.js
+/sim
+/sim.c
+/sim.js
 /build/
 /tests/unit
 /tests/oracle

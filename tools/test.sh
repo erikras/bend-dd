@@ -25,7 +25,7 @@ if [ "$have" != "$BEND_VERSION" ]; then
   echo "warning: tested with bend $BEND_VERSION, this is bend $have"
 fi
 
-if grep -n '@unsafe\|^def [^ (]*?' hand.bend dd.bend LAWS.bend SPEC.bend PROOF.bend src/*.bend tests/*.bend bench/*.bend; then
+if grep -n '@unsafe\|^def [^ (]*?' hand.bend dd.bend sim.bend LAWS.bend SPEC.bend PROOF.bend src/*.bend tests/*.bend bench/*.bend; then
   echo "FAIL: @unsafe is not allowed anywhere"
   exit 1
 fi
@@ -33,10 +33,12 @@ fi
 echo "== build"
 bend hand.bend -o hand
 bend dd.bend -o dd
+bend sim.bend -o sim
 bend tests/unit.bend -o tests/unit
 bend tests/oracle.bend -o tests/oracle
 mkdir -p build
 bend bench/gpu.bend -o build/gpu
+bend tests/play.bend -o build/play
 
 echo "== unit tests"
 tests/unit
@@ -58,6 +60,16 @@ else
   tests/oracle 5000 3 1 2
   tests/oracle 2000 4 1 2
   tests/oracle 200 3 1 1
+fi
+
+echo "== single cards from any point in a trick, against brute force"
+if [ $quick = 1 ]; then
+  build/play 1000 3
+  build/play 300 4
+else
+  build/play 5000 3
+  build/play 2000 4
+  build/play 200 5
 fi
 
 echo "== hand output"
@@ -134,5 +146,13 @@ else
   .venv/bin/python tools/check.py endings --count 200 --cards 8
   .venv/bin/python tools/check.py endings --count 200 --cards 6 --suits 2
 fi
+
+echo "== simulation layouts against DDS"
+d42="N:A8.J94.KQ62.KT86 - QJ73.AKQ65.98.AJ -"
+.venv/bin/python tools/simcheck.py --count 10 deal="N:- - - T952.T2.JT754.97" contract=4H by=S S.hcp=15-19 S.H=5+ seed=1
+.venv/bin/python tools/simcheck.py --count 10 deal="$d42" contract=3NT by=N play=C5 E.C=5+ seed=2
+.venv/bin/python tools/simcheck.py --count 10 deal="$d42" contract=6H by=S play="DJ D2 DA D8 S2" W.D=5+ seed=3
+.venv/bin/python tools/simcheck.py --count 10 deal="N:- K64.873.A3.Q5432 - T952.T2.JT754.97" contract=2S by=W play="HA H3 H6 HT HK H7 HQ H2 D2" N.hcp=12-20 seed=4
+.venv/bin/python tools/simcheck.py --count 10 deal="N:- - - T952.T2.JT754.97" contract=4H by=S play="DJ D2 DA D8 D3 D9 D4 DK DQ C2 S3 D5 S4 S6 SK" seed=5
 
 echo "ALL TESTS PASS"
