@@ -1087,18 +1087,46 @@ def Tops(s: Nat, +j: Nat, +r: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +
 # can beat it.
 
 
-# Witnesses in the search: a child's value, an East-West node's value as one of
-# its values, and a count of nodes at which a child is worth at most x.
+# Witnesses in the search, and a run of top cards: a card and a count of nodes,
+# the cards of a suit at rank r0 and above, and the values the proofs pick out.
+
+type CN is Data:
+  CN{c: U32, n: Nat}
+
+def above(+r0: Nat) -> U32:
+  U32.xor(8191, U32{ones(32n, r0)})
 
 def CV(+p: Nat, +t: U32, +pos: R.Pos, +c: U32, +n: Nat) -> U32:
   rv(B.search(p, R.moves(R.play(t, pos, c)), t, R.play(t, pos, c), R.pos.ns(R.play(t, pos, c)), B.seed(R.pos.ns(R.play(t, pos, c))), B.Res{B.seed(R.pos.ns(R.play(t, pos, c))), n}))
 
-# Where an East-West node's value comes from: what it started with, or one move's child.
+# A card and a count of nodes.
+
+def cn.c(w: CN) -> U32:
+  match w:
+    case CN{c, _}:
+      c
+
+def cn.n(w: CN) -> Nat:
+  match w:
+    case CN{_, n}:
+      n
+
+def CNEx(-B: @-x: CN -> Data) -> Data:
+  Sigma<&2, &2, CN, B>
 
 def MinWit(+v: U32, +best: U32, +rv0: U32, +p: Nat, +t: U32, +pos: R.Pos, ms: List<&2, U32>) -> Type:
-  Either<&1, &1, Either<&2, &2, {v == best : U32}, {v == rv0 : U32}>, (&c: U32 -> (Mem(c, ms) & (&n: Nat -> {v == CV(p, t, pos, c, n) : U32})))>
+  Either<&1, &1, Either<&2, &2, {v == best : U32}, {v == rv0 : U32}>, (&w: CN -> (Mem(cn.c(w), ms) & {v == CV(p, t, pos, cn.c(w), cn.n(w)) : U32}))>
 
-def AtLeast(+p: Nat, +t: U32, +pos: R.Pos, +c: U32, +x: U32) -> Type:
-  &n: Nat -> {Nat.is_le(U32.to_nat(CV(p, t, pos, c, n)), U32.to_nat(x)) == True{} : Bool}
+def NatEx(-B: @-x: Nat -> Data) -> Data:
+  Sigma<&2, &2, Nat, B>
+
+def AtLeast(+p: Nat, +t: U32, +pos: R.Pos, +c: U32, +x: U32) -> Data:
+  NatEx((n => {Nat.is_le(U32.to_nat(CV(p, t, pos, c, n)), U32.to_nat(x)) == True{} : Bool}))
 
 # North-South's value is at least the value of any one move's child.
+
+def MinD(+v: U32, +best: U32, +rv0: U32, +p: Nat, +t: U32, +pos: R.Pos, +h01: U32, +h23: U32) -> Data:
+  CNEx((w => And(InHand(cn.c(w), h01, h23), Either<&2, &2, {v == best : U32}, Either<&2, &2, {v == rv0 : U32}, {v == CV(p, t, pos, cn.c(w), cn.n(w)) : U32}>>)))
+
+def PartD(+v: U32, +p: Nat, +t: U32, +pos: R.Pos, +h01: U32, +h23: U32) -> Data:
+  CNEx((w => And(InHand(cn.c(w), h01, h23), {Nat.is_le(U32.to_nat(CV(p, t, pos, cn.c(w), cn.n(w))), U32.to_nat(v)) == True{} : Bool})))

@@ -1757,7 +1757,63 @@ law top_nt_south:
 
 
 # ---------------------------------------------------------------------------
-# Witnesses in the search: the min is one of its values, the max is above each
+# Witnesses in the search, as data, and the bit facts a run of top cards needs
+
+law and_xor_w:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  for +k: Word(n)
+  {Word.and(n, Word.xor(n, a, b), k) == Word.xor(n, Word.and(n, a, k), Word.and(n, b, k)) : Word(n)}
+
+law and_xor:
+  for +a: U32
+  for +b: U32
+  for +k: U32
+  {U32.and(U32.xor(a, b), k) == U32.xor(U32.and(a, k), U32.and(b, k)) : U32}
+
+law pad_xor:
+  for +p: Nat
+  for +a: Word(p)
+  for +b: Word(p)
+  {Word.shr.pad(p, Word.xor(p, a, b)) == Word.xor(1n+p, Word.shr.pad(p, a), Word.shr.pad(p, b)) : Word(1n+p)}
+
+law shrn_xor:
+  for +k: Nat
+  for +a: U32
+  for +b: U32
+  {U32.shrn(U32.xor(a, b), k) == U32.xor(U32.shrn(a, k), U32.shrn(b, k)) : U32}
+
+law take_bit:
+  for +j: Nat
+  for +b: U32
+  for +h01: U32
+  for +h23: U32
+  for +lj: {Nat.is_lt(j, 4n) == True{} : Bool}
+  for +hb: S.Sub32(b, 65535)
+  {R.suit.mask(j, U32.xor(h01, R.sel(U32.is_lt(U32.from_nat(j), 2), R.sel(U32.is_zero((U32.from_nat(j) .&. 1 : U32)), (b << 16n : U32), b), 0)), U32.xor(h23, R.sel(U32.is_lt(U32.from_nat(j), 2), 0, R.sel(U32.is_zero((U32.from_nat(j) .&. 1 : U32)), (b << 16n : U32), b)))) == U32.xor(R.suit.mask(j, h01, h23), b) : U32}
+
+law ones_mono:
+  for +n: Nat
+  for +a: Nat
+  for +b: Nat
+  for +h: {Nat.is_le(a, b) == True{} : Bool}
+  S.Sub(n, S.ones(n, a), S.ones(n, b))
+
+law unit_in:
+  for +n: Nat
+  for +q: Nat
+  for +r: Nat
+  for +h: {Nat.is_lt(q, r) == True{} : Bool}
+  S.Sub(n, S.unit(n, q), S.ones(n, r))
+
+law threshold:
+  for +r0: Nat
+  for +r1: Nat
+  for +l0: {Nat.is_lt(r0, 14n) == True{} : Bool}
+  for +l1: {Nat.is_lt(r1, 13n) == True{} : Bool}
+  for +h: S.Sub32((1 << r1 : U32), S.above(r0))
+  {Nat.is_le(r0, r1) == True{} : Bool}
 
 law min_is:
   for +a: U32
@@ -1792,3 +1848,38 @@ law max_child:
   for +c: U32
   for mem: S.Mem(c, ms)
   S.AtLeast(p, t, pos, c, S.rv(B.search(1n+p, ms, t, pos, True{}, best, r)))
+
+law mem_hand:
+  for ms: List<&2, U32>
+  for +c: U32
+  for +h01: U32
+  for +h23: U32
+  for mem: S.Mem(c, ms)
+  for ah: S.AllH(ms, h01, h23)
+  S.InHand(c, h01, h23)
+
+law min_pick:
+  for +p: Nat
+  for +ms: List<&2, U32>
+  for +t: U32
+  for +pos: R.Pos
+  for +best: U32
+  for +r: B.Res
+  for +h01: U32
+  for +h23: U32
+  for ah: S.AllH(ms, h01, h23)
+  for ne: S.NE(ms)
+  S.MinD(S.rv(B.search(1n+p, ms, t, pos, False{}, best, r)), best, S.rv(r), p, t, pos, h01, h23)
+
+law partner_pick:
+  for +p: Nat
+  for +ms: List<&2, U32>
+  for +t: U32
+  for +pos: R.Pos
+  for +best: U32
+  for +r: B.Res
+  for +h01: U32
+  for +h23: U32
+  for ah: S.AllH(ms, h01, h23)
+  for ne: S.NE(ms)
+  S.PartD(S.rv(B.search(1n+p, ms, t, pos, True{}, best, r)), p, t, pos, h01, h23)

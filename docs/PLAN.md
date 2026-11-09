@@ -705,13 +705,34 @@ move":
   `max_child`: North-South's value is at least the value of any one move's child, at
   some count of nodes (`S.AtLeast`). `keep_le`: their max stays above where it
   started and above every value it meets. `min_is`: a min is one of its two values.
-- Next: the run's state at the start of each trick. It holds the invariant, the
-  leader on lead, the other hands below rank r0 in suit j, and k cards of the leader's
-  at rank r0 or above. Step lemmas carry it through the four cards of a trick. Then
-  one recursive def on k follows the trick through the witnesses: the lead of the
-  lowest of the run, the card East-West's min comes from, any card from partner, and
-  the card East-West's min comes from again. After that it calls itself on the next
-  trick.
+- *Done:* the same witnesses as data that a proof can take apart many times. They are
+  keyed by a card and a count of nodes (`S.CN`), because Bend's checker can't take apart
+  a nested dependent pair. `min_pick` gives East-West's value as what it started with
+  or one of the hand's cards' children. `partner_pick` gives some card of the hand
+  whose child is worth no more than North-South's value. `mem_hand` puts a card of the
+  moves in the hand.
+- *Done:* the bit facts the run needs. `and_xor` and `shrn_xor` (`and` and shifts
+  spread over `xor`). `take_bit`: playing a card flips exactly its bit in its suit's
+  holding. `threshold`: a card above the threshold `S.above(r0)` is at rank r0 or more.
+  `ones_mono` and `unit_in` for low-bit masks.
+- *Done in PROOF.bend, as helpers:* the run's state. `HoldR` holds during a trick and
+  `RH` at the start of one: the invariant, the leader, the other hands below r0 in
+  suit j, and the count of the leader's cards at r0 or above. The four steps of a
+  trick are `lead_0`/`lead_2`, which lead the lowest card of the run (`run.low`),
+  `step1_*`, `step2_*`, and `end_*`, which put the leader on lead again with one
+  trick more and one card fewer in the run. `chain_*` chains the values of a trick
+  through the witnesses.
+- *Open:* the recursive def `top_run` that threads these through each trick, and
+  through itself on the next one. Each piece checks in under a second. Called from
+  `top_run`, with the children of the trick as nested `R.play` terms, Bend's checker
+  ran for more than 20 minutes on one step without an answer. The same call checks in
+  about a second when the witnesses (the node counts, the min and max witnesses and the
+  step results) are parameters, even with the lead card and its rank as computed
+  terms. It turns slow only when they are the proof terms themselves, which then sit
+  inside the types the call has to compare. A way through is to keep them opaque. One
+  merged def could take the witnesses as parameters in a second phase, with a selector
+  argument in place of the mutual recursion Bend rules out. That is the next thing to
+  try.
 
 **The kernel check.** `bend PROOF.bend --verdict` rechecks proofs with a kernel proved
 in Lean, using Lean 4.34.0. On the whole file it stops at the first law that walks a
