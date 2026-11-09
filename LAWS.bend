@@ -1919,3 +1919,139 @@ law run_south:
   for +kle: {Nat.is_le(k, L) == True{} : Bool}
   for +n: Nat
   S.GE(Nat.add(k, w0), S.rv(B.solve(S.r4(L), 4, pos, n)))
+
+
+# ---------------------------------------------------------------------------
+# The solver's count of a run of top cards: what the run rule above covers
+
+law or_sub:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  for +k: Word(n)
+  for +ha: S.Sub(n, a, k)
+  for +hb: S.Sub(n, b, k)
+  S.Sub(n, Word.or(n, a, b), k)
+
+law sub_or_l:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  S.Sub(n, a, Word.or(n, a, b))
+
+law sub_or_r:
+  for +n: Nat
+  for +a: Word(n)
+  for +b: Word(n)
+  S.Sub(n, b, Word.or(n, a, b))
+
+# Taking the leader's cards m back out of every card in play leaves the others',
+# when none of theirs is the leader's.
+law rest_or:
+  for +n: Nat
+  for +m: Word(n)
+  for +p: Word(n)
+  for +a: Word(n)
+  for +b: Word(n)
+  for +d: {Word.and(n, m, Word.or(n, Word.or(n, p, a), b)) == Word.zero(n) : Word(n)}
+  {Word.xor(n, Word.or(n, Word.or(n, Word.or(n, m, p), a), b), m) == Word.or(n, Word.or(n, p, a), b) : Word(n)}
+
+law or_sub32:
+  for +a: U32
+  for +b: U32
+  for +k: U32
+  for +ha: S.Sub32(a, k)
+  for +hb: S.Sub32(b, k)
+  S.Sub32(U32.or(a, b), k)
+
+law sub_or_l32:
+  for +a: U32
+  for +b: U32
+  S.Sub32(a, U32.or(a, b))
+
+law sub_or_r32:
+  for +a: U32
+  for +b: U32
+  S.Sub32(b, U32.or(a, b))
+
+law rest_or32:
+  for +m: U32
+  for +p: U32
+  for +a: U32
+  for +b: U32
+  for +d: {U32.and(m, U32.or(U32.or(p, a), b)) == 0 : U32}
+  {U32.xor(U32.or(U32.or(U32.or(m, p), a), b), m) == U32.or(U32.or(p, a), b) : U32}
+
+# What Z.run computes: the leader's cards at the rank S.r0of finds, counted by shifting.
+law run_r0:
+  for +m: U32
+  for +all: U32
+  {Z.run(m, all) == C.bits.count(U32.shrn(m, S.r0of(U32.xor(all, m)))) : U32}
+
+# LAW: the facts about a holding a run of top cards rests on, for each of the 8192
+# holdings, and so for any holding.
+law runfacts_all:
+  {S.runfacts.all(8192n, 0) == True{} : Bool}
+
+law runfacts_holding:
+  for +u: U32
+  for +h: {(u .&. 8191 : U32) == u : U32}
+  {S.runfacts(u) == True{} : Bool}
+
+# The count by shifting is the count of cards at that rank or above, for any rank up
+# to 13.
+law shift_count:
+  for +r: Nat
+  for +m: U32
+  for +lr: {Nat.is_lt(r, 14n) == True{} : Bool}
+  for +h: {S.fact.shift(13n, m) == True{} : Bool}
+  {U32.to_nat(C.bits.count(U32.shrn(m, r))) == S.bits(U32.and(m, S.above(r))) : Nat}
+
+# LAW: the solver's count of North's (or South's) run of top cards in a suit at no
+# trumps, as Z.run makes it for its count of quick tricks, is a run the run rule
+# covers: at the start of a trick with North (South) on lead and L cards to each
+# hand, North-South take at least that many tricks more than they have won, up to L,
+# in every line of defence. dj says no other hand holds one of the leader's cards.
+law run_count_north:
+  for +j: Nat
+  for +lj: {Nat.is_lt(j, 4n) == True{} : Bool}
+  for +L: Nat
+  for +n01: U32
+  for +n23: U32
+  for +e01: U32
+  for +e23: U32
+  for +s01: U32
+  for +s23: U32
+  for +w01: U32
+  for +w23: U32
+  for +tr: U32
+  for +won: U32
+  for +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, S.r4(L), L)
+  for +es: {U32.to_nat(R.trick.seat(tr)) == 0n : Nat}
+  for +ek: {U32.to_nat(R.trick.played(tr)) == 0n : Nat}
+  for +el: {R.trick.lead(tr) == 4 : U32}
+  for +dj: {U32.and(R.suit.mask(j, n01, n23), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))) == 0 : U32}
+  for +n: Nat
+  S.GE(Nat.add(Nat.min(U32.to_nat(Z.run(R.suit.mask(j, n01, n23), U32.or(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)))), L), U32.to_nat(won)), S.rv(B.solve(S.r4(L), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, n)))
+
+law run_count_south:
+  for +j: Nat
+  for +lj: {Nat.is_lt(j, 4n) == True{} : Bool}
+  for +L: Nat
+  for +n01: U32
+  for +n23: U32
+  for +e01: U32
+  for +e23: U32
+  for +s01: U32
+  for +s23: U32
+  for +w01: U32
+  for +w23: U32
+  for +tr: U32
+  for +won: U32
+  for +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, S.r4(L), L)
+  for +es: {U32.to_nat(R.trick.seat(tr)) == 2n : Nat}
+  for +ek: {U32.to_nat(R.trick.played(tr)) == 0n : Nat}
+  for +el: {R.trick.lead(tr) == 4 : U32}
+  for +dj: {U32.and(R.suit.mask(j, s01, s23), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))) == 0 : U32}
+  for +n: Nat
+  S.GE(Nat.add(Nat.min(U32.to_nat(Z.run(R.suit.mask(j, s01, s23), U32.or(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)))), L), U32.to_nat(won)), S.rv(B.solve(S.r4(L), 4, R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, n)))

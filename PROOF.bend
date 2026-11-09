@@ -5,6 +5,7 @@ import ./src/cards.bend as C
 import ./src/pbn.bend as P
 import ./src/rules.bend as R
 import ./src/brute.bend as B
+import ./src/search.bend as Z
 import ./SPEC.bend as S
 import ./LAWS.bend as Laws
 
@@ -6277,3 +6278,333 @@ def Laws.run_north(k, L, j, r0, lj, l0, w0, pos, rh, kle, n):
 
 def Laws.run_south(k, L, j, r0, lj, l0, w0, pos, rh, kle, n):
   top_run_2(k, L, j, r0, lj, l0, w0, pos, rh, kle, n)
+
+
+# ---------------------------------------------------------------------------
+# The solver's count of a run of top cards
+
+def bor_sub(+a: Bool, +b: Bool, +k: Bool, ha: {Bool.and(a, k) == a : Bool}, hb: {Bool.and(b, k) == b : Bool}) -> {Bool.and(Bool.or(a, b), k) == Bool.or(a, b) : Bool}:
+  match a b k:
+    case False{} False{} False{}:
+      {==}
+    case False{} False{} True{}:
+      {==}
+    case False{} True{} False{}:
+      Empty.absurd({Bool.and(Bool.or(False{}, True{}), False{}) == Bool.or(False{}, True{}) : Bool}, no_ft(hb))
+    case False{} True{} True{}:
+      {==}
+    case True{} False{} False{}:
+      Empty.absurd({Bool.and(Bool.or(True{}, False{}), False{}) == Bool.or(True{}, False{}) : Bool}, no_ft(ha))
+    case True{} False{} True{}:
+      {==}
+    case True{} True{} False{}:
+      Empty.absurd({Bool.and(Bool.or(True{}, True{}), False{}) == Bool.or(True{}, True{}) : Bool}, no_ft(ha))
+    case True{} True{} True{}:
+      {==}
+
+def bsub_or_l(+a: Bool, +b: Bool) -> {Bool.and(a, Bool.or(a, b)) == a : Bool}:
+  match a b:
+    case False{} False{}:
+      {==}
+    case False{} True{}:
+      {==}
+    case True{} False{}:
+      {==}
+    case True{} True{}:
+      {==}
+
+def bsub_or_r(+a: Bool, +b: Bool) -> {Bool.and(b, Bool.or(a, b)) == b : Bool}:
+  match a b:
+    case False{} False{}:
+      {==}
+    case False{} True{}:
+      {==}
+    case True{} False{}:
+      {==}
+    case True{} True{}:
+      {==}
+
+def brest(+m: Bool, +p: Bool, +a: Bool, +b: Bool, d: {Bool.and(m, Bool.or(Bool.or(p, a), b)) == False{} : Bool}) -> {Bool.xor(Bool.or(Bool.or(Bool.or(m, p), a), b), m) == Bool.or(Bool.or(p, a), b) : Bool}:
+  match m p a b:
+    case False{} False{} False{} False{}:
+      {==}
+    case False{} False{} False{} True{}:
+      {==}
+    case False{} False{} True{} False{}:
+      {==}
+    case False{} False{} True{} True{}:
+      {==}
+    case False{} True{} False{} False{}:
+      {==}
+    case False{} True{} False{} True{}:
+      {==}
+    case False{} True{} True{} False{}:
+      {==}
+    case False{} True{} True{} True{}:
+      {==}
+    case True{} False{} False{} False{}:
+      {==}
+    case True{} False{} False{} True{}:
+      Empty.absurd({Bool.xor(Bool.or(Bool.or(Bool.or(True{}, False{}), False{}), True{}), True{}) == Bool.or(Bool.or(False{}, False{}), True{}) : Bool}, no_tf(d))
+    case True{} False{} True{} False{}:
+      Empty.absurd({Bool.xor(Bool.or(Bool.or(Bool.or(True{}, False{}), True{}), False{}), True{}) == Bool.or(Bool.or(False{}, True{}), False{}) : Bool}, no_tf(d))
+    case True{} False{} True{} True{}:
+      Empty.absurd({Bool.xor(Bool.or(Bool.or(Bool.or(True{}, False{}), True{}), True{}), True{}) == Bool.or(Bool.or(False{}, True{}), True{}) : Bool}, no_tf(d))
+    case True{} True{} False{} False{}:
+      Empty.absurd({Bool.xor(Bool.or(Bool.or(Bool.or(True{}, True{}), False{}), False{}), True{}) == Bool.or(Bool.or(True{}, False{}), False{}) : Bool}, no_tf(d))
+    case True{} True{} False{} True{}:
+      Empty.absurd({Bool.xor(Bool.or(Bool.or(Bool.or(True{}, True{}), False{}), True{}), True{}) == Bool.or(Bool.or(True{}, False{}), True{}) : Bool}, no_tf(d))
+    case True{} True{} True{} False{}:
+      Empty.absurd({Bool.xor(Bool.or(Bool.or(Bool.or(True{}, True{}), True{}), False{}), True{}) == Bool.or(Bool.or(True{}, True{}), False{}) : Bool}, no_tf(d))
+    case True{} True{} True{} True{}:
+      Empty.absurd({Bool.xor(Bool.or(Bool.or(Bool.or(True{}, True{}), True{}), True{}), True{}) == Bool.or(Bool.or(True{}, True{}), True{}) : Bool}, no_tf(d))
+
+def Laws.or_sub(n, a, b, k, ha, hb):
+  match n:
+    case 0n:
+      {==}
+    case 1n+q:
+      match a b k:
+        case WCon{+x, +at} WCon{+y, +bt} WCon{+z, +kt}:
+          cons.eq(q, Bool.and(Bool.or(x, y), z), Bool.or(x, y), Word.and(q, Word.or(q, at, bt), kt), Word.or(q, at, bt),
+            bor_sub(x, y, z, hd(q, Bool.and(x, z), x, Word.and(q, at, kt), at, ha), hd(q, Bool.and(y, z), y, Word.and(q, bt, kt), bt, hb)),
+            Laws.or_sub(q, at, bt, kt, tl(q, Bool.and(x, z), x, Word.and(q, at, kt), at, ha), tl(q, Bool.and(y, z), y, Word.and(q, bt, kt), bt, hb)))
+
+def Laws.sub_or_l(n, a, b):
+  match n:
+    case 0n:
+      match a:
+        case WNil{}:
+          {==}
+    case 1n+q:
+      match a b:
+        case WCon{+x, +at} WCon{+y, +bt}:
+          cons.eq(q, Bool.and(x, Bool.or(x, y)), x, Word.and(q, at, Word.or(q, at, bt)), at, bsub_or_l(x, y), Laws.sub_or_l(q, at, bt))
+
+def Laws.sub_or_r(n, a, b):
+  match n:
+    case 0n:
+      match b:
+        case WNil{}:
+          {==}
+    case 1n+q:
+      match a b:
+        case WCon{+x, +at} WCon{+y, +bt}:
+          cons.eq(q, Bool.and(y, Bool.or(x, y)), y, Word.and(q, bt, Word.or(q, at, bt)), bt, bsub_or_r(x, y), Laws.sub_or_r(q, at, bt))
+
+def Laws.rest_or(n, m, p, a, b, d):
+  match n:
+    case 0n:
+      {==}
+    case 1n+q:
+      match m p a b:
+        case WCon{+mh, +mt} WCon{+ph, +pt} WCon{+ah, +at} WCon{+bh, +bt}:
+          cons.eq(q, Bool.xor(Bool.or(Bool.or(Bool.or(mh, ph), ah), bh), mh), Bool.or(Bool.or(ph, ah), bh), Word.xor(q, Word.or(q, Word.or(q, Word.or(q, mt, pt), at), bt), mt), Word.or(q, Word.or(q, pt, at), bt),
+            brest(mh, ph, ah, bh, hd(q, Bool.and(mh, Bool.or(Bool.or(ph, ah), bh)), False{}, Word.and(q, mt, Word.or(q, Word.or(q, pt, at), bt)), Word.zero(q), d)),
+            Laws.rest_or(q, mt, pt, at, bt, tl(q, Bool.and(mh, Bool.or(Bool.or(ph, ah), bh)), False{}, Word.and(q, mt, Word.or(q, Word.or(q, pt, at), bt)), Word.zero(q), d)))
+
+def Laws.or_sub32(a, b, k, ha, hb):
+  match a b k:
+    case U32{+x} U32{+y} U32{+z}:
+      u.wrap(Word.and(32n, Word.or(32n, x, y), z), Word.or(32n, x, y), Laws.or_sub(32n, x, y, z, u.unwrap(Word.and(32n, x, z), x, ha), u.unwrap(Word.and(32n, y, z), y, hb)))
+
+def Laws.sub_or_l32(a, b):
+  match a b:
+    case U32{+x} U32{+y}:
+      u.wrap(Word.and(32n, x, Word.or(32n, x, y)), x, Laws.sub_or_l(32n, x, y))
+
+def Laws.sub_or_r32(a, b):
+  match a b:
+    case U32{+x} U32{+y}:
+      u.wrap(Word.and(32n, y, Word.or(32n, x, y)), y, Laws.sub_or_r(32n, x, y))
+
+def Laws.rest_or32(m, p, a, b, d):
+  match m p a b:
+    case U32{+w} U32{+x} U32{+y} U32{+z}:
+      u.wrap(Word.xor(32n, Word.or(32n, Word.or(32n, Word.or(32n, w, x), y), z), w), Word.or(32n, Word.or(32n, x, y), z), Laws.rest_or(32n, w, x, y, z, u.unwrap(Word.and(32n, w, Word.or(32n, Word.or(32n, x, y), z)), Word.zero(32n), d)))
+
+def run_r0.go(+z: Bool, +m: U32, +rest: U32) -> {R.sel(z, C.bits.count(m), C.bits.count(U32.shrn(m, 1n+U32.log2(rest)))) == C.bits.count(U32.shrn(m, S.r0of.go(z, rest))) : U32}:
+  match z:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def Laws.run_r0(m, all):
+  run_r0.go(U32.is_zero(U32.xor(all, m)), m, U32.xor(all, m))
+
+def Laws.runfacts_all():
+  {==}
+
+def runfacts_at(+n: Nat, +k: Nat, +m: U32, all: {S.runfacts.all(n, m) == True{} : Bool}, lt: {Nat.is_lt(k, n) == True{} : Bool}) -> {S.runfacts(step(k, m)) == True{} : Bool}:
+  match n k:
+    case 0n 0n:
+      Empty.absurd({S.runfacts(m) == True{} : Bool}, no_ft(lt))
+    case 0n 1n+j:
+      Empty.absurd({S.runfacts(step(1n+j, m)) == True{} : Bool}, no_ft(lt))
+    case 1n+p 0n:
+      Sigma.fst.bool(S.runfacts(m), S.runfacts.all(p, U32.inc(m)), and_true(S.runfacts(m), S.runfacts.all(p, U32.inc(m)), all))
+    case 1n+p 1n+j:
+      runfacts_at(p, j, U32.inc(m), Sigma.snd.bool(S.runfacts(m), S.runfacts.all(p, U32.inc(m)), and_true(S.runfacts(m), S.runfacts.all(p, U32.inc(m)), all)), lt)
+
+def runfacts_nat(+k: Nat, lt: {Nat.is_lt(k, 8192n) == True{} : Bool}) -> {S.runfacts(U32.from_nat(k)) == True{} : Bool}:
+  %step_from(k) : {S.runfacts(_) == True{} : Bool}
+  runfacts_at(8192n, k, 0, Laws.runfacts_all(), lt)
+
+def Laws.runfacts_holding(u, h):
+  %Equal.sym(U32, u, U32.from_nat(U32.to_nat(u)), Equal.sym(U32, U32.from_nat(U32.to_nat(u)), u, Laws.u32_roundtrip(u))) : {S.runfacts(_) == True{} : Bool}
+  runfacts_nat(U32.to_nat(u), Laws.holding_lt(u, h))
+
+def nat_eq(+a: Nat, +b: Nat, e: {Nat.is_eq(a, b) == True{} : Bool}) -> {a == b : Nat}:
+  match a b:
+    case 0n 0n:
+      {==}
+    case 0n 1n+y:
+      Empty.absurd({0n == 1n+y : Nat}, no_ft(e))
+    case 1n+x 0n:
+      Empty.absurd({1n+x == 0n : Nat}, no_ft(e))
+    case 1n+x 1n+y:
+      Equal.cong(Nat, Nat, (z => 1n+z), x, y, nat_eq(x, y, e))
+
+def sh.e(+r: Nat, +m: U32) -> Bool:
+  Nat.is_eq(U32.to_nat(C.bits.count(U32.shrn(m, r))), S.bits(U32.and(m, S.above(r))))
+
+def sh.fst(+i: Nat, +m: U32, h: {S.fact.shift(1n+i, m) == True{} : Bool}) -> {sh.e(1n+i, m) == True{} : Bool}:
+  Sigma.fst.bool(sh.e(1n+i, m), S.fact.shift(i, m), and_true(sh.e(1n+i, m), S.fact.shift(i, m), h))
+
+def sh.snd(+i: Nat, +m: U32, h: {S.fact.shift(1n+i, m) == True{} : Bool}) -> {S.fact.shift(i, m) == True{} : Bool}:
+  Sigma.snd.bool(sh.e(1n+i, m), S.fact.shift(i, m), and_true(sh.e(1n+i, m), S.fact.shift(i, m), h))
+
+def sh.at(+r: Nat, +m: U32, h: {sh.e(r, m) == True{} : Bool}) -> {U32.to_nat(C.bits.count(U32.shrn(m, r))) == S.bits(U32.and(m, S.above(r))) : Nat}:
+  nat_eq(U32.to_nat(C.bits.count(U32.shrn(m, r))), S.bits(U32.and(m, S.above(r))), h)
+
+def Laws.shift_count(r, m, lr, h):
+  match r:
+    case 0n:
+      sh.at(0n, m, sh.snd(0n, m, sh.snd(1n, m, sh.snd(2n, m, sh.snd(3n, m, sh.snd(4n, m, sh.snd(5n, m, sh.snd(6n, m, sh.snd(7n, m, sh.snd(8n, m, sh.snd(9n, m, sh.snd(10n, m, sh.snd(11n, m, sh.snd(12n, m, h))))))))))))))
+    case 1n+r1:
+      match r1:
+        case 0n:
+          sh.at(1n, m, sh.fst(0n, m, sh.snd(1n, m, sh.snd(2n, m, sh.snd(3n, m, sh.snd(4n, m, sh.snd(5n, m, sh.snd(6n, m, sh.snd(7n, m, sh.snd(8n, m, sh.snd(9n, m, sh.snd(10n, m, sh.snd(11n, m, sh.snd(12n, m, h))))))))))))))
+        case 1n+r2:
+          match r2:
+            case 0n:
+              sh.at(2n, m, sh.fst(1n, m, sh.snd(2n, m, sh.snd(3n, m, sh.snd(4n, m, sh.snd(5n, m, sh.snd(6n, m, sh.snd(7n, m, sh.snd(8n, m, sh.snd(9n, m, sh.snd(10n, m, sh.snd(11n, m, sh.snd(12n, m, h)))))))))))))
+            case 1n+r3:
+              match r3:
+                case 0n:
+                  sh.at(3n, m, sh.fst(2n, m, sh.snd(3n, m, sh.snd(4n, m, sh.snd(5n, m, sh.snd(6n, m, sh.snd(7n, m, sh.snd(8n, m, sh.snd(9n, m, sh.snd(10n, m, sh.snd(11n, m, sh.snd(12n, m, h))))))))))))
+                case 1n+r4:
+                  match r4:
+                    case 0n:
+                      sh.at(4n, m, sh.fst(3n, m, sh.snd(4n, m, sh.snd(5n, m, sh.snd(6n, m, sh.snd(7n, m, sh.snd(8n, m, sh.snd(9n, m, sh.snd(10n, m, sh.snd(11n, m, sh.snd(12n, m, h)))))))))))
+                    case 1n+r5:
+                      match r5:
+                        case 0n:
+                          sh.at(5n, m, sh.fst(4n, m, sh.snd(5n, m, sh.snd(6n, m, sh.snd(7n, m, sh.snd(8n, m, sh.snd(9n, m, sh.snd(10n, m, sh.snd(11n, m, sh.snd(12n, m, h))))))))))
+                        case 1n+r6:
+                          match r6:
+                            case 0n:
+                              sh.at(6n, m, sh.fst(5n, m, sh.snd(6n, m, sh.snd(7n, m, sh.snd(8n, m, sh.snd(9n, m, sh.snd(10n, m, sh.snd(11n, m, sh.snd(12n, m, h)))))))))
+                            case 1n+r7:
+                              match r7:
+                                case 0n:
+                                  sh.at(7n, m, sh.fst(6n, m, sh.snd(7n, m, sh.snd(8n, m, sh.snd(9n, m, sh.snd(10n, m, sh.snd(11n, m, sh.snd(12n, m, h))))))))
+                                case 1n+r8:
+                                  match r8:
+                                    case 0n:
+                                      sh.at(8n, m, sh.fst(7n, m, sh.snd(8n, m, sh.snd(9n, m, sh.snd(10n, m, sh.snd(11n, m, sh.snd(12n, m, h)))))))
+                                    case 1n+r9:
+                                      match r9:
+                                        case 0n:
+                                          sh.at(9n, m, sh.fst(8n, m, sh.snd(9n, m, sh.snd(10n, m, sh.snd(11n, m, sh.snd(12n, m, h))))))
+                                        case 1n+r10:
+                                          match r10:
+                                            case 0n:
+                                              sh.at(10n, m, sh.fst(9n, m, sh.snd(10n, m, sh.snd(11n, m, sh.snd(12n, m, h)))))
+                                            case 1n+r11:
+                                              match r11:
+                                                case 0n:
+                                                  sh.at(11n, m, sh.fst(10n, m, sh.snd(11n, m, sh.snd(12n, m, h))))
+                                                case 1n+r12:
+                                                  match r12:
+                                                    case 0n:
+                                                      sh.at(12n, m, sh.fst(11n, m, sh.snd(12n, m, h)))
+                                                    case 1n+r13:
+                                                      match r13:
+                                                        case 0n:
+                                                          sh.at(13n, m, sh.fst(12n, m, h))
+                                                        case 1n+r14:
+                                                          match r14:
+                                                            case 0n:
+                                                              Empty.absurd({U32.to_nat(C.bits.count(U32.shrn(m, 1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+0n))) == S.bits(U32.and(m, S.above(1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+0n))) : Nat}, no_ft(lr))
+                                                            case 1n+r15:
+                                                              Empty.absurd({U32.to_nat(C.bits.count(U32.shrn(m, 1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+r15))) == S.bits(U32.and(m, S.above(1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+1n+r15))) : Nat}, no_ft(lr))
+
+def min_le_l(+a: Nat, +b: Nat) -> {Nat.is_le(Nat.min(a, b), a) == True{} : Bool}:
+  match a b:
+    case 0n 0n:
+      {==}
+    case 0n 1n+y:
+      {==}
+    case 1n+x 0n:
+      {==}
+    case 1n+x 1n+y:
+      min_le_l(x, y)
+
+def min_le_r(+a: Nat, +b: Nat) -> {Nat.is_le(Nat.min(a, b), b) == True{} : Bool}:
+  match a b:
+    case 0n 0n:
+      {==}
+    case 0n 1n+y:
+      {==}
+    case 1n+x 0n:
+      {==}
+    case 1n+x 1n+y:
+      min_le_r(x, y)
+
+def rc.cnt(+K: Nat, +L: Nat, +Bn: Nat, e: {K == Bn : Nat}) -> {Nat.is_le(Nat.min(K, L), Bn) == True{} : Bool}:
+  %e : {Nat.is_le(Nat.min(K, L), _) == True{} : Bool}
+  min_le_l(K, L)
+
+def mh(+which: Nat, +j: Nat, +n01: U32, +n23: U32, +e01: U32, +e23: U32, +s01: U32, +s23: U32, +w01: U32, +w23: U32, +tr: U32, +won: U32, +d: Nat, +L: Nat, +inv: S.Inv(R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, d, L)) -> S.Sub32(R.suit.mask(j, R.pick(which, n01, e01, s01, w01), R.pick(which, n23, e23, s23, w23)), 8191):
+  match which:
+    case 0n:
+      ((+v1, (+v2, (+v3, (+v4, (+v5, (+v6, (+v7, +v8))))))), (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      mask_hold(j, n01, n23, v1, v2)
+    case 1n:
+      ((+v1, (+v2, (+v3, (+v4, (+v5, (+v6, (+v7, +v8))))))), (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      mask_hold(j, e01, e23, v3, v4)
+    case 2n:
+      ((+v1, (+v2, (+v3, (+v4, (+v5, (+v6, (+v7, +v8))))))), (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      mask_hold(j, s01, s23, v5, v6)
+    case 3n:
+      ((+v1, (+v2, (+v3, (+v4, (+v5, (+v6, (+v7, +v8))))))), (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      mask_hold(j, w01, w23, v7, v8)
+    case 4n+y:
+      ((+v1, (+v2, (+v3, (+v4, (+v5, (+v6, (+v7, +v8))))))), (+ls2, (+lk2, (+ev, (+ed, +ewl))))) = inv
+      mask_hold(j, w01, w23, v7, v8)
+
+def Laws.run_count_north(j, lj, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, el, dj, n):
+  +hx = Laws.or_sub32(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23), 8191, Laws.or_sub32(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23), 8191, mh(2n, j, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, S.r4(L), L, inv), mh(1n, j, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, S.r4(L), L, inv)), mh(3n, j, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, S.r4(L), L, inv))
+  +ftop = Sigma.fst.bool(S.fact.top(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), S.fact.shift(13n, U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), and_true(S.fact.top(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), S.fact.shift(13n, U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), Laws.runfacts_holding(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), hx)))
+  +xsub = Laws.u32_eq(U32.and(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))))}), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), Sigma.fst.bool(U32.is_eq(U32.and(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))))}), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), Nat.is_lt(S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), 14n), and_true(U32.is_eq(U32.and(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))))}), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), Nat.is_lt(S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), 14n), ftop)))
+  +l0 = Sigma.snd.bool(U32.is_eq(U32.and(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))))}), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), Nat.is_lt(S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), 14n), and_true(U32.is_eq(U32.and(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))))}), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), Nat.is_lt(S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), 14n), ftop))
+  +fsh = Sigma.snd.bool(S.fact.top(R.suit.mask(j, n01, n23)), S.fact.shift(13n, R.suit.mask(j, n01, n23)), and_true(S.fact.top(R.suit.mask(j, n01, n23)), S.fact.shift(13n, R.suit.mask(j, n01, n23)), Laws.runfacts_holding(R.suit.mask(j, n01, n23), mh(0n, j, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, S.r4(L), L, inv))))
+  +keq = Laws.shift_count(S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), R.suit.mask(j, n01, n23), l0, fsh)
+  +e1 = Equal.cong(U32, Nat, (u => U32.to_nat(u)), Z.run(R.suit.mask(j, n01, n23), U32.or(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), C.bits.count(U32.shrn(R.suit.mask(j, n01, n23), S.r0of(U32.xor(U32.or(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, n01, n23))))), Laws.run_r0(R.suit.mask(j, n01, n23), U32.or(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))))
+  +e2 = Equal.cong(U32, Nat, (z => U32.to_nat(C.bits.count(U32.shrn(R.suit.mask(j, n01, n23), S.r0of(z))))), U32.xor(U32.or(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, n01, n23)), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), Laws.rest_or32(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23), R.suit.mask(j, w01, w23), dj))
+  +req = Equal.trans(Nat, U32.to_nat(Z.run(R.suit.mask(j, n01, n23), U32.or(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)))), U32.to_nat(C.bits.count(U32.shrn(R.suit.mask(j, n01, n23), S.r0of(U32.xor(U32.or(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, n01, n23)))))), S.bits(U32.and(R.suit.mask(j, n01, n23), S.above(S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)))))), e1, Equal.trans(Nat, U32.to_nat(C.bits.count(U32.shrn(R.suit.mask(j, n01, n23), S.r0of(U32.xor(U32.or(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, n01, n23)))))), U32.to_nat(C.bits.count(U32.shrn(R.suit.mask(j, n01, n23), S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)))))), S.bits(U32.and(R.suit.mask(j, n01, n23), S.above(S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)))))), e2, keq))
+  Laws.run_north(Nat.min(U32.to_nat(Z.run(R.suit.mask(j, n01, n23), U32.or(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)))), L), L, j, S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), lj, l0, U32.to_nat(won), R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, (inv, (es, (ek, (el, ({==}, ((Laws.sub_trans32(R.suit.mask(j, e01, e23), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))))}, Laws.sub_trans32(R.suit.mask(j, e01, e23), U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), Laws.sub_or_r32(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), Laws.sub_or_l32(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), xsub), (Laws.sub_trans32(R.suit.mask(j, s01, s23), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))))}, Laws.sub_trans32(R.suit.mask(j, s01, s23), U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), Laws.sub_or_l32(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), Laws.sub_or_l32(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))), xsub), Laws.sub_trans32(R.suit.mask(j, w01, w23), U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23))))}, Laws.sub_or_r32(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)), xsub))), rc.cnt(U32.to_nat(Z.run(R.suit.mask(j, n01, n23), U32.or(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)))), L, S.bits(U32.and(R.suit.mask(j, n01, n23), S.above(S.r0of(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)))))), req))))))), min_le_r(U32.to_nat(Z.run(R.suit.mask(j, n01, n23), U32.or(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, s01, s23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, w01, w23)))), L), n)
+
+def Laws.run_count_south(j, lj, L, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, inv, es, ek, el, dj, n):
+  +hx = Laws.or_sub32(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23), 8191, Laws.or_sub32(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23), 8191, mh(0n, j, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, S.r4(L), L, inv), mh(3n, j, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, S.r4(L), L, inv)), mh(1n, j, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, S.r4(L), L, inv))
+  +ftop = Sigma.fst.bool(S.fact.top(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), S.fact.shift(13n, U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), and_true(S.fact.top(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), S.fact.shift(13n, U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), Laws.runfacts_holding(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), hx)))
+  +xsub = Laws.u32_eq(U32.and(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))))}), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), Sigma.fst.bool(U32.is_eq(U32.and(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))))}), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), Nat.is_lt(S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), 14n), and_true(U32.is_eq(U32.and(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))))}), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), Nat.is_lt(S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), 14n), ftop)))
+  +l0 = Sigma.snd.bool(U32.is_eq(U32.and(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))))}), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), Nat.is_lt(S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), 14n), and_true(U32.is_eq(U32.and(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))))}), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), Nat.is_lt(S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), 14n), ftop))
+  +fsh = Sigma.snd.bool(S.fact.top(R.suit.mask(j, s01, s23)), S.fact.shift(13n, R.suit.mask(j, s01, s23)), and_true(S.fact.top(R.suit.mask(j, s01, s23)), S.fact.shift(13n, R.suit.mask(j, s01, s23)), Laws.runfacts_holding(R.suit.mask(j, s01, s23), mh(2n, j, n01, n23, e01, e23, s01, s23, w01, w23, tr, won, S.r4(L), L, inv))))
+  +keq = Laws.shift_count(S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), R.suit.mask(j, s01, s23), l0, fsh)
+  +e1 = Equal.cong(U32, Nat, (u => U32.to_nat(u)), Z.run(R.suit.mask(j, s01, s23), U32.or(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), C.bits.count(U32.shrn(R.suit.mask(j, s01, s23), S.r0of(U32.xor(U32.or(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, s01, s23))))), Laws.run_r0(R.suit.mask(j, s01, s23), U32.or(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))))
+  +e2 = Equal.cong(U32, Nat, (z => U32.to_nat(C.bits.count(U32.shrn(R.suit.mask(j, s01, s23), S.r0of(z))))), U32.xor(U32.or(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, s01, s23)), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), Laws.rest_or32(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23), R.suit.mask(j, e01, e23), dj))
+  +req = Equal.trans(Nat, U32.to_nat(Z.run(R.suit.mask(j, s01, s23), U32.or(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)))), U32.to_nat(C.bits.count(U32.shrn(R.suit.mask(j, s01, s23), S.r0of(U32.xor(U32.or(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, s01, s23)))))), S.bits(U32.and(R.suit.mask(j, s01, s23), S.above(S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)))))), e1, Equal.trans(Nat, U32.to_nat(C.bits.count(U32.shrn(R.suit.mask(j, s01, s23), S.r0of(U32.xor(U32.or(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), R.suit.mask(j, s01, s23)))))), U32.to_nat(C.bits.count(U32.shrn(R.suit.mask(j, s01, s23), S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)))))), S.bits(U32.and(R.suit.mask(j, s01, s23), S.above(S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)))))), e2, keq))
+  Laws.run_south(Nat.min(U32.to_nat(Z.run(R.suit.mask(j, s01, s23), U32.or(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)))), L), L, j, S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), lj, l0, U32.to_nat(won), R.Pos{n01, n23, e01, e23, s01, s23, w01, w23, tr, won}, (inv, (es, (ek, (el, ({==}, ((Laws.sub_trans32(R.suit.mask(j, n01, n23), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))))}, Laws.sub_trans32(R.suit.mask(j, n01, n23), U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), Laws.sub_or_l32(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), Laws.sub_or_l32(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), xsub), (Laws.sub_trans32(R.suit.mask(j, e01, e23), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))))}, Laws.sub_or_r32(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), xsub), Laws.sub_trans32(R.suit.mask(j, w01, w23), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), U32{S.ones(32n, S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))))}, Laws.sub_trans32(R.suit.mask(j, w01, w23), U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)), Laws.sub_or_r32(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), Laws.sub_or_l32(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23))), xsub))), rc.cnt(U32.to_nat(Z.run(R.suit.mask(j, s01, s23), U32.or(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)))), L, S.bits(U32.and(R.suit.mask(j, s01, s23), S.above(S.r0of(U32.or(U32.or(R.suit.mask(j, n01, n23), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)))))), req))))))), min_le_r(U32.to_nat(Z.run(R.suit.mask(j, s01, s23), U32.or(U32.or(U32.or(R.suit.mask(j, s01, s23), R.suit.mask(j, n01, n23)), R.suit.mask(j, w01, w23)), R.suit.mask(j, e01, e23)))), L), n)

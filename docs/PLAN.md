@@ -734,8 +734,36 @@ move":
   proof terms. With the error in place, Bend spent its time printing those types in
   the error. With both fixed, each run def checks in a few seconds.
 
-The one-card rule of before is the run with k = 1. Next comes tying these to the
-solver's own count of quick tricks (`Z.quick`).
+The one-card rule of before is the run with k = 1.
+
+**The solver's count of a run.** `run_count_north` and `run_count_south` tie the rule
+to the solver. `Z.run(m, all)` is how `Z.quick` counts the leader's run of top cards
+in a suit: the cards of m above the highest card in play outside m. The laws say that
+at no trumps, at the start of a trick with North (South) on lead and L cards to each
+hand, `B.solve` gives North-South at least min(`Z.run`, L) tricks more than they have
+won. This is with `all` built as `Z.quick` builds it, and with no other hand holding
+one of the leader's cards in the suit (`dj`, true of every real deal). The proof
+picks r0 as `Z.run` does (`S.r0of`: one above the highest card in play outside the
+leader's hand, found with `U32.log2`) and then builds the run state `S.RH` for
+`run_north`. Its pieces:
+
+- `rest_or`: taking the leader's cards back out of all four hands' leaves the other
+  three's, when they share none. `or_sub`, `sub_or_l` and `sub_or_r`: the subset facts
+  for `or`. All are word lemmas by induction, with four-bit case splits at the head.
+- `run_r0`: `Z.run` is the count of m shifted down by `S.r0of`, in both of its cases.
+- `runfacts_holding`: for every holding, every card is below `S.r0of`, which is at
+  most 13, and counting the holding shifted down r is counting its cards at rank r or
+  above (`S.bits`) for each r up to 13. This is checked over the 8192 holdings and
+  carried to any holding as `facts_holding` is. `shift_count` picks out the r needed.
+
+The 8192-holding check walks a domain, so `runfacts_holding` and the two laws on top
+of it are among those `tools/verdict.sh` leaves out (see below). Proving the `log2`
+and shift facts by induction on words would bring them into the kernel check, as was
+done for the lowest-card facts.
+
+`Z.quick` counts more than this one run: both hands of a side, entries between them,
+second cards, safety against ruffs, and the trump suit. Each of those is a further
+rule to prove in the same way.
 
 **The kernel check.** `bend PROOF.bend --verdict` rechecks proofs with a kernel proved
 in Lean, using Lean 4.34.0. On the whole file it stops at the first law that walks a
@@ -755,12 +783,14 @@ induction on the bits of the word (under "The lowest card of a holding, by induc
   These are finite case splits, which the kernel accepts.
 
 `tools/verdict.sh` leaves out the laws that walk a whole domain and whatever rests on
-them, 30 of 179, and runs `--verdict` on the rest. All 149 pass, including the main
-theorem: `search_in`, `solve_in`, `solve_deal`, and under them `moves_hand`,
-`play_inv`, the trick word and the word lemmas. The 30 left out are the PBN and
-holding checks, the samples of the fast search's rules (cut, quick and later tricks,
-the driver, the table) and the old pass over the holdings, which now nothing on the
-path to the bounds uses.
+them, 34 of 246, and runs `--verdict` on the rest. All 212 pass, including the main
+theorem (`search_in`, `solve_in`, `solve_deal`, and under them `moves_hand`,
+`play_inv`, the trick word and the word lemmas) and the sure-trick rules (`top_nt_*`,
+`run_north`, `run_south`). The 34 left out are the PBN and holding checks, the
+samples of the fast search's rules (cut, quick and later tricks, the driver, the
+table), the old pass over the holdings, which now nothing on the path to the bounds
+uses, and the new pass behind the solver's run count (`runfacts_all`) with the three
+laws on it, `runfacts_holding` and `run_count_*`.
 
 ## 3. Data representation
 
