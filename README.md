@@ -143,8 +143,8 @@ the hidden cards at random many times, keeps the layouts that fit the auction an
 the play, solves each one double dummy, and says for each card the player could
 play now how many tricks declarer takes on average and how often the contract
 makes. Every layout that fits is equally likely. On an Apple M6 the example below,
-200 layouts of an opening lead with 10 cards to try, takes about 0.9 s on 12
-threads and 4.4 s on one.
+200 layouts of an opening lead with 10 cards to try, takes 0.9 s on 12
+threads on a quiet machine (the run shown shared it) and 4.4 s on one.
 
 ```sh
 tools/sim.sh deal="N:- - - T952.T2.JT754.97" contract=4H by=S \
