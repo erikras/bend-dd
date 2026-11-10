@@ -8,6 +8,8 @@
 #                             table, and its par against DDS
 #   tools/web.sh shots        build, then check the page in Chromium with Playwright and
 #                             save screenshots to web/shots/
+#   tools/web.sh deploy [branch]  build, then deploy a preview to Cloudflare Pages at
+#                             https://<branch>.bend-dd.pages.dev/ (dev by default; never main)
 #   tools/web.sh bench        time every route on list100: native dd, Bend's JS target,
 #                             and Bend's C as WebAssembly with and without threads
 #
@@ -112,6 +114,23 @@ case "$1" in
     sleep 1
     node web/bench/shots.mjs http://localhost:8643/
     ;;
+  deploy)
+    # A preview on Cloudflare Pages, at <branch>.bend-dd.pages.dev (dev by default).
+    # Wrangler logs in through the browser (npx wrangler login); no token is kept here.
+    # Production is the main branch, which this never deploys to.
+    branch=${2:-dev}
+    if [ "$branch" = "main" ]; then
+      echo "tools/web.sh deploy: main is production; deploy a preview branch instead"
+      exit 1
+    fi
+    build_solver
+    build_page
+    if ! npx --yes wrangler pages project list 2>/dev/null | grep -q "bend-dd"; then
+      npx --yes wrangler pages project create bend-dd --production-branch main
+    fi
+    npx --yes wrangler pages deploy $D --project-name bend-dd --branch "$branch" --commit-dirty=true
+    echo "preview: https://$branch.bend-dd.pages.dev/"
+    ;;
   bench)
     build_solver
     dd_ready
@@ -136,7 +155,7 @@ case "$1" in
     uptime
     ;;
   *)
-    sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
     ;;
 esac
