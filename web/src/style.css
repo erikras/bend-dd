@@ -9,18 +9,9 @@
   --accent: #1f6f4a;
   --vul: #c8102e;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #17181a;
-    --card: #222326;
-    --ink: #ececec;
-    --muted: #9a9aa0;
-    --line: #3a3b3f;
-    --red: #ff6b6b;
-    --black: #ececec;
-    --accent: #5cc58f;
-  }
+  /* Light only, form controls too, whatever the system's setting: spades and
+     clubs are black and hearts and diamonds red, as on cards. */
+  color-scheme: light;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); }
@@ -88,6 +79,7 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted)
 .suit { display: flex; gap: 6px; line-height: 1.45; white-space: nowrap; }
 .sym { width: 1em; text-align: center; }
 .s0, .s3 { color: var(--black); }
+.s4 { color: var(--ink); }
 .s1, .s2 { color: var(--red); }
 .ranks { letter-spacing: 0.02em; }
 

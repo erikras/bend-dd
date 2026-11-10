@@ -1,8 +1,9 @@
 // Checks the hand diagram's layout in Chromium: West and East the same distance from
 // the compass, North and South centred on it, and nothing wider than its card, for
 // long hands (a 7-card suit with a 10), the play-through's card boxes and the
-// rotated diagram, at desktop, medium and phone widths, light and dark. Saves
-// web/shots/layout-<case>-<width>-<scheme>.png. Run as web/bench/shots.mjs is.
+// rotated diagram, at desktop, medium and phone widths. The page is light only:
+// under an emulated dark system setting it must stay light, with black spades and
+// clubs and red hearts and diamonds. Saves web/shots/layout-<case>-<width>-<scheme>.png. Run as web/bench/shots.mjs is.
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
 
@@ -42,6 +43,21 @@ for (const [name, hash] of cases) for (const [wname, w] of widths) for (const sc
     return { card: { left: card.left, right: card.right }, cv: cv && { left: cv.left, right: cv.right, mid: (cv.left + cv.right) / 2 }, t, rt, b, l, overflow: document.documentElement.scrollWidth > innerWidth + 1 };
   });
   const notes = [];
+  // Light whatever the system says, with the suits in their colours everywhere.
+  const look = await p.evaluate(() => {
+    const lum = (c) => { const [r, g, b] = c.match(/\d+/g).map(Number); return (r + g + b) / 3; };
+    const red = (c) => { const [r, g, b] = c.match(/\d+/g).map(Number); return r > 150 && g < 80 && b < 80; };
+    const syms = [...document.querySelectorAll(".s0, .s1, .s2, .s3")].map((e) => [e.classList.contains("s0") || e.classList.contains("s3"), getComputedStyle(e).color]);
+    return {
+      bg: lum(getComputedStyle(document.body).backgroundColor),
+      card: lum(getComputedStyle(document.querySelector(".diagram")).backgroundColor),
+      black: syms.filter(([b]) => b).every(([, c]) => lum(c) < 60),
+      red: syms.filter(([b]) => !b).every(([, c]) => red(c)),
+      n: syms.length,
+    };
+  });
+  if (look.bg < 230 || look.card < 230) notes.push(`not light: background ${look.bg.toFixed(0)}, card ${look.card.toFixed(0)}`);
+  if (!look.black || !look.red || look.n < 16) notes.push(`suit colours wrong (black ${look.black}, red ${look.red}, ${look.n} symbols)`);
   if (m.overflow) notes.push("page scrolls sideways");
   for (const h of [m.t, m.rt, m.b, m.l]) if (h.left < m.card.left - 1 || h.right > m.card.right + 1) notes.push("a hand spills out of the card");
   if (m.cv && wname !== "phone") {
@@ -63,7 +79,7 @@ for (const [name, hash] of cases) for (const [wname, w] of widths) for (const sc
   if (!ok) bad++;
   console.log(`${name} ${wname} ${scheme}: ${ok ? "ok" : notes.join("; ")}`);
   await p.locator(".diagram").screenshot({ path: `${shots}layout-${name}-${wname}-${scheme}.png` });
-  if (name === "seed11-4HW" && wname === "medium" && scheme === "dark") await p.screenshot({ path: `${shots}medium-dark.png`, fullPage: true });
+  if (name === "seed11-4HW" && wname === "medium" && scheme === "dark") await p.screenshot({ path: `${shots}medium-system-dark.png`, fullPage: true });
   await p.close();
 }
 await browser.close();

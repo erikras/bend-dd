@@ -77,6 +77,15 @@ function writeHash(s: State) {
 const rankText = (r: string) => (r === "T" ? "10" : r);
 const cardLabel = (c: Card) => SUITS[c.s] + rankText(c.r);
 
+// Text with each suit symbol in its colour: black spades and clubs, red hearts and
+// diamonds.
+function suited(text: string) {
+  return text.split(/([♠♥♦♣])/).map((x) => {
+    const s = SUITS.indexOf(x);
+    return s >= 0 ? <span class={`s${s}`}>{x}</span> : x;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // The diagram
 
@@ -225,7 +234,7 @@ function PlayPane({ state, play, set, pending }: { state: State; play: Play; set
     <div class="pane play">
       <div class="row between">
         <div>
-          <strong>{state.level}{STRAINS[state.strain!]}</strong> by {SEAT_NAMES[decl]}
+          <strong>{state.level}{suited(STRAINS[state.strain!])}</strong> by {SEAT_NAMES[decl]}
           <select aria-label="level" value={state.level} onChange={(e) => set({ level: +(e.target as HTMLSelectElement).value })}>
             {[1, 2, 3, 4, 5, 6, 7].map((l) => <option value={l}>{l}</option>)}
           </select>
@@ -551,7 +560,7 @@ function App() {
               <h2>Double dummy tricks</h2>
               <TableView table={table} pick={pick} chosen={playing ? [state.strain!, state.by!] : undefined} />
               <p class="par">
-                {parResult ? <>Par: <strong>{parResult.text}</strong></> : <span class="wait">Solving…</span>}
+                {parResult ? <>Par: <strong>{suited(parResult.text)}</strong></> : <span class="wait">Solving…</span>}
               </p>
               {total != null ? (
                 <details class="meta">
