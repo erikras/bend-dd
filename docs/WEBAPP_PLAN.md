@@ -69,7 +69,14 @@ transposition table is a 32 MB `Array<U32>` per strain, so 5 workers need about 
 
 ### 3.2 Recommendation
 
-Start with **A**, and decide B or C only if Phase 0 says the browser is too slow.
+Run the solver in the browser, and let Phase 0 choose between **A** and **C** by
+measuring both on cadmium (Erik's call, 2026-11-10). Neither matches native speed:
+the JS target is single-threaded and probably 3 to 10 times slower per core, and
+WebAssembly usually runs 1.2 to 2 times slower than native, with real threads if it
+builds at all. If C builds and passes the tests it is likely the faster of the two.
+The page talks to the solver only through the worker interface below, so either
+route plugs in behind it, and A stays as the fallback. A server (B) comes back only
+if both are too slow.
 
 The Bend code goes in one new file, `web/api.bend`, that imports `src/` and exposes a
 few pure defs with plain inputs and outputs (strings and numbers), so nothing in the
@@ -105,7 +112,8 @@ parameter of `api.bend` (a check for Phase 0).
   and a per-IP rate limit. The page would try the server for large simulations and fall
   back to workers. Hosting would be a small Linux VM (Hetzner, Fly.io), built with clang;
   the GPU is not needed.
-- WebAssembly (C) is worth a one-day spike only if A is too slow and B is unwanted.
+- If WebAssembly (C) builds but loses to A, or needs patches to Bend's runtime that
+  are too deep, it is dropped and the numbers go in §2.
 
 ## 4. The UI
 
@@ -179,10 +187,13 @@ deploy. A custom domain is optional.
 
 Each phase ends with something usable and deployed.
 
-0. **Spike, about a day.** Build `api.mjs` for one strain. Time `list100` under Bun and
-   in Chrome and Safari workers on cadmium, and on a phone. Measure memory with 5 and 8
-   workers. Check that `api.sim` chunks merge to `sim`'s exact output. Outcome: go on
-   with A, or bring §3.3 back to Erik with numbers.
+0. **Spike, about a day: JavaScript and WebAssembly side by side.** Build `api.mjs`
+   with Bend's JS target, and build the emitted C (`-o api.c`) with Emscripten, with
+   pthreads and without. Time `list100` for each under Node or Bun, and in Chrome and
+   Safari workers on cadmium, against native `dd`. Note what the C needed to build
+   (`mmap`, `poll`, signals). Measure memory with 5 and 8 workers. Check that
+   `api.sim` chunks merge to `sim`'s exact output. Outcome: the faster route that
+   passes the tests, with the numbers in §2.
 1. **API and workers.** `web/api.bend`, the worker pool, the tests in §6.
 2. **Viewer.** Deal diagram, random and pasted deals, the table filling in by strain,
    par, shareable links. Deploy. This is the first version people can use.
@@ -194,9 +205,9 @@ Each phase ends with something usable and deployed.
 
 ## 8. Decisions for Erik
 
-1. **Where the solver runs.** Recommended: in the browser (A), confirmed by Phase 0's
-   numbers before anything else is built. The alternative is a server running the
-   native binaries (B), faster but a running service to pay for and watch.
+1. **Where the solver runs.** Decided (2026-11-10): in the browser, with Phase 0
+   picking JavaScript (A) or WebAssembly (C) by measurement. A server running the
+   native binaries (B) stays the fallback.
 2. **Where it's hosted.** Recommended: Cloudflare Pages, deployed from cadmium with one
    command. Alternatives: GitHub Pages from a branch, or a VPS.
 3. **Who it's for.** Public on the open web, or just for Erik for now? This changes how
