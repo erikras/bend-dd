@@ -1988,11 +1988,17 @@ law run_r0:
   for +all: U32
   {Z.run(m, all) == C.bits.count(U32.shrn(m, S.r0of(U32.xor(all, m)))) : U32}
 
-# LAW: the facts about a holding a run of top cards rests on, for each of the 8192
-# holdings, and so for any holding.
-law runfacts_all:
-  {S.runfacts.all(8192n, 0) == True{} : Bool}
+# A word under the mask of its first k bits is its first k bits.
+law keep_low:
+  for +k: Nat
+  for +n: Nat
+  for +w: Word(n)
+  for +h: S.Sub(n, w, S.ones(n, k))
+  {w == S.w.keep(k, n, w) : Word(n)}
 
+# LAW: the facts about a holding a run of top cards rests on, for any holding. The
+# proof splits on the holding's 13 bits and checks each of the 8192 cases on its own,
+# so each case is small enough for the kernel.
 law runfacts_holding:
   for +u: U32
   for +h: {(u .&. 8191 : U32) == u : U32}

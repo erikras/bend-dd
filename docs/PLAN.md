@@ -753,13 +753,14 @@ leader's hand, found with `U32.log2`) and then builds the run state `S.RH` for
 - `run_r0`: `Z.run` is the count of m shifted down by `S.r0of`, in both of its cases.
 - `runfacts_holding`: for every holding, every card is below `S.r0of`, which is at
   most 13, and counting the holding shifted down r is counting its cards at rank r or
-  above (`S.bits`) for each r up to 13. This is checked over the 8192 holdings and
-  carried to any holding as `facts_holding` is. `shift_count` picks out the r needed.
+  above (`S.bits`) for each r up to 13. `keep_low` turns a holding into the word of
+  its 13 bits with zeros above them (`S.w.keep`), and `rf13` splits on those 13 bits:
+  8192 cases, each checked by evaluation. `shift_count` picks out the r needed.
 
-The 8192-holding check walks a domain, so `runfacts_holding` and the two laws on top
-of it are among those `tools/verdict.sh` leaves out (see below). Proving the `log2`
-and shift facts by induction on words would bring them into the kernel check, as was
-done for the lowest-card facts.
+This was first a single pass over the 8192 holdings, like `facts_all`, which the
+kernel can't run (its fuel runs out somewhere between 16 and 128 holdings in one
+evaluation). Split by bits, each case is one holding, well within the fuel, so
+`runfacts_holding` and `run_count_*` pass `--verdict` too.
 
 `Z.quick` counts more than this one run: both hands of a side, entries between them,
 second cards, safety against ruffs, and the trump suit. Each of those is a further
@@ -783,14 +784,13 @@ induction on the bits of the word (under "The lowest card of a holding, by induc
   These are finite case splits, which the kernel accepts.
 
 `tools/verdict.sh` leaves out the laws that walk a whole domain and whatever rests on
-them, 34 of 246, and runs `--verdict` on the rest. All 212 pass, including the main
+them, 30 of 246, and runs `--verdict` on the rest. All 216 pass, including the main
 theorem (`search_in`, `solve_in`, `solve_deal`, and under them `moves_hand`,
 `play_inv`, the trick word and the word lemmas) and the sure-trick rules (`top_nt_*`,
-`run_north`, `run_south`). The 34 left out are the PBN and holding checks, the
-samples of the fast search's rules (cut, quick and later tricks, the driver, the
-table), the old pass over the holdings, which now nothing on the path to the bounds
-uses, and the new pass behind the solver's run count (`runfacts_all`) with the three
-laws on it, `runfacts_holding` and `run_count_*`.
+`run_north`, `run_south`, and `run_count_*`, which tie them to the solver's count).
+The 30 left out are the PBN and holding checks, the samples of the fast search's
+rules (cut, quick and later tricks, the driver, the table) and the old pass over the
+holdings, which now nothing on the path to the bounds uses.
 
 ## 3. Data representation
 
