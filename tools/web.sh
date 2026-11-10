@@ -94,7 +94,7 @@ case "$1" in
   bench)
     build_solver
     dd_ready
-    if newer $B/wasm-pthread.cjs $B/wasm.c web/wasm-patch.py; then
+    if newer $B/wasm-pthread.cjs $B/wasm.c web/wasm-patch.py tools/web.sh; then
       # Five strains at once share one heap here, so it needs more than one does.
       echo "== emcc: wasm-pthread.cjs"
       python3 web/wasm-patch.py $B/wasm.c $B/wasm-patched-1g.c 1024

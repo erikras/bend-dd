@@ -48,11 +48,61 @@ What Bend 2.0.40 gives us for the web (from its guide and compiler source):
 - Bend can also write servers (`TCP.listen`, as in `demos/io_http_server`), but HTTP and
   JSON written by hand in Bend would be a lot of code for little gain.
 
-What we don't know yet, and must measure first (Phase 0): how fast the JS target runs
-the search. Its output is plain JS functions, not an interpreter, so a guess is 3 to 10
-times slower than one native thread. That would put one table at about 1 to 4 s in one
-worker and about 0.3 to 1 s with one worker per strain (a heavy strain sets the pace). The memory is known: the
-transposition table is a 32 MB `Array<U32>` per strain, so 5 workers need about 160 MB.
+### Phase 0: measured (2026-11-10, cadmium)
+
+All 100 deals of `tests/data/list100.txt`, every table checked against native `dd`
+(0 wrong on every route). Node 26, one process. "5 workers" is one worker thread per
+strain, each deal's five strains at once, which is how the page runs; the time is per
+deal, waiting for its slowest strain. The machine was shared with ordinary desktop
+apps (load about 3) but no other benchmark. `tools/web.sh bench` repeats all of it.
+
+| Route | 1 thread | 5 workers / threads | Median, 5 | Worst, 5 |
+|---|---|---|---|---|
+| Native `dd`, deal by deal | 332 ms | 153 ms | | |
+| Native `dd`, the whole list at once | 332 ms | 54 ms on 12 | | |
+| A. Bend's JS target (`api.mjs`) | 1760 ms | 787 ms | 523 ms | 6.4 s |
+| C. WebAssembly, no threads (the page) | 1070 ms | 440 ms | 294 ms | 3.8 s |
+| C. WebAssembly with pthreads | 1051 ms | 456 ms | | |
+
+- WebAssembly runs about 3.2 times slower than native per thread, JS about 5.3 times.
+  WebAssembly is 1.6 to 1.8 times faster than JS.
+- In the browser (Chromium, through the page) seed 11 solves in 0.1 s and list100's
+  first deal in 0.8 s.
+- `api.sim` split into chunks of 7 or 16 layouts adds up to `sim`'s output exactly,
+  for the README's 200-layout example (`web/bench/simcheck.mjs`). In one JS thread it
+  takes 25 to 29 s, against 4.4 s for native `sim` on one thread.
+- Memory: each WebAssembly worker reserves a 512 MB heap but touches about 75 MB at
+  most (the 32 MB transposition table and the search), so 5 workers use about 370 MB.
+
+**Chosen: WebAssembly without threads, one Web Worker per strain.** It is the fastest
+route that passes, as fast as the pthreads build because a table has only five strains
+to run at once, and it needs no cross-origin isolation headers, so any static host
+works. Each strain is a job of its own, so the table fills in column by column. Each
+job runs the solver's `main` once in a new instance of the compiled module, which
+costs under a millisecond. The JS target stays as the fallback (it needs no
+Emscripten) and `api.mjs` is still built and tested.
+
+What the C needed to build with Emscripten 7.0 (all in `web/wasm-patch.py`, plain
+text substitutions on Bend's output that fail loudly if a new Bend moves them; the
+solver's code is untouched):
+
+1. `-mtail-call`, since Bend's segments jump to each other by `musttail`, and the
+   `Env` struct passed as two pointer arguments, because WebAssembly tail calls can't
+   pass a struct by value.
+2. The heap: 512 MB instead of an 8 GB `MAP_NORESERVE` reservation, which a wasm32
+   memory can't hold. Bend grows its heap in place at fixed addresses, which wasm32
+   doesn't have, so that is off and the size is fixed (the pthreads build, with five
+   strains in one heap, needs 1 GB).
+3. Each thread's stack: 16 MB instead of 2 GB.
+4. The heap from `sbrk` instead of `mmap`: Emscripten's `mmap` zeroes what it maps,
+   which took 300 ms a call, while memory past the break in a new instance is
+   already zero.
+5. The event loop's `select` sets sized to Emscripten's 128-byte `fd_set`.
+
+Nothing was needed for signals (`sigaction` and `sigaltstack` are stubs), `mprotect`
+(it warns and goes on), `poll` or Metal (only built with `!`). Two things don't work and
+the page doesn't use them: file IO, whose helper thread blocks in `select` (the solver
+gets its input as arguments instead), and calling `main` twice in one instance.
 
 ## 3. Architecture
 
@@ -187,7 +237,7 @@ deploy. A custom domain is optional.
 
 Each phase ends with something usable and deployed.
 
-0. **Spike, about a day: JavaScript and WebAssembly side by side.** Build `api.mjs`
+0. **Done (2026-11-10), see §2. Spike: JavaScript and WebAssembly side by side.** Build `api.mjs`
    with Bend's JS target, and build the emitted C (`-o api.c`) with Emscripten, with
    pthreads and without. Time `list100` for each under Node or Bun, and in Chrome and
    Safari workers on cadmium, against native `dd`. Note what the C needed to build
