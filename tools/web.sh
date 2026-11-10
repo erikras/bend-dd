@@ -113,6 +113,7 @@ case "$1" in
     trap 'kill $server' EXIT
     sleep 1
     node web/bench/shots.mjs http://localhost:8643/
+    node web/bench/layout.mjs http://localhost:8643/
     ;;
   deploy)
     # A preview on Cloudflare Pages, at <branch>.bend-dd.pages.dev (dev by default).

@@ -44,6 +44,11 @@ for (const [name, viewport, hash] of [
   const pbn = await page.textContent(".pbn-out code");
   console.log(`${name}: seed 11 solved in ${Date.now() - t0} ms including the page load; ${await page.textContent(".par")}`);
   check(`${name} table`, got, want(pbn.trim()));
+  // The solve times: no row under the table, and a details toggle that names them.
+  check(`${name}: no time row under the table`, await page.$$eval("table.dd tfoot", (x) => x.length), 0);
+  await page.click("details.meta summary");
+  const tm = await page.textContent("details.meta .times");
+  check(`${name}: details show each strain's time`, /NT \d+\.\d\d s, ♠ \d+\.\d\d s, ♥ \d+\.\d\d s, ♦ \d+\.\d\d s, ♣ \d+\.\d\d s/.test(tm), true);
   await page.screenshot({ path: `${shots}${name}.png`, fullPage: true });
   await page.close();
 }

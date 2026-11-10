@@ -169,10 +169,10 @@ function Compass({ play, bottom }: { play: Play | null; bottom: number }) {
 
 function Diagram({ deal, dealer, vul, modes, play, bottom }: { deal: Deal; dealer: number; vul: Vul; modes: HandMode[]; play: Play | null; bottom: number }) {
   return (
-    <div class="diagram">
+    <div class="diagram"><div class="dgrid">
       {deal.map((h, seat) => <HandView seat={seat} pos={place(seat, bottom)} hand={h} dealer={dealer} vul={vul} mode={modes[seat]} mover={!!play && !play.over && play.mover === seat && modes[seat].kind === "play"} />)}
       <Compass play={play} bottom={bottom} />
-    </div>
+    </div></div>
   );
 }
 
@@ -183,7 +183,7 @@ function Diagram({ deal, dealer, vul, modes, play, bottom }: { deal: Deal; deale
 const ROWS = [0, 2, 1, 3]; // N S E W
 const COLS = [4, 0, 1, 2, 3]; // NT ♠ ♥ ♦ ♣
 
-function TableView({ table, times, pick, chosen }: { table: Table; times: (number | null)[]; pick: (s: number, seat: number, tricks: number) => void; chosen?: [number, number] }) {
+function TableView({ table, pick, chosen }: { table: Table; pick: (s: number, seat: number, tricks: number) => void; chosen?: [number, number] }) {
   return (
     <table class="dd">
       <thead>
@@ -206,12 +206,6 @@ function TableView({ table, times, pick, chosen }: { table: Table; times: (numbe
           </tr>
         ))}
       </tbody>
-      <tfoot>
-        <tr>
-          <th></th>
-          {COLS.map((s) => <td class="ms">{times[s] == null ? "" : (times[s]! / 1000).toFixed(2)}</td>)}
-        </tr>
-      </tfoot>
     </table>
   );
 }
@@ -555,14 +549,19 @@ function App() {
             ) : (
               <>
               <h2>Double dummy tricks</h2>
-              <TableView table={table} times={times} pick={pick} chosen={playing ? [state.strain!, state.by!] : undefined} />
+              <TableView table={table} pick={pick} chosen={playing ? [state.strain!, state.by!] : undefined} />
               <p class="par">
                 {parResult ? <>Par: <strong>{parResult.text}</strong></> : <span class="wait">Solving…</span>}
               </p>
-              <p class="meta">
-                {total != null ? `Solved in ${(total / 1000).toFixed(2)} s with ${pool.size} workers.` : `${pool.size} workers, one strain each.`}
-                {state.seed !== undefined && !state.pbn && <> Same deal as <code>dd --random {state.seed}</code>.</>}
-              </p>
+              {total != null ? (
+                <details class="meta">
+                  <summary>Solved in {(total / 1000).toFixed(2)} s with {pool.size} workers. <span class="more">details</span></summary>
+                  <p class="times">Each strain in a worker of its own, all started together; each finished after:{" "}
+                    {COLS.map((s, i) => <span class="t">{i > 0 && ", "}{STRAINS[s]} {(times[s]! / 1000).toFixed(2)} s</span>)}.
+                  </p>
+                </details>
+              ) : <p class="meta">{pool.size} workers, one strain each.</p>}
+              {state.seed !== undefined && !state.pbn && <p class="meta">Same deal as <code>dd --random {state.seed}</code>.</p>}
               {!playing && done && <p class="hint">Click a number to play that contract.</p>}
               <p class="pbn-out"><code>{pbn}</code></p>
                 {simMode && hidden.length > 0 && <button type="button" class="reveal" onClick={() => setReveal(false)}>Hide the full deal</button>}
