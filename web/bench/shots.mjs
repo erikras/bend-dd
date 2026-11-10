@@ -101,7 +101,7 @@ const simKept = simText.match(/Dealt \d+ layouts and kept \d+/)[0];
 for (const [name, viewport] of [["sim", { width: 1100, height: 900 }], ["sim-phone", { width: 390, height: 844 }]]) {
   const p = await browser.newPage({ viewport, deviceScaleFactor: 2 });
   await p.goto(url + SIM_URL);
-  await table(p);
+  await p.waitForSelector("button.run");
   const t = Date.now();
   await p.click("button.run");
   await p.waitForFunction(() => document.querySelector(".stats") && !document.querySelector(".stats").textContent.includes("running"), null, { timeout: 120000 });
@@ -111,7 +111,13 @@ for (const [name, viewport] of [["sim", { width: 1100, height: 900 }], ["sim-pho
   check(`${name}: README simulation rows`, got, simRows);
   check(`${name}: layouts dealt and kept`, kept, simKept);
   console.log(`${name}: ${ms} ms in the page; hidden hands shown: ${await p.$$eval(".hand.hidden", (x) => x.length)}`);
+  // Nothing on the page gives the hidden hands away until asked.
+  const leaks = await p.evaluate(() => [!!document.querySelector("table.dd"), !!document.querySelector(".par"), !!document.querySelector(".pbn-out"), document.body.innerText.includes("AJ4.K94")]);
+  check(`${name}: table, par and deal hidden`, leaks, [false, false, false, false]);
   await p.screenshot({ path: `${shots}${name}.png`, fullPage: true });
+  await p.click("button.reveal");
+  const shown = await p.evaluate(() => [!!document.querySelector("table.dd"), !!document.querySelector(".par"), !!document.querySelector(".pbn-out"), document.querySelectorAll(".hand.hidden").length]);
+  check(`${name}: "Show the full deal" shows them`, shown, [true, true, true, 0]);
   await p.close();
 }
 

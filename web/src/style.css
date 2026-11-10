@@ -162,3 +162,6 @@ table.simrows td.bar { width: 30%; }
 table.simrows td.bar div { height: 10px; background: var(--accent); border-radius: 2px; }
 table.simrows td.bar.makes div { background: #b08a2e; }
 button.stop { background: var(--red); border-color: var(--red); }
+
+.secret p { font-size: 0.9rem; }
+button.reveal { background: var(--card); color: var(--ink); border-color: var(--line); margin-top: 8px; }

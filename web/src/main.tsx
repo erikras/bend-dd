@@ -344,6 +344,7 @@ function App() {
   const [seedText, setSeedText] = useState("");
   const [cands, setCands] = useState<Map<string, Cands>>(new Map());
   const [simRun, setSimRun] = useState<SimRun | null>(null);
+  const [reveal, setReveal] = useState(false);
   const run = useRef(0);
   const simId = useRef(0);
   const set = (s: Partial<State>) => setState((old) => ({ ...old, ...s }));
@@ -488,8 +489,10 @@ function App() {
     set({ strain: s, by: seat, level: Math.max(1, Math.min(7, tricks - 6)), plays: [], at: 0 });
 
   const simMode = playing && state.tab === "sim";
+  // While the simulation hides hands, the table, par and the deal would show them.
+  const secret = !!simMode && hidden.length > 0 && !reveal;
   const modes: HandMode[] = [0, 1, 2, 3].map((s) =>
-    simMode && hidden.includes(s) ? { kind: "hidden" }
+    simMode && hidden.includes(s) && !reveal ? { kind: "hidden" }
       : play && !play.error ? { kind: "play", left: play.hands[s], opts: here ? options(play, here) : null, onPlay: playCard }
       : { kind: "view" });
 
@@ -539,17 +542,28 @@ function App() {
             )}
           </div>
           <div class="analysis">
-            <h2>Double dummy tricks</h2>
-            <TableView table={table} times={times} pick={pick} chosen={playing ? [state.strain!, state.by!] : undefined} />
-            <p class="par">
-              {parResult ? <>Par: <strong>{parResult.text}</strong></> : <span class="wait">Solving…</span>}
-            </p>
-            <p class="meta">
-              {total != null ? `Solved in ${(total / 1000).toFixed(2)} s with ${pool.size} workers.` : `${pool.size} workers, one strain each.`}
-              {state.seed !== undefined && !state.pbn && <> Same deal as <code>dd --random {state.seed}</code>.</>}
-            </p>
-            {!playing && done && <p class="hint">Click a number to play that contract.</p>}
-            <p class="pbn-out"><code>{pbn}</code></p>
+            {secret ? (
+              <div class="secret">
+                <h2>Double dummy tricks</h2>
+                <p class="muted">The table, par and deal are hidden while the simulation hides {hidden.map((x) => SEAT_NAMES[x]).join(", ")}, since they would give the hidden hands away.</p>
+                <button type="button" class="reveal" onClick={() => setReveal(true)}>Show the full deal</button>
+              </div>
+            ) : (
+              <>
+              <h2>Double dummy tricks</h2>
+              <TableView table={table} times={times} pick={pick} chosen={playing ? [state.strain!, state.by!] : undefined} />
+              <p class="par">
+                {parResult ? <>Par: <strong>{parResult.text}</strong></> : <span class="wait">Solving…</span>}
+              </p>
+              <p class="meta">
+                {total != null ? `Solved in ${(total / 1000).toFixed(2)} s with ${pool.size} workers.` : `${pool.size} workers, one strain each.`}
+                {state.seed !== undefined && !state.pbn && <> Same deal as <code>dd --random {state.seed}</code>.</>}
+              </p>
+              {!playing && done && <p class="hint">Click a number to play that contract.</p>}
+              <p class="pbn-out"><code>{pbn}</code></p>
+                {simMode && hidden.length > 0 && <button type="button" class="reveal" onClick={() => setReveal(false)}>Hide the full deal</button>}
+              </>
+            )}
           </div>
         </section>
       )}
