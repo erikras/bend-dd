@@ -53,10 +53,10 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted)
   border-radius: 10px;
   padding: 12px;
 }
-.seat0 { grid-column: 2; grid-row: 1; }
-.seat3 { grid-column: 1; grid-row: 2; }
-.seat1 { grid-column: 3; grid-row: 2; }
-.seat2 { grid-column: 2; grid-row: 3; }
+.pos0 { grid-column: 2; grid-row: 1; }
+.pos3 { grid-column: 1; grid-row: 2; }
+.pos1 { grid-column: 3; grid-row: 2; }
+.pos2 { grid-column: 2; grid-row: 3; }
 .compass {
   grid-column: 2; grid-row: 2;
   width: 72px; height: 72px; justify-self: center;
@@ -82,10 +82,10 @@ label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted)
 /* At phone width the hands stack: North, West and East side by side, South. */
 @media (max-width: 420px) {
   .diagram { grid-template-columns: 1fr 1fr; }
-  .seat0 { grid-column: 1 / span 2; grid-row: 1; justify-self: center; }
-  .seat3 { grid-column: 1; grid-row: 2; }
-  .seat1 { grid-column: 2; grid-row: 2; }
-  .seat2 { grid-column: 1 / span 2; grid-row: 3; justify-self: center; }
+  .pos0 { grid-column: 1 / span 2; grid-row: 1; justify-self: center; }
+  .pos3 { grid-column: 1; grid-row: 2; }
+  .pos1 { grid-column: 2; grid-row: 2; }
+  .pos2 { grid-column: 1 / span 2; grid-row: 3; justify-self: center; }
   .compass { display: none; }
 }
 

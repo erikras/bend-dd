@@ -125,10 +125,14 @@ function PlaySuit({ s, ranks, left, opts, onPlay }: { s: number; ranks: string; 
   );
 }
 
-function HandView({ seat, hand, dealer, vul, mode, mover }: { seat: number; hand: Hand; dealer: number; vul: Vul; mode: HandMode; mover: boolean }) {
+// Where a seat sits in the diagram: 0 top, 1 right, 2 bottom, 3 left. With a
+// declarer, declarer is at the bottom and dummy at the top; otherwise North is.
+const place = (seat: number, bottom: number) => (seat - bottom + 6) % 4;
+
+function HandView({ seat, pos, hand, dealer, vul, mode, mover }: { seat: number; pos: number; hand: Hand; dealer: number; vul: Vul; mode: HandMode; mover: boolean }) {
   const red = vul === "All" || (vul === "NS" && seat % 2 === 0) || (vul === "EW" && seat % 2 === 1);
   return (
-    <div class={`hand seat${seat}${mover ? " mover" : ""}${mode.kind === "hidden" ? " hidden" : ""}`}>
+    <div data-seat={SEATS[seat]} class={`hand pos${pos}${mover ? " mover" : ""}${mode.kind === "hidden" ? " hidden" : ""}`}>
       <div class="who">
         <span class={red ? "name vul" : "name"}>{SEAT_NAMES[seat]}</span>
         {dealer === seat && <span class="dealer" title="dealer">D</span>}
@@ -147,14 +151,14 @@ function HandView({ seat, hand, dealer, vul, mode, mover }: { seat: number; hand
 }
 
 // The compass, with the trick in progress (or the last one, faded) during play.
-function Compass({ play }: { play: Play | null }) {
+function Compass({ play, bottom }: { play: Play | null; bottom: number }) {
   const shown = play ? (play.current.length || !play.tricks.length ? play.current : play.tricks[play.tricks.length - 1].cards) : [];
   const last = play && !play.current.length && play.tricks.length > 0;
   return (
     <div class={`compass${play ? " playing" : ""}`}>
       {SEATS.map((s, i) => {
         const c = shown.find((x) => x.seat === i);
-        return <span class={`c${i}${c ? " played" : ""}${last ? " last" : ""}${play?.mover === i && !play.over ? " turn" : ""}`}>
+        return <span class={`c${place(i, bottom)}${c ? " played" : ""}${last ? " last" : ""}${play?.mover === i && !play.over ? " turn" : ""}`}>
           {c ? <b class={`s${c.card.s}`}>{cardLabel(c.card)}</b> : s}
         </span>;
       })}
@@ -163,11 +167,11 @@ function Compass({ play }: { play: Play | null }) {
   );
 }
 
-function Diagram({ deal, dealer, vul, modes, play }: { deal: Deal; dealer: number; vul: Vul; modes: HandMode[]; play: Play | null }) {
+function Diagram({ deal, dealer, vul, modes, play, bottom }: { deal: Deal; dealer: number; vul: Vul; modes: HandMode[]; play: Play | null; bottom: number }) {
   return (
     <div class="diagram">
-      {deal.map((h, seat) => <HandView seat={seat} hand={h} dealer={dealer} vul={vul} mode={modes[seat]} mover={!!play && !play.over && play.mover === seat && modes[seat].kind === "play"} />)}
-      <Compass play={play} />
+      {deal.map((h, seat) => <HandView seat={seat} pos={place(seat, bottom)} hand={h} dealer={dealer} vul={vul} mode={modes[seat]} mover={!!play && !play.over && play.mover === seat && modes[seat].kind === "play"} />)}
+      <Compass play={play} bottom={bottom} />
     </div>
   );
 }
@@ -528,7 +532,7 @@ function App() {
       {deal && (
         <section class="board">
           <div class="left">
-            <Diagram deal={deal} dealer={state.dealer} vul={state.vul} modes={modes} play={play && !play.error && !simMode ? play : null} />
+            <Diagram deal={deal} dealer={state.dealer} vul={state.vul} modes={modes} play={play && !play.error && !simMode ? play : null} bottom={playing ? state.by! : 2} />
             {playing && play && (
               <>
                 <div class="tabs" role="tablist">

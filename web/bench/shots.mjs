@@ -69,8 +69,13 @@ for (const [name, viewport] of [["play", { width: 1100, height: 900 }], ["play-p
   const p = await browser.newPage({ viewport, deviceScaleFactor: 2 });
   await p.goto(url + "#seed=11");
   await table(p);
+  // The diagram: North at the top until a contract is picked, then declarer at the
+  // bottom, dummy at the top, and the defenders in order round the table.
+  const where = () => p.evaluate(() => [0, 1, 2, 3].map((i) => document.querySelector(`.hand.pos${i}`).dataset.seat + document.querySelector(`.compass .c${i}`).textContent.slice(0, 1)).join(" "));
+  check(`${name}: North at the top with no contract (top right bottom left)`, await where(), "NN EE SS WW");
   await p.click('button[aria-label="play ♥ by West"]');
   await p.waitForFunction(() => location.hash.includes("c=4H&by=W"));
+  check(`${name}: West declaring is at the bottom`, await where(), "EE SS WW NN");
   const first = await bestValue(p);
   check(`${name}: best lead keeps declarer to the table's 10`, first, 10);
   for (let i = 0; i < 4; i++) {
