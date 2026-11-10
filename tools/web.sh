@@ -126,7 +126,9 @@ case "$1" in
     build_solver
     build_page
     if ! npx --yes wrangler pages project list 2>/dev/null | grep -q "bend-dd"; then
-      npx --yes wrangler pages project create bend-dd --production-branch main
+      # --force: a classic Pages project; wrangler 4.160 otherwise hands this to
+      # Workers, which fails to find the static files.
+      npx --yes wrangler pages project create bend-dd --production-branch main --force
     fi
     npx --yes wrangler pages deploy $D --project-name bend-dd --branch "$branch" --commit-dirty=true
     echo "preview: https://$branch.bend-dd.pages.dev/"
