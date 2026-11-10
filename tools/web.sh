@@ -4,7 +4,10 @@
 #   tools/web.sh build        the solver for the page and the page, into web/dist
 #   tools/web.sh serve [port] build, then serve web/dist on localhost (8642)
 #   tools/web.sh test         build, then check the page's solver against dd on list100,
-#                             its simulator against sim, and its par against DDS
+#                             its simulator against sim, its play-through against the
+#                             table, and its par against DDS
+#   tools/web.sh shots        build, then check the page in Chromium with Playwright and
+#                             save screenshots to web/shots/
 #   tools/web.sh bench        time every route on list100: native dd, Bend's JS target,
 #                             and Bend's C as WebAssembly with and without threads
 #
@@ -12,7 +15,8 @@
 # comes with bend: `BUN_BE_BUN=1 bend` is Bun.
 #
 # The page runs Bend's C, built by Emscripten to WebAssembly without threads, in
-# five Web Workers, one per strain (docs/WEBAPP_PLAN.md, section 2, has why).
+# a pool of Web Workers, one strain or one chunk of a simulation each
+# (docs/WEBAPP_PLAN.md, section 2, has why).
 # web/wasm-patch.py makes the few changes the C needs to build for WebAssembly.
 
 set -e
@@ -81,8 +85,12 @@ case "$1" in
     dd_ready
     echo "== the page's solver (WebAssembly) against dd, list100, five workers"
     node web/bench/bench.mjs wasm strains $B/list100.pbn $B/list100.dd
-    echo "== api.sim in chunks against sim"
+    echo "== api.sim in chunks against sim (JS target)"
     node web/bench/simcheck.mjs 16
+    echo "== the page's simulator (its chunks, merged) against sim, row for row"
+    bun web/bench/pagesim.ts
+    echo "== play-through: api.cards and the page's rules of play against the table"
+    bun web/bench/playcheck.ts $B/list100.pbn $B/list100.dd 4
     echo "== the page's par against DDS's, list100 with every dealer and vulnerability"
     if [ -x .venv/bin/python ]; then
       .venv/bin/python web/bench/par.py $B/list100.pbn > $B/list100.par
@@ -90,6 +98,19 @@ case "$1" in
     else
       echo "skipped: no .venv with endplay (tools/test.sh makes one)"
     fi
+    ;;
+  shots)
+    # The page in Chromium: tables against dd, a play-through, the README's simulation
+    # against sim, and screenshots in web/shots/. Needs Playwright: NODE_PATH=<the
+    # node_modules that has it>, and CHROMIUM=<binary> to use a Chromium of your own.
+    build_solver
+    build_page
+    dd_ready
+    node web/serve.mjs $D 8643 > /dev/null &
+    server=$!
+    trap 'kill $server' EXIT
+    sleep 1
+    node web/bench/shots.mjs http://localhost:8643/
     ;;
   bench)
     build_solver
@@ -115,7 +136,7 @@ case "$1" in
     uptime
     ;;
   *)
-    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
     ;;
 esac

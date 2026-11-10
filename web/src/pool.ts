@@ -1,7 +1,7 @@
 // A pool of solver workers with one queue. Each job is one run of the solver's
 // main (web/wasm.bend) with these arguments, and resolves to what it printed.
 
-type Pending = { id: number; args: string[]; ok: (s: string) => void; fail: (e: Error) => void };
+type Pending = { id: number; args: string[]; tag: string; ok: (s: string) => void; fail: (e: Error) => void };
 
 export class Pool {
   private workers: Worker[] = [];
@@ -20,17 +20,19 @@ export class Pool {
     }
   }
 
-  run(args: string[]): Promise<string> {
+  run(args: string[], tag = ""): Promise<string> {
     return new Promise((ok, fail) => {
-      this.queue.push({ id: this.next++, args, ok, fail });
+      this.queue.push({ id: this.next++, args, tag, ok, fail });
       this.pump();
     });
   }
 
-  // Drops the jobs that haven't started, as when a new deal replaces the old one.
-  clear() {
-    for (const p of this.queue) p.fail(new Error("cancelled"));
-    this.queue = [];
+  // Drops the jobs that haven't started, as when a new deal replaces the old one:
+  // all of them, or those with this tag.
+  clear(tag?: string) {
+    const drop = this.queue.filter((p) => tag === undefined || p.tag === tag);
+    this.queue = this.queue.filter((p) => !drop.includes(p));
+    for (const p of drop) p.fail(new Error("cancelled"));
   }
 
   private pump() {
@@ -54,8 +56,9 @@ export class Pool {
   }
 }
 
-// Five is the most a table can use, one worker per strain.
+// A table uses five, one per strain; a simulation uses them all. Each worker needs
+// about 75 MB while it solves.
 export function poolSize(): number {
   const n = navigator.hardwareConcurrency || 4;
-  return Math.max(2, Math.min(5, n - 1));
+  return Math.max(2, Math.min(8, n - 1));
 }

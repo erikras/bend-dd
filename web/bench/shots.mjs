@@ -1,5 +1,6 @@
-// Opens the page in Chromium, checks a random deal and a pasted one against dd, and
-// saves screenshots to web/shots/. Needs Playwright; with it installed elsewhere, run
+// Opens the page in Chromium and checks it: a random deal and a pasted one against
+// dd, a play-through of best cards against the table, and the README's simulation
+// against sim row for row. Saves screenshots to web/shots/. Needs Playwright; with it installed elsewhere, run
 // as NODE_PATH=<its node_modules> node web/bench/shots.mjs [url]. CHROMIUM=<binary>
 // launches that Chromium instead of Playwright's own.
 import { createRequire } from "node:module";
@@ -29,7 +30,7 @@ let bad = 0;
 const check = (name, got, exp) => {
   const ok = JSON.stringify(got) === JSON.stringify(exp);
   if (!ok) bad++;
-  console.log(`${name}: ${ok ? "same as dd" : "DIFFERENT " + JSON.stringify(got) + " vs " + JSON.stringify(exp)}`);
+  console.log(`${name}: ${ok ? "ok" : "DIFFERENT " + JSON.stringify(got) + " vs " + JSON.stringify(exp)}`);
 };
 
 for (const [name, viewport, hash] of [
@@ -59,5 +60,61 @@ check("pasted deal table", got, want("N:AT5.KJ53.96.KQ43 8763.Q6.JT753.75 Q9.AT9
 console.log(`pasted deal: ${await page.textContent(".par")}, link ${page.url().replace(/^.*#/, "#")}`);
 await page.screenshot({ path: `${shots}pasted.png`, fullPage: true });
 
+await page.close();
+
+// Play: pick 4H by West from the table, play the best card four times, step back.
+const SIM_URL = "#deal=N:AJ4.K94.KQ8.T862+KQ86.873.A62.KJ5+73.AQJ65.93.AQ43+T952.T2.JT754.97&c=4H&by=S&tab=sim&view=leader&rule=S.hcp=15-19&rule=S.H=5%2B&rule=N.hcp=8-11&rule=N.H=3%2B&n=200&sseed=11";
+const bestValue = (p) => p.waitForSelector(".group.best .val", { timeout: 60000 }).then((e) => e.textContent()).then((t) => +t.replace(/−.*/, ""));
+for (const [name, viewport] of [["play", { width: 1100, height: 900 }], ["play-phone", { width: 390, height: 844 }]]) {
+  const p = await browser.newPage({ viewport, deviceScaleFactor: 2 });
+  await p.goto(url + "#seed=11");
+  await table(p);
+  await p.click('button[aria-label="play ♥ by West"]');
+  await p.waitForFunction(() => location.hash.includes("c=4H&by=W"));
+  const first = await bestValue(p);
+  check(`${name}: best lead keeps declarer to the table's 10`, first, 10);
+  for (let i = 0; i < 4; i++) {
+    const n = await p.evaluate(() => (location.hash.match(/play=([^&]*)/)?.[1] || "").split(",").filter(Boolean).length);
+    const v = await bestValue(p);
+    if (v !== 10) check(`${name}: best card after ${n} cards`, v, 10);
+    await p.click(".group.best button.card");
+    await p.waitForFunction((k) => (location.hash.match(/play=([^&]*)/)?.[1] || "").split(",").filter(Boolean).length === k, n + 1);
+  }
+  const tricks = await p.$$eval("ol.tricks li", (x) => x.length);
+  check(`${name}: one trick in the list`, tricks, 1);
+  await p.click(".group.best button.card");
+  await bestValue(p);
+  await p.keyboard.press("ArrowLeft");
+  await p.waitForFunction(() => location.hash.includes("at=4"));
+  await p.keyboard.press("ArrowRight");
+  await p.waitForFunction(() => !location.hash.includes("at="));
+  await bestValue(p);
+  console.log(`${name}: ${await p.textContent(".count")}, link ${p.url().replace(/^.*#/, "#")}`);
+  await p.screenshot({ path: `${shots}${name}.png`, fullPage: true });
+  await p.close();
+}
+
+// Simulate: the README example, against sim row for row.
+const simText = execFileSync(root + "sim", ["deal=N:- - - T952.T2.JT754.97", "contract=4H", "by=S", "S.hcp=15-19", "S.H=5+", "N.hcp=8-11", "N.H=3+", "n=200", "seed=11"], { encoding: "utf8" });
+const simRows = simText.split("\n").map((l) => l.match(/^(\S+)\s+(\d+\.\d\d)\s+(\d+\.\d%)$/)).filter(Boolean).map((m) => `${m[1]} ${m[2]} ${m[3]}`);
+const simKept = simText.match(/Dealt \d+ layouts and kept \d+/)[0];
+for (const [name, viewport] of [["sim", { width: 1100, height: 900 }], ["sim-phone", { width: 390, height: 844 }]]) {
+  const p = await browser.newPage({ viewport, deviceScaleFactor: 2 });
+  await p.goto(url + SIM_URL);
+  await table(p);
+  const t = Date.now();
+  await p.click("button.run");
+  await p.waitForFunction(() => document.querySelector(".stats") && !document.querySelector(".stats").textContent.includes("running"), null, { timeout: 120000 });
+  const ms = Date.now() - t;
+  const got = await p.$$eval("table.simrows tbody tr", (rs) => rs.map((r) => `${r.dataset.key} ${r.dataset.tricks} ${r.dataset.makes}`));
+  const kept = (await p.textContent(".stats")).match(/Dealt \d+ layouts and kept \d+/)[0];
+  check(`${name}: README simulation rows`, got, simRows);
+  check(`${name}: layouts dealt and kept`, kept, simKept);
+  console.log(`${name}: ${ms} ms in the page; hidden hands shown: ${await p.$$eval(".hand.hidden", (x) => x.length)}`);
+  await p.screenshot({ path: `${shots}${name}.png`, fullPage: true });
+  await p.close();
+}
+
 await browser.close();
+console.log(bad ? `${bad} checks failed` : "all page checks passed");
 process.exit(bad ? 1 : 0);
