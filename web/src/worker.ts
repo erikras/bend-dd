@@ -1,25 +1,22 @@
 // One solver: Bend's C as WebAssembly, run once per job in a new instance of the
-// compiled module. A new instance starts with a zeroed memory, which the patched
-// runtime relies on (web/wasm-patch.py), and costs under a millisecond.
+// module that the pool compiled and sent with the job. A new instance starts with a
+// zeroed memory, which the patched runtime relies on (web/wasm-patch.py), and costs
+// under a millisecond. The pool replaces this worker after one job (web/src/pool.ts).
 
-type Job = { id: number; args: string[] };
+type Job = { id: number; args: string[]; mod: WebAssembly.Module };
 
-let compiled: Promise<{ create: any; mod: WebAssembly.Module }> | undefined;
+let glue: Promise<any> | undefined;
 
 function load() {
-  if (!compiled) {
-    const base = new URL("./", self.location.href).href;
-    const url = base + "solver.mjs";
-    compiled = Promise.all([
-      import(/* @vite-ignore */ url).then((m) => m.default),
-      WebAssembly.compileStreaming(fetch(base + "solver.wasm")),
-    ]).then(([create, mod]) => ({ create, mod }));
+  if (!glue) {
+    const url = new URL("./solver.mjs", self.location.href).href;
+    glue = import(/* @vite-ignore */ url).then((m) => m.default);
   }
-  return compiled;
+  return glue;
 }
 
-async function run(args: string[]): Promise<string> {
-  const { create, mod } = await load();
+async function run(args: string[], mod: WebAssembly.Module): Promise<string> {
+  const create = await load();
   let out = "";
   let err = "";
   try {
@@ -40,9 +37,9 @@ async function run(args: string[]): Promise<string> {
 }
 
 self.onmessage = async (e: MessageEvent<Job>) => {
-  const { id, args } = e.data;
+  const { id, args, mod } = e.data;
   try {
-    (self as any).postMessage({ id, out: await run(args) });
+    (self as any).postMessage({ id, out: await run(args, mod) });
   } catch (x) {
     (self as any).postMessage({ id, error: String((x as Error).message || x) });
   }

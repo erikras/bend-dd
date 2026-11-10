@@ -31,8 +31,10 @@ D=web/dist
 mkdir -p $B
 
 # Emscripten's flags for the solver: tail calls, since Bend's segments jump to each
-# other by musttail; a memory that grows, since the heap is mapped at the start.
-EMFLAGS="-std=c11 -O3 -mtail-call -lm -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB"
+# other by musttail; a memory that grows, since the heap is mapped at the start, and
+# grows by just what's asked: Safari and iOS cap the memory of all a page's workers
+# together, and the default 20% more made each one 615 MB rather than 545.
+EMFLAGS="-std=c11 -O3 -mtail-call -lm -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB -sMEMORY_GROWTH_GEOMETRIC_STEP=0"
 
 newer() { # newer target sources...: true when target is missing or older than one
   t=$1; shift
@@ -47,7 +49,7 @@ build_solver() {
     echo "== bend: api.mjs (the JavaScript target)"
     bend web/api.bend -o $B/api.mjs
   fi
-  if newer $B/solver.wasm $srcs; then
+  if newer $B/solver.wasm $srcs tools/web.sh; then
     echo "== bend + emcc: solver.wasm"
     bend web/wasm.bend -o $B/wasm.c
     python3 web/wasm-patch.py $B/wasm.c $B/wasm-patched.c
