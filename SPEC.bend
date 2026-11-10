@@ -1146,3 +1146,43 @@ def RH(pos: R.Pos, +L: Nat, +j: Nat, +r0: Nat, +w0: Nat, +s: Nat, +kk: Nat) -> D
             And({R.trick.lead(tr) == 4 : U32},
               And({U32.to_nat(won) == w0 : Nat},
                 And(Tops(s, j, r0, n01, n23, e01, e23, s01, s23, w01, w23), {Nat.is_le(kk, bits(U32.and(R.suit.mask(j, R.pick(s, n01, e01, s01, w01), R.pick(s, n23, e23, s23, w23)), above(r0)))) == True{} : Bool}))))))
+
+
+# ---------------------------------------------------------------------------
+# What the solver's count of a run of top cards rests on
+
+# The rank a run of top cards starts at, as Z.run finds it from x, the cards in play
+# in the suit that the leader doesn't hold: one above the highest of them, or 0 if
+# there are none.
+def r0of.go(z: Bool, +x: U32) -> Nat:
+  match z:
+    case True{}:
+      0n
+    case False{}:
+      1n+U32.log2(x)
+
+def r0of(+x: U32) -> Nat:
+  r0of.go(U32.is_zero(x), x)
+
+# The cards of x are all below that rank, and the rank is at most 13.
+def fact.top(+x: U32) -> Bool:
+  Bool.and(U32.is_eq(U32.and(x, U32{ones(32n, r0of(x))}), x), Nat.is_lt(r0of(x), 14n))
+
+# Counting a holding shifted down r is counting its cards at rank r or above, for
+# every r up to the given one.
+def fact.shift(+r: Nat, +m: U32) -> Bool:
+  match r:
+    case 0n:
+      Nat.is_eq(U32.to_nat(C.bits.count(m)), bits(U32.and(m, above(0n))))
+    case 1n+q:
+      Bool.and(Nat.is_eq(U32.to_nat(C.bits.count(U32.shrn(m, 1n+q))), bits(U32.and(m, above(1n+q)))), fact.shift(q, m))
+
+def runfacts(+m: U32) -> Bool:
+  Bool.and(fact.top(m), fact.shift(13n, m))
+
+def runfacts.all(n: Nat, +m: U32) -> Bool:
+  match n:
+    case 0n:
+      True{}
+    case 1n+p:
+      Bool.and(runfacts(m), runfacts.all(p, U32.inc(m)))
