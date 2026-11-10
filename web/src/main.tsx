@@ -6,6 +6,7 @@ import { Cands, Card, Option, Play, cardText, options, parseCard, replay } from 
 import { SimOut, View, chunks, merge, percent, ratio, rows, setupText, visible } from "./sim";
 
 const pool = new Pool(poolSize());
+(globalThis as any).ddPool = pool; // for the tests: pool.stats and pool.size
 const STRAIN_LETTERS = ["S", "H", "D", "C", "NT"];
 
 // ---------------------------------------------------------------------------

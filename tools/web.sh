@@ -7,7 +7,8 @@
 #                             its simulator against sim, its play-through against the
 #                             table, and its par against DDS
 #   tools/web.sh shots        build, then check the page in Chromium with Playwright and
-#                             save screenshots to web/shots/
+#                             save screenshots to web/shots/, then in WebKit as an
+#                             iPhone 15 (web/bench/iphone.mjs), with its memory
 #   tools/web.sh deploy [branch]  build, then deploy a preview to Cloudflare Pages at
 #                             https://<branch>.bend-dd.pages.dev/ (dev by default; never main)
 #   tools/web.sh bench        time every route on list100: native dd, Bend's JS target,
@@ -116,6 +117,7 @@ case "$1" in
     sleep 1
     node web/bench/shots.mjs http://localhost:8643/
     node web/bench/layout.mjs http://localhost:8643/
+    node web/bench/iphone.mjs http://localhost:8643/
     ;;
   deploy)
     # A preview on Cloudflare Pages, at <branch>.bend-dd.pages.dev (dev by default).

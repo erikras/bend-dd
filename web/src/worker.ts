@@ -15,23 +15,32 @@ function load() {
   return glue;
 }
 
+// The size of the instance's memory when the run ended, sent back with the answer.
+let memBytes = 0;
+
 async function run(args: string[], mod: WebAssembly.Module): Promise<string> {
   const create = await load();
   let out = "";
   let err = "";
+  let mem: WebAssembly.Memory | undefined;
   try {
     await create({
       arguments: args,
       print: (s: string) => { out += s + "\n"; },
       printErr: (s: string) => { if (!s.startsWith("warning:")) err += s + "\n"; },
       instantiateWasm: (imports: WebAssembly.Imports, ok: (i: WebAssembly.Instance, m: WebAssembly.Module) => void) => {
-        WebAssembly.instantiate(mod, imports).then((i) => ok(i, mod));
+        WebAssembly.instantiate(mod, imports).then((i) => {
+          mem = Object.values(i.exports).find((x) => x instanceof WebAssembly.Memory) as WebAssembly.Memory | undefined;
+          ok(i, mod);
+        });
         return {};
       },
     });
   } catch (x) {
+    memBytes = mem?.buffer.byteLength ?? 0;
     if (!out) throw new Error(err.trim() || String(x));
   }
+  memBytes = mem?.buffer.byteLength ?? 0;
   if (!out && err) throw new Error(err.trim());
   return out.trim();
 }
@@ -39,9 +48,10 @@ async function run(args: string[], mod: WebAssembly.Module): Promise<string> {
 self.onmessage = async (e: MessageEvent<Job>) => {
   const { id, args, mod } = e.data;
   try {
-    (self as any).postMessage({ id, out: await run(args, mod) });
+    const out = await run(args, mod);
+    (self as any).postMessage({ id, out, mem: memBytes });
   } catch (x) {
-    (self as any).postMessage({ id, error: String((x as Error).message || x) });
+    (self as any).postMessage({ id, error: String((x as Error).message || x), mem: memBytes });
   }
 };
 
