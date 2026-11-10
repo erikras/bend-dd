@@ -507,7 +507,7 @@ function App() {
     <main>
       <header>
         <h1>Double dummy</h1>
-        <p class="sub">A bridge solver written in Bend, running in your browser.</p>
+        <p class="sub">A bridge solver written in Bend, running {(globalThis as any).ddNative ? "on this device" : "in your browser"}.</p>
       </header>
 
       <section class="controls">
