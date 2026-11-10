@@ -1180,9 +1180,17 @@ def fact.shift(+r: Nat, +m: U32) -> Bool:
 def runfacts(+m: U32) -> Bool:
   Bool.and(fact.top(m), fact.shift(13n, m))
 
-def runfacts.all(n: Nat, +m: U32) -> Bool:
-  match n:
+# The word w of n bits with only its first k bits kept. A holding is the word of its
+# 13 bits with nothing above them.
+def w.keep(+k: Nat, +n: Nat, w: Word(n)) -> Word(n):
+  match k:
     case 0n:
-      True{}
-    case 1n+p:
-      Bool.and(runfacts(m), runfacts.all(p, U32.inc(m)))
+      Word.zero(n)
+    case 1n+i:
+      match n:
+        case 0n:
+          w
+        case 1n+p:
+          match w:
+            case WCon{b, t}:
+              WCon{b, w.keep(i, p, t)}
