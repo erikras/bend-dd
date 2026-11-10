@@ -244,11 +244,11 @@ Each phase ends with something usable and deployed.
    (`mmap`, `poll`, signals). Measure memory with 5 and 8 workers. Check that
    `api.sim` chunks merge to `sim`'s exact output. Outcome: the faster route that
    passes the tests, with the numbers in §2.
-1. **API and workers.** `web/api.bend`, the worker pool, the tests in §6.
-2. **Viewer.** Deal diagram, random and pasted deals, the table filling in by strain,
+1. **Done (2026-11-10). API and workers.** `web/api.bend`, the worker pool, the tests in §6.
+2. **Done (2026-11-10), not deployed. Viewer.** Deal diagram, random and pasted deals, the table filling in by strain,
    par, shareable links. Deploy. This is the first version people can use.
-3. **Play-through.** Per-card tricks at every point, undo and step, keyboard.
-4. **Simulator.** The Simulate pane with rules, progress, and results drawn as bars.
+3. **Done (2026-11-10). Play-through.** Per-card tricks at every point, undo and step, keyboard.
+4. **Done (2026-11-10). Simulator.** In the page the README's 200-layout example takes 3.5 s on 8 workers in Chromium (native `sim`: 0.9 s on 12 threads); each layout is about 100 ms in WebAssembly against 22 ms native, and each chunk sets up its own transposition table, about 0.3 s. The Simulate pane with rules, progress, and results drawn as bars.
 5. **More input and output.** Deal editor, PBN files with many boards, export of the
    tables as CSV, and possibly LIN links from BBO hand records.
 6. **Only if needed.** The server (B) for large simulations, or the WebAssembly spike (C).
