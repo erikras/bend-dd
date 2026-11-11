@@ -205,6 +205,50 @@ checks that against brute force from random points in random endings, and
 `tools/simcheck.py` replays the first layouts of a simulation in DDS and checks every
 card against its `SolveBoard`.
 
+## Web app
+
+`web/` is a page that runs the solver in the browser: the deal, the double dummy
+table filling in strain by strain, par, a play-through that shows what every legal
+card takes, and the simulator. The solver is Bend's C target built by Emscripten to
+WebAssembly, in a pool of Web Workers. `docs/WEBAPP_PLAN.md` has the plan and the
+measurements behind that choice: on cadmium a full deal takes 0.4 s with one worker
+per strain, and the simulation above 3.5 s on 8 workers.
+
+```sh
+tools/web.sh build      # the solver and the page, into web/dist
+tools/web.sh serve      # build, then serve it on http://localhost:8642/
+tools/web.sh test       # check the page's solver against dd, sim and DDS
+tools/web.sh shots      # check the page in Chromium and save web/shots/ (needs Playwright)
+tools/web.sh bench      # time native dd, Bend's JS target and WebAssembly on list100
+```
+
+It needs Emscripten (`brew install emscripten`) as well as bend, clang, node and
+python3; Bun comes inside bend. Everything the page shows is in the link:
+`#seed=11&c=4H&by=W&play=S7,SQ` opens deal 11 in 4♥ by West after two cards. Click a
+number in the table to play that contract, click cards to play them, and use the
+arrow keys to step through. `web/dist` is a folder of static files that any web
+server can host.
+
+## iOS app
+
+`ios/` is the web app as an iPhone and iPad app: a SwiftUI app with the page in a
+WKWebView, served from the app bundle, with the solver as WebAssembly in workers as
+on the web. A page's WebAssembly memories share one cap in WebKit, and each solver
+run takes about 530 MB of address space, so the app runs 2 to 4 workers by the
+device's memory, and each worker does one job and is replaced
+(`web/src/pool.ts`). On the iPhone 18 Pro simulator with 3 workers, a full
+play-through takes 8 s and the 1000-layout simulation above 33 s.
+
+```sh
+tools/ios.sh sim        # build the page and the app, and run it in the simulator
+tools/ios.sh archive    # a signed Release build, in ios/build
+tools/ios.sh upload     # archive, then upload to App Store Connect for TestFlight
+```
+
+It needs Xcode, xcodegen (`brew install xcodegen`) and what the web app needs.
+Signing is automatic with the Apple ID signed in to Xcode, for the team in
+`ios/project.yml`, and the bundle ID is `co.formnerd.doubledummy`.
+
 ## Testing
 
 ```sh

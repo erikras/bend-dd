@@ -1,0 +1,178 @@
+:root {
+  --bg: #f6f4ef;
+  --card: #fffdf8;
+  --ink: #1d1d1f;
+  --muted: #6b6b70;
+  --line: #ddd8cc;
+  --red: #c8102e;
+  --black: #1d1d1f;
+  --accent: #1f6f4a;
+  --vul: #c8102e;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Light only, form controls too, whatever the system's setting: spades and
+     clubs are black and hearts and diamonds red, as on cards. */
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); }
+main { max-width: 980px; margin: 0 auto; padding: 16px; }
+header h1 { margin: 0; font-size: 1.6rem; }
+.sub { margin: 4px 0 16px; color: var(--muted); }
+h2 { font-size: 1rem; margin: 0 0 8px; }
+
+.controls { display: grid; gap: 8px; margin-bottom: 16px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+input, select, button { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
+button { cursor: pointer; background: var(--accent); color: white; border-color: var(--accent); }
+button[type="button"] { background: var(--card); color: var(--ink); border-color: var(--line); }
+input.pbn { flex: 1 1 280px; min-width: 0; font-family: ui-monospace, Menlo, monospace; font-size: 0.9rem; }
+label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); }
+
+.error { color: var(--red); background: var(--card); border: 1px solid var(--red); padding: 8px 12px; border-radius: 6px; }
+
+.board { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 720px) { .board { grid-template-columns: 1fr; } }
+
+.diagram {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 12px;
+  overflow-x: auto;
+}
+/* A standard bridge diagram, centred in its card: West and East in columns of the
+   same width (the wider hand's), right- and left-aligned against the compass, so
+   the compass sits in the middle and both gaps match. The middle column is the
+   compass's width; North and South, usually wider, stand centred over and under it
+   and spill evenly into the columns either side. */
+.dgrid {
+  display: grid;
+  grid-template-columns: minmax(8em, 1fr) 72px minmax(8em, 1fr);
+  grid-template-rows: auto auto auto;
+  width: max-content;
+  margin: 0 auto;
+  align-items: center;
+  column-gap: 18px;
+  row-gap: 10px;
+}
+.dgrid:has(.compass.playing) { grid-template-columns: minmax(8em, 1fr) 120px minmax(8em, 1fr); }
+.pos0 { grid-column: 2; grid-row: 1; justify-self: unsafe center; width: max-content; }
+.pos3 { grid-column: 1; grid-row: 2; justify-self: end; }
+.pos1 { grid-column: 3; grid-row: 2; justify-self: start; }
+.pos2 { grid-column: 2; grid-row: 3; justify-self: unsafe center; width: max-content; }
+.compass {
+  grid-column: 2; grid-row: 2;
+  width: 72px; height: 72px; justify-self: center;
+  display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+  border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 0.8rem;
+}
+.compass span { display: flex; align-items: center; justify-content: center; }
+.compass .c0 { grid-column: 2; grid-row: 1; }
+.compass .c1 { grid-column: 3; grid-row: 2; }
+.compass .c2 { grid-column: 2; grid-row: 3; }
+.compass .c3 { grid-column: 1; grid-row: 2; }
+.hand { min-width: 0; font-variant-numeric: tabular-nums; }
+.who { display: flex; gap: 6px; align-items: baseline; margin-bottom: 2px; font-size: 0.85rem; color: var(--muted); }
+.who .name.vul { color: var(--vul); font-weight: 600; }
+.who .dealer { border: 1px solid var(--muted); border-radius: 3px; padding: 0 3px; font-size: 0.7rem; }
+.who .hcp::before { content: "· "; }
+.suit { display: flex; gap: 6px; line-height: 1.45; white-space: nowrap; }
+.sym { width: 1em; text-align: center; }
+.s0, .s3 { color: var(--black); }
+.s4 { color: var(--ink); }
+.s1, .s2 { color: var(--red); }
+.ranks { letter-spacing: 0.02em; }
+
+/* At phone width there is no room for the compass between West and East: they sit
+   side by side under North, centred, and the compass (in play) goes below South. */
+@media (max-width: 480px) {
+  .diagram { padding: 12px 8px; }
+  .dgrid, .dgrid:has(.compass.playing) { grid-template-columns: auto auto; column-gap: 20px; }
+  .pos0 { grid-column: 1 / span 2; grid-row: 1; justify-self: center; }
+  .pos3 { grid-column: 1; grid-row: 2; justify-self: end; }
+  .pos1 { grid-column: 2; grid-row: 2; justify-self: start; }
+  .pos2 { grid-column: 1 / span 2; grid-row: 3; justify-self: center; }
+  .compass { display: none; }
+}
+
+.analysis { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+table.dd { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; max-width: 360px; }
+table.dd th, table.dd td { padding: 6px 8px; text-align: center; border-bottom: 1px solid var(--line); }
+table.dd thead th { font-size: 1.1rem; }
+table.dd tbody th { color: var(--muted); font-weight: 600; text-align: left; }
+table.dd td { font-size: 1.15rem; }
+table.dd td.make { font-weight: 700; }
+table.dd td.wait { color: var(--muted); }
+.par { margin: 12px 0 4px; }
+.meta { color: var(--muted); font-size: 0.85rem; margin: 4px 0; }
+.wait { color: var(--muted); }
+.pbn-out { font-size: 0.75rem; color: var(--muted); overflow-wrap: anywhere; margin: 8px 0 0; }
+code { font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
+.pbn-out code { white-space: normal; }
+
+/* ---- Play ---- */
+.left { display: grid; gap: 12px; min-width: 0; }
+.rank { margin-right: 0.28em; }
+.rank.gone { opacity: 0.3; text-decoration: line-through; }
+.hand.mover .who .name { color: var(--accent); font-weight: 700; }
+.hand.hidden .unseen { color: var(--muted); font-style: italic; padding: 8px 0; }
+.group { display: inline-flex; flex-direction: column; align-items: center; border: 1px solid var(--line); border-radius: 6px; padding: 1px 2px 0; margin: 0 3px 3px 0; vertical-align: top; }
+.group.best { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.group .cards { display: inline-flex; gap: 1px; }
+.group .rank.gone { margin: 0 2px; }
+button.card { padding: 1px 4px; font-size: 1rem; background: var(--card); color: var(--ink); border: 1px solid transparent; border-radius: 4px; min-width: 1.6em; }
+button.card:hover, button.card:focus-visible { border-color: var(--ink); }
+.group .val { font-size: 0.7rem; color: var(--muted); line-height: 1.1; }
+.group.best .val { color: var(--accent); font-weight: 700; }
+.group .cost { color: var(--red); margin-left: 3px; font-weight: 700; }
+.compass.playing { width: 120px; height: 120px; position: relative; }
+.compass.playing span.played b { font-size: 1rem; }
+.compass .last { opacity: 0.45; }
+.compass .turn { color: var(--accent); font-weight: 700; }
+.compass .mid { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; color: var(--muted); pointer-events: none; }
+@media (max-width: 480px) {
+  .compass.playing { display: grid; grid-column: 1 / span 2; grid-row: 4; justify-self: center; }
+}
+table.dd td { padding: 2px; }
+button.cell { width: 100%; padding: 4px 0; font-size: 1.15rem; background: transparent; color: inherit; border: 1px solid transparent; font-weight: inherit; }
+button.cell:hover { border-color: var(--line); }
+td.chosen button.cell { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.hint { color: var(--muted); font-size: 0.85rem; }
+.tabs { display: flex; gap: 4px; }
+.tabs button { background: var(--card); color: var(--muted); border-color: var(--line); }
+.tabs button.on { background: var(--accent); color: white; border-color: var(--accent); }
+.pane { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 8px; }
+.pane select { margin-left: 8px; padding: 2px 6px; }
+.row.between { justify-content: space-between; }
+.status { margin: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 0.8rem; margin: 0; }
+button:disabled { opacity: 0.45; cursor: default; }
+ol.tricks { margin: 0; padding-left: 1.6em; font-size: 0.85rem; columns: 2; column-gap: 24px; }
+ol.tricks li span { margin-right: 8px; white-space: nowrap; }
+ol.tricks li span.won { font-weight: 700; text-decoration: underline; }
+@media (max-width: 420px) { ol.tricks { columns: 1; } }
+
+/* ---- Simulate ---- */
+.rules { display: grid; gap: 6px; }
+.rule select, .rule input { padding: 4px 6px; margin: 0; }
+.progress { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.progress div { height: 100%; background: var(--accent); }
+.stats { margin: 6px 0; font-size: 0.9rem; }
+table.simrows { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+table.simrows th, table.simrows td { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--line); }
+table.simrows thead th { font-size: 0.75rem; color: var(--muted); font-weight: 600; }
+table.simrows td.num { text-align: right; width: 4.5em; }
+table.simrows td.bar { width: 30%; }
+table.simrows td.bar div { height: 10px; background: var(--accent); border-radius: 2px; }
+table.simrows td.bar.makes div { background: #b08a2e; }
+button.stop { background: var(--red); border-color: var(--red); }
+
+.secret p { font-size: 0.9rem; }
+button.reveal { background: var(--card); color: var(--ink); border-color: var(--line); margin-top: 8px; }
+
+details.meta summary { cursor: pointer; list-style: none; }
+details.meta summary::-webkit-details-marker { display: none; }
+details.meta .more { text-decoration: underline; font-size: 0.8rem; margin-left: 4px; }
+details.meta[open] .more { display: none; }
+details.meta .times { margin: 4px 0 0; }
